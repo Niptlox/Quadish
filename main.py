@@ -12,8 +12,7 @@ from noise import snoise2, pnoise2
 import pygame
 from pygame.locals import *
 
-
-random.seed(50, 1)
+# INIT GAME ================================================
 
 WINDOW_SIZE = (700*2, 400*2)
 FPS = 60
@@ -27,6 +26,7 @@ display = pygame.Surface(WINDOW_SIZE)
 
 TILE_SIZE = 48, 48
 # TILE_SIZE = 18, 18
+
 CHUNK_SIZE = 16
 # колво чанков отрисываемых на экране
 WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE[0] * CHUNK_SIZE)) + 2, \
@@ -34,8 +34,11 @@ WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE[0] * CHUNK_SIZE)) + 2,
 
 print("WINDOW_CHUNK_SIZE", WINDOW_CHUNK_SIZE)
 
+# STRUCTS OF DINAMIC ==========================================
 
-# cloud_struct = [["my_x, my_y"], [["tile_x, tile_y"],...]]
+cloud_struct = [["my_x, my_y"], [["tile_x, tile_y"],...]]
+
+# CREATING TILE IMAGES ========================================
 
 BORDER_COLOR = "#1C1917"
 def create_tile_image(color, bd=1, size=TILE_SIZE, bd_color=BORDER_COLOR):
@@ -66,8 +69,6 @@ smalltree_img.set_colorkey(COLORKEY)
 
 chunk_img = create_tile_image(sky, bd=1, size=(CHUNK_SIZE*TILE_SIZE[0], CHUNK_SIZE*TILE_SIZE[1]), bd_color="red")
 
-
-
 tile_imgs = {1: grass_img, 
              2: dirt_img, 
              3: stone_img,
@@ -75,6 +76,9 @@ tile_imgs = {1: grass_img,
              101: bush_img,
              102: smalltree_img,}
 PHYSBODY_TILES = (1, 2, 3, 4)
+
+
+# GENERATING MAP OR CHANK ========================================
 
 def generate_chunk(x, y):
     if map_generate_type == TGENERATE_INFINITE:
@@ -241,8 +245,6 @@ def generate_chunk_noise_island(x,y):
             # last_tile = tile_type
     return static_tiles, dinamic_tiles
 
-
-
 def create_game_map(nums_game_map):
     map_size = [len(nums_game_map[0]), len(nums_game_map)]
     chunk_map_size = math.ceil(map_size[0] / CHUNK_SIZE), math.ceil(map_size[1] / CHUNK_SIZE)
@@ -256,8 +258,6 @@ def create_game_map(nums_game_map):
             print((chunk_x, chunk_y))
             print(*game_map[(chunk_x, chunk_y)], sep="\n")
             pass
-
-
     return game_map, map_size, chunk_map_size
 
 
@@ -283,6 +283,8 @@ if map_generate_type == TGENERATE_LOAD:
     map_rect = [0, 0] + map_size
 else:
     game_map = {}
+
+# HANDLERS PHISICS TILES ==================================================
 
 def collision_test(rect: pygame.Rect, static_tiles: dict, dynamic_tiles: list=[], first_tile_pos=(0, 0)):
     # rect_x_map, rect_y_map = rect.x // TILE_SIZE, rect. // 
@@ -351,8 +353,13 @@ class PhiscalObject:
     def draw(self):
         pygame.draw.rect(screen,(255,255,0),self.rect)
 
-player = PhiscalObject(CHUNK_SIZE*TILE_SIZE[0]*2, WINDOW_SIZE[1]//2 - TILE_SIZE[1]*3.5, TILE_SIZE[0]-1, TILE_SIZE[1]-1)
+# CREATING PLAYER ==========================================================
 
+global player
+player = PhiscalObject(CHUNK_SIZE*TILE_SIZE[0]*2, WINDOW_SIZE[1]//2 - TILE_SIZE[1]*3.5, TILE_SIZE[0]-1, TILE_SIZE[1]-1)    
+    
+
+# MAIN LOOP =================================================================
 
 def main():    
     
@@ -377,6 +384,8 @@ def main():
     while running:     
         display.fill(sky)
 
+        # CALCULATION SCROLL MAP AND PLAYER ==================================
+
         true_scroll[0] += (player.rect.x - true_scroll[0] - WINDOW_SIZE[0] // 2) / 20
         true_scroll[1] += (player.rect.y - true_scroll[1] - WINDOW_SIZE[1] // 2) / 20
         if map_generate_type == TGENERATE_LOAD:
@@ -385,6 +394,9 @@ def main():
                 true_scroll[0] = map_size[0] * TILE_SIZE[0] - WINDOW_SIZE[0]
         scroll = [int(true_scroll[0]), int(true_scroll[1])]
         # scroll = player.rect.x, player.rect.y
+
+        # LOAD TILES (CHUNKS) AND DRAW OF VIEW WINDOW =========================
+
         static_tiles = {}
         for cx in range(WINDOW_CHUNK_SIZE[0]):                
             for cy in range(WINDOW_CHUNK_SIZE[1]):
@@ -417,6 +429,8 @@ def main():
                             if chunk_pos[1] > 0:
                                 pass
      
+        # PROCESSING PLAYER ACTIONS =======================================
+
         player_movement = [0,0]
         if moving_right:
             player_movement[0] += player_speed
@@ -460,7 +474,9 @@ def main():
 
         display.blit(player_img, (player.rect.x-scroll[0], player.rect.y-scroll[1]))
 
-        jump_on_wall = False
+
+        # PROCESSING PYGAME EVENTS =======================================
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -497,6 +513,7 @@ def main():
                 elif event.key in (K_LCTRL, K_RCTRL):
                     dig = False
          
+        # DRAW DISPLAY GAME TO WINDOW ========================================
         screen.blit(display, (0, 0))
         pygame.display.flip()
         clock.tick(FPS)
