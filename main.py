@@ -41,9 +41,13 @@ print("WINDOW_CHUNK_SIZE", WINDOW_CHUNK_SIZE)
 
 pygame.font.init()
 # textfont = pygame.font.SysFont('Harrington', 18)
-textfont = pygame.font.SysFont('Goudy Stout', 18)
+# textfont = pygame.font.SysFont('Goudy Stout', 18)
+textfont = pygame.font.SysFont("Fenix", 19)
+
 # texframe = font.render(text, False, text_color)
-text_color = "#374151"
+text_color = "#1C1917"
+text_color_dark = "#1C1917"
+text_color_light = "#F5F5F4"
 
 # STRUCTS OF DINAMIC ==========================================
 
@@ -406,6 +410,7 @@ class Cloud:
                     wind_vectorx = 1
                 elif wind_direction == 3:
                     wind_vectorx = -1
+                self.x, self.y, _ = self.tiles[0][0] # set pos of first tile cloud
                 last_chunk_x = self.x // CHUNK_SIZE_PX
                 self.x += wind_vectorx
                 chunk_x = self.x // CHUNK_SIZE_PX
@@ -413,19 +418,10 @@ class Cloud:
                 if chunk_x != last_chunk_x:
                     move_dinamic_obj(last_chunk_x, chunk_y, chunk_x, chunk_y, (201, self))
                 for y in range(self.height):
-                    x_left = None
-                    x_right = None   
-                    x_left_i, x_right_i = 0, 0
-                    for i in range(len(self.tiles[y])):
-                        tx, ty, tw = self.tiles[y][i]
-                        if x_left is None or tx < x_left:
-                            x_left = tx
-                            x_left_i = i
-                        if x_right is None or tx > x_right:
-                            x_right = tx
-                            x_right_i = i
+                    x_left, x_left_i, x_right, x_right_i, ty = self.find_left_right(y)
+
                     if wind_direction == 1:
-                        # cloud left move to right ->
+                        # cloud left move to right -->
                         test = static_tile_of_game_map(x_right + 1, ty, -1)
                         if test > 0:
                             w = self.tiles[y][x_right_i][2]
@@ -440,11 +436,24 @@ class Cloud:
                             set_static_tile(x_right + 1, ty, 200+ w) # set new
                         set_static_tile(x_left, ty, 0) # del old
                     elif wind_direction == 3:                    
-                        # cloud right
+                        # cloud right move to left <--
                         self.tiles[y][x_right_i][0] = x_left - 1 
                         set_static_tile(x_left - 1, ty, 201) # set new
-                        set_static_tile(x_right, ty, 0) # del old
-                        assert not static_tile_of_game_map(x_right, ty), "Пустая ячейка должна быть"
+                        set_static_tile(x_right, ty, 0) # del old                        
+
+    def find_left_right(self, y):
+        x_left = None
+        x_right = None   
+        x_left_i, x_right_i = 0, 0
+        for i in range(len(self.tiles[y])):
+            tx, tile_y, _ = self.tiles[y][i]
+            if x_left is None or tx < x_left:
+                x_left = tx
+                x_left_i = i
+            if x_right is None or tx > x_right:
+                x_right = tx
+                x_right_i = i
+        return x_left, x_left_i, x_right, x_right_i, tile_y
 
     def append(self, tile_x, tile_y, weight):
         tile = [tile_x, tile_y, weight]
@@ -458,14 +467,31 @@ class Cloud:
 # CREATING PLAYER ==========================================================
 
 def dig_tile(x, y):
-    tile = static_tile_of_game_map(x, y)    
-    resources[tile] = resources.get(tile, 0) + 1
+    tile = static_tile_of_game_map(x, y, 0)    
+    if tile == 0:
+        return
+    i = 0
+    while i < inventory_size:
+        if inventory[i] is None:
+            inventory[i] = [tile, 1]
+            redraw_top()
+            break
+        if inventory[i][1] < cell_size and inventory[i][0] == tile:
+            inventory[i][1] += 1
+            redraw_top()
+            break
+        i += 1
+    else:
+        print("Перепонен инвентарь", tile)
+    
     set_static_tile(x, y, 0)
-    redraw_top()
 
 global player
 player = PhiscalObject(0, 0, TILE_SIZE-1, TILE_SIZE-1)    
-resources = {}
+inventory_size = 10
+inventory = [None] * inventory_size
+
+cell_size = 100
 
 # GLOBAL VARS================================================================
 
@@ -478,18 +504,27 @@ global wind
 wind = 0.05 # speed of wind
 
 # DRAW UI ==================================================================
-top_surface = pygame.Surface(((TILE_SIZE + 1) * count_tiles, TILE_SIZE // 2 * 3))
 
+top_surface = pygame.Surface(((TILE_SIZE + 7) * inventory_size, TILE_SIZE + 8))
 def redraw_top():
-    top_surface.fill("#E5E5E5")
+    top_surface.fill("#52525B")
 
     x = 0
-    for k, img in tile_imgs.items():
-        top_surface.blit(img, (x, 0))
-        res = resources.get(k, 0)
-        text = textfont.render(str(res), False, text_color)
-        top_surface.blit(text, (x, TILE_SIZE + 1))
-        x += TILE_SIZE + 1
+    i = 0
+    for i in range(inventory_size):
+        pygame.draw.rect(top_surface, "#000000", 
+            (x, 0, TILE_SIZE + 7, TILE_SIZE + 7), 1)
+        cell = inventory[i]
+        if cell is not None:
+            img = tile_imgs[cell[0]]
+            top_surface.blit(img, (x+3, 3))
+            res = str(cell[1])
+            tx, ty = (x+TILE_SIZE+3-7*len(res), TILE_SIZE-8)
+            text = textfont.render(res, False, text_color_dark)
+            top_surface.blit(text, (tx + 1, ty + 1))
+            text = textfont.render(res, False, text_color_light)
+            top_surface.blit(text, (tx, ty))
+        x += TILE_SIZE + 7
 redraw_top()
 
 # MAIN LOOP =================================================================
