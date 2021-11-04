@@ -14,17 +14,19 @@ from pygame.locals import *
 
 # INIT GAME ================================================
 
+DEBUG = True
+# WINDOW_SIZE = (2200, 1100)
 WINDOW_SIZE = (700*2, 400*2)
 FPS = 60
 
 pygame.init() # initiate pygame
 pygame.display.set_caption('Pygame Window')
-
 screen = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SHOWN, vsync=2)
 
 display = pygame.Surface(WINDOW_SIZE)
 
 TILE_SIZE = 48
+# TILE_SIZE = 16
 # TILE_SIZE = 8
 TILE_RECT = (TILE_SIZE, TILE_SIZE)
 
@@ -32,9 +34,9 @@ CHUNK_SIZE = 16
 
 CHUNK_SIZE_PX = CHUNK_SIZE * TILE_SIZE
 # колво чанков отрисываемых на экране
-WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 2, \
-    math.ceil(WINDOW_SIZE[1] / (TILE_SIZE * CHUNK_SIZE)) + 2
-
+WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 1, \
+    math.ceil(WINDOW_SIZE[1] / (TILE_SIZE * CHUNK_SIZE)) + 1
+# WINDOW_CHUNK_SIZE = (3, 3)
 print("WINDOW_CHUNK_SIZE", WINDOW_CHUNK_SIZE)
 
 # INIT TEXT ==================================================
@@ -130,8 +132,11 @@ def set_static_tile(x, y, tile_type):
 def move_dinamic_obj(chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
     chunk = game_map.get((new_chunk_x, new_chunk_y))
     if chunk:
-        if game_map[(chunk_x, chunk_y)][1] and obj in game_map[(chunk_x, chunk_y)][1]:
+        if obj in game_map[(chunk_x, chunk_y)][1]:
             game_map[(chunk_x, chunk_y)][1].remove(obj)
+        # else:
+        #     raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
+            
         chunk[1].append(obj)
 
 def random_plant_selection():
@@ -266,7 +271,7 @@ def generate_chunk_noise_island(x,y):
                 if tile_type is None:
                     # ставим облака
                     v201 = pnoise2(tile_x / 15, (tile_y) / 10-20, 5, persistence=0.3)
-                    # if 0 <= x_pos <= 1 and y_pos == 0 and x == 0 and y == 0:
+                    # if 0 <= x_pos <= 2 and 0 <= y_pos <= 2 and x == 0 and y == 0:
                     if v201 > 0.33:
                         tile_type = 201 # cloud_1
                         for vector in ((-1, 0),):# (0, -1)):
@@ -275,7 +280,7 @@ def generate_chunk_noise_island(x,y):
                                 cloud_obj = cloud_tiles[o_tile_pos]
                                 break
                         else:                            
-                            cloud_obj = Cloud((tile_x * TILE_SIZE, tile_y * TILE_SIZE), [], (x, y))
+                            cloud_obj = Cloud((tile_x, tile_y), [], (x, y))
                             dinamic_tiles.append([201, cloud_obj])
                         cloud_tiles[(x_pos, y_pos)] = cloud_obj
                         cloud_obj.append(tile_x, tile_y, 1) # x, y, weight                
@@ -399,22 +404,23 @@ class Cloud:
         self.height = len(tiles)
         self.last_tact_update = 0
         self.chunk = chunk
+        self.tiles_count = 0
 
     def update(self, tact):
-        if self.tiles:
+        if self.tiles_count > 0:
             if tact - self.last_tact_update > 1 / wind:
                 self.last_tact_update = tact
                 # сдвигем облако на один блок
+                last_chunk_x = self.x // CHUNK_SIZE
                 wind_vectorx = 0
                 if wind_direction == 1:
                     wind_vectorx = 1
+                    self.x = self.tiles[0][0][0] # set pos of first tile cloud
                 elif wind_direction == 3:
                     wind_vectorx = -1
-                self.x, self.y, _ = self.tiles[0][0] # set pos of first tile cloud
-                last_chunk_x = self.x // CHUNK_SIZE_PX
-                self.x += wind_vectorx
-                chunk_x = self.x // CHUNK_SIZE_PX
-                chunk_y = self.y // CHUNK_SIZE_PX
+                    self.x = self.tiles[0][-1][0] # set pos of last tile cloud                                            
+                chunk_x = self.x // CHUNK_SIZE
+                chunk_y = self.y // CHUNK_SIZE
                 if chunk_x != last_chunk_x:
                     move_dinamic_obj(last_chunk_x, chunk_y, chunk_x, chunk_y, (201, self))
                 for y in range(self.height):
@@ -424,22 +430,40 @@ class Cloud:
                         # cloud left move to right -->
                         test = static_tile_of_game_map(x_right + 1, ty, -1)
                         if test > 0:
-                            w = self.tiles[y][x_right_i][2]
-                            # for i in range(0, )
-                            if w < 3:
-                                w += 1
-                                self.tiles[y][x_right_i][2] = w
-                                set_static_tile(x_right, ty, 200 + w)
+                            if 201 <= test <= 203 and test - 200 < 3:
+                                w = self.tiles[y][x_right_i][2]
+                                w2 = test - 200                                
+                                new_w2 = (w2 + w) % 4
+                                if new_w2 == 0: new_w2 = 3
+                                new_w = w - (new_w2 - w2)
+                                if new_w == 0:
+                                    set_static_tile(x_left, ty, 0)
+                                else:
+                                    set_static_tile(x_left, ty, 200 + new_w)
+                                set_static_tile(x_right + 1, ty, 200 + new_w2)
+                            elif self.tiles_count > 1:
+                                w = self.tiles[y][x_right_i][2]
+                                # for i in range(0, )
+                                if w < 3:
+                                    w += 1
+                                    self.tiles[y][x_right_i][2] = w
+                                    set_static_tile(x_right, ty, 200 + w)
+                                    del self.tiles[y][x_left_i]
+                                    self.tiles_count -= 1
+                                    set_static_tile(x_left, ty, 0) # del old
                         else:
                             w = self.tiles[y][x_left_i][2]
                             self.tiles[y][x_left_i][0] = x_right + 1                             
                             set_static_tile(x_right + 1, ty, 200+ w) # set new
-                        set_static_tile(x_left, ty, 0) # del old
+                            set_static_tile(x_left, ty, 0) # del old
                     elif wind_direction == 3:                    
                         # cloud right move to left <--
                         self.tiles[y][x_right_i][0] = x_left - 1 
                         set_static_tile(x_left - 1, ty, 201) # set new
                         set_static_tile(x_right, ty, 0) # del old                        
+        else:
+            return False
+        return True
 
     def find_left_right(self, y):
         x_left = None
@@ -457,11 +481,12 @@ class Cloud:
 
     def append(self, tile_x, tile_y, weight):
         tile = [tile_x, tile_y, weight]
-        y = tile_y - self.y // TILE_SIZE
+        y = tile_y - self.y
         if y > (self.height-1):
             self.tiles.append([]*(y-self.height+1))
             self.height = y + 1
         self.tiles[y].append(tile)
+        self.tiles_count += 1
 
             
 # CREATING PLAYER ==========================================================
@@ -488,9 +513,8 @@ def dig_tile(x, y):
 
 global player
 player = PhiscalObject(0, 0, TILE_SIZE-1, TILE_SIZE-1)    
-inventory_size = 10
+inventory_size = 16
 inventory = [None] * inventory_size
-
 cell_size = 100
 
 # GLOBAL VARS================================================================
@@ -504,10 +528,11 @@ global wind
 wind = 0.05 # speed of wind
 
 # DRAW UI ==================================================================
-
-top_surface = pygame.Surface(((TILE_SIZE + 7) * inventory_size, TILE_SIZE + 8))
+global top_surface
+top_surface = pygame.Surface(((TILE_SIZE + 7) * inventory_size, TILE_SIZE + 8), pygame.SRCALPHA, 32)
+top_bg_color = (82, 82, 91, 150)
 def redraw_top():
-    top_surface.fill("#52525B")
+    top_surface.fill(top_bg_color)
 
     x = 0
     i = 0
@@ -567,15 +592,13 @@ def main():
 
         static_tiles = {}
         dinamic_tiles = []
-        scroll_chunk_x = scroll[0]//(CHUNK_SIZE_PX)
-        chunk_y = scroll[1]//(CHUNK_SIZE_PX)        
-        for cx in range(WINDOW_CHUNK_SIZE[0]):                
-            chunk_x = scroll_chunk_x        
-            for cy in range(WINDOW_CHUNK_SIZE[1]):
-                # display.blit(chunk_img, (chunk_x*CHUNK_SIZE*TILE_SIZE-scroll[0], chunk_y*CHUNK_SIZE*TILE_SIZE-scroll[1]))
-                # if map_generate_type != TGENERATE_LOAD:
-                #     chunk_x -= 1
-                #     chunk_y -= 1
+        scroll_chunk_x = ((scroll[0])//(TILE_SIZE)+ CHUNK_SIZE-1)//CHUNK_SIZE-1
+        chunk_y = ((scroll[1])//(TILE_SIZE)+ CHUNK_SIZE-1)//CHUNK_SIZE-1   
+        for cy in range(WINDOW_CHUNK_SIZE[1]):                
+            chunk_x = scroll_chunk_x
+            for cx in range(WINDOW_CHUNK_SIZE[0]):
+                if DEBUG:
+                    display.blit(chunk_img, (chunk_x*CHUNK_SIZE*TILE_SIZE-scroll[0], chunk_y*CHUNK_SIZE*TILE_SIZE-scroll[1]))
                 chunk_pos = (chunk_x, chunk_y)                
                 if chunk_pos not in game_map:
                     if map_generate_type != TGENERATE_LOAD:
@@ -697,6 +720,7 @@ def main():
          
         # DRAW DISPLAY GAME TO WINDOW ========================================
         display.blit(top_surface, (0, 0))
+        # pygame.transform.scale(display,(WINDOW_SIZE[0]//1.8, WINDOW_SIZE[1]//1.8)), (100, 100)
         screen.blit(display, (0, 0))
         pygame.display.flip()
         clock.tick(FPS)
