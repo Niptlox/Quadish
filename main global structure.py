@@ -25,7 +25,7 @@ screen = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SHOWN, vsync=2)
 
 display = pygame.Surface(WINDOW_SIZE)
 
-TILE_SIZE = 40
+TILE_SIZE = 48
 # TILE_SIZE = 16
 # TILE_SIZE = 8
 TILE_RECT = (TILE_SIZE, TILE_SIZE)
@@ -105,118 +105,6 @@ tile_imgs = {1: grass_img,
 count_tiles = len(tile_imgs)
 PHYSBODY_TILES = (1, 2, 3, 4)
 
-# CLASS GAMEMAP===================================================
-
-class GameMap:
-    def __init__(self) -> None:
-        self.tile_size = TILE_SIZE
-        self.chunk_size = CHUNK_SIZE
-        self.tile_data_size = 4
-        self.chunk_arr_size = self.tile_data_size * self.chunk_size ** 2
-        self.game_map = {}
-
-    def chunk(self, xy):
-        res = self.game_map.get(xy)
-        return res
-
-    def get_static_tile(self, x, y):        
-        i = self.convert_pos_to_i(x, y)
-        return self.chunk((x // self.chunk_size, y // self.chunk_size))[0][i:i+self.tile_data_size]
-
-    def set_static_tile(self, x, y, tile):
-        chunk = self.chunk((x // self.chunk_size, y // self.chunk_size))
-        if chunk is not None:
-            i = self.convert_pos_to_i(x, y)
-            chunk[0][i:i+self.tile_data_size] = tile
-            return True
-        return False
-
-    def move_dinamic_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
-        chunk = self.chunk((new_chunk_x, new_chunk_y))
-        if chunk:
-            ochunk = self.chunk((chunk_x, chunk_y))
-            if ochunk is not None and obj in ochunk[1]:                
-                    ochunk[1].remove(obj)
-                    chunk[1].append(obj)
-                    return True
-            # else:
-            #     raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")        
-            return False
-        return
-
-    def convert_pos_to_i(self, x, y):
-        #cx, cy = x % self.chunk_size, y % self.chunk_size
-        #i = (cy * self.chunk_size + cx) * self.tile_data_size        
-        return ((y % self.chunk_size) * self.chunk_size + (x % self.chunk_size)) * self.tile_data_size
-
-    def set_chunk_arr2(self, arr):
-        pass
-
-    def create_pass_chunk(self, xy):
-        self.game_map[xy] = [bytearray([0]*self.chunk_arr_size), [], []]
-        return self.game_map[xy]
-
-    def generate_chunk_noise_island(self, x,y):            
-        static_tiles, dinamic_tiles, group_handlers = self.create_pass_chunk((x,y))
-        octaves = 6
-        freq_x = 35
-        freq_y = 15
-        # cloud_objs = [] # objects of class Cloud
-        cloud_tiles = {} # position tile cloud: object of class Cloud
-        base_x = x * CHUNK_SIZE
-        base_y = y * CHUNK_SIZE
-        tile_y = base_y  # global tile y (not px)
-        for y_pos in range(CHUNK_SIZE): # local tile y in chunk (not px)            
-            tile_x = base_x # global tile x (not px)
-            for x_pos in range(CHUNK_SIZE): # local tile x in chunk (not px)
-                tile_type = None
-                v = pnoise2(tile_x / freq_x, tile_y / freq_y, octaves, persistence=0.35)
-                if v > 0.1:
-                    v3 = pnoise2(tile_x / freq_x, (tile_y-5-random.randint(0, 1)) / freq_y, octaves, persistence=0.35)
-                    if v3 > 0.10:
-                        tile_type = 3 # stone
-                        v4 = pnoise2(tile_x / 5, tile_y / 5, 2, persistence=0.85)
-                        if v4 > 0.2:                    
-                            tile_type = 4 # blore
-                    else:
-                        v2 = pnoise2((tile_x+1) / freq_x, (tile_y-2-random.randint(0, 1)) / freq_y, octaves, persistence=0.35)
-                        if v2 > 0.10:
-                            tile_type = 2 # dirt                                         
-                        else:
-                            tile_type = 1 # grass
-                            if y_pos > 1 and static_tiles[y_pos - 1][x_pos] == 0:
-                                plant_tile_type = random_plant_selection() #plant
-                                if plant_tile_type is not None:
-                                    static_tiles[y_pos-1][x_pos] = plant_tile_type
-                else:
-                    # пусто  
-                    # ставим растение     
-                    if y_pos == CHUNK_SIZE-1 and\
-                        static_tile_of_game_map(tile_x, tile_y+1, default=0)==1:
-                        tile_type = random_plant_selection()            
-                    if tile_type is None:
-                        # ставим облака
-                        v201 = pnoise2(tile_x / 15, (tile_y) / 10-20, 5, persistence=0.3)
-                        # if 0 <= x_pos <= 2 and 0 <= y_pos <= 2 and x == 0 and y == 0:
-                        if v201 > 0.33:
-                            tile_type = 201 # cloud_1
-                            for vector in ((-1, 0),):# (0, -1)):
-                                o_tile_pos = (x_pos + vector[0], y_pos + vector[1])
-                                if o_tile_pos in cloud_tiles:
-                                    cloud_obj = cloud_tiles[o_tile_pos]
-                                    break
-                            else:                            
-                                cloud_obj = Cloud((tile_x, tile_y), [], (x, y))
-                                dinamic_tiles.append([201, cloud_obj])
-                            cloud_tiles[(x_pos, y_pos)] = cloud_obj
-                            cloud_obj.append(tile_x, tile_y, 1) # x, y, weight                
-                if tile_type is not None:
-                    static_tiles[y_pos][x_pos] = tile_type
-                tile_x += 1
-            tile_y += 1
-        return static_tiles, dinamic_tiles
-
-        
 
 # GENERATING MAP OR CHANK ========================================
 
@@ -244,11 +132,10 @@ def set_static_tile(x, y, tile_type):
 def move_dinamic_obj(chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
     chunk = game_map.get((new_chunk_x, new_chunk_y))
     if chunk:
-        if (chunk_x, chunk_y) in game_map:
-            if obj in game_map[(chunk_x, chunk_y)][1]:
-                game_map[(chunk_x, chunk_y)][1].remove(obj)
-            # else:
-            #     raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
+        if obj in game_map[(chunk_x, chunk_y)][1]:
+            game_map[(chunk_x, chunk_y)][1].remove(obj)
+        # else:
+        #     raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
             
         chunk[1].append(obj)
 
@@ -344,7 +231,8 @@ def generate_chunk_island(x,y):
 # генерация чанка с островами на основе шумов перлинга
 def generate_chunk_noise_island(x,y):    
     static_tiles = [[0]*CHUNK_SIZE for i in range(CHUNK_SIZE)]    
-    dinamic_tiles = []    
+    dinamic_tiles = []
+    
     octaves = 6
     freq_x = 35
     freq_y = 15
