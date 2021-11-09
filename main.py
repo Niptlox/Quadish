@@ -1,4 +1,5 @@
 ﻿import os
+from pygame.display import update
 
 from pygame.event import event_name
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -14,7 +15,8 @@ from pygame.locals import *
 
 # INIT GAME ================================================
 
-DEBUG = True
+# DEBUG = True
+DEBUG = False
 # WINDOW_SIZE = (2200, 1100)
 WINDOW_SIZE = (700*2, 400*2)
 FPS = 60
@@ -38,6 +40,14 @@ WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 1, \
     math.ceil(WINDOW_SIZE[1] / (TILE_SIZE * CHUNK_SIZE)) + 1
 # WINDOW_CHUNK_SIZE = (3, 3)
 print("WINDOW_CHUNK_SIZE", WINDOW_CHUNK_SIZE)
+
+random.seed(12321)
+
+# INIT TIME ================================================================
+
+clock = pygame.time.Clock()
+EVENT_100_MSEC = USEREVENT+1
+pygame.time.set_timer(EVENT_100_MSEC, 100, False)
 
 # INIT TEXT ==================================================
 
@@ -107,25 +117,63 @@ PHYSBODY_TILES = (1, 2, 3, 4)
 
 # CLASS GAMEMAP===================================================
 
+def random_plant_selection():
+    plant_tile_type = None
+    if random.randint(0, 10) == 0:
+        plant_tile_type = 101
+    elif random.randint(0, 10) == 0:
+        plant_tile_type = 102
+    return plant_tile_type
+
 class GameMap:
-    def __init__(self) -> None:
+    def __init__(self, generate_type) -> None:
+        self.gen_type = generate_type
         self.tile_size = TILE_SIZE
-        self.chunk_size = CHUNK_SIZE
         self.tile_data_size = 4
+        self.chunk_size = CHUNK_SIZE
+        self.map_size = [-1, -1]
+        self.chunk_arr_width = self.chunk_size * self.tile_data_size
         self.chunk_arr_size = self.tile_data_size * self.chunk_size ** 2
         self.game_map = {}
 
-    def chunk(self, xy):
-        res = self.game_map.get(xy)
+    def chunk(self, xy, default=None):
+        res = self.game_map.get(xy, default)
         return res
 
-    def get_static_tile(self, x, y):        
+    def chunk_gen(self, xy):
+        index = 0
+        chunk = self.chunk(xy)
+        for y in range(self.chunk_size):
+            for x in range(self.chunk_size):
+                yield index, y, x, chunk[0][index:index+self.tile_data_size]
+                index += self.tile_data_size
+
+    def index_gen(self):
+        index = 0
+        while index < self.chunk_array_size:
+            yield index
+            index += self.tile_data_size
+
+    def get_static_tile(self, x, y, default=None):        
+        chunk = self.chunk((x // self.chunk_size, y // self.chunk_size), default=default)
+        if chunk == default:
+            return chunk
         i = self.convert_pos_to_i(x, y)
-        return self.chunk((x // self.chunk_size, y // self.chunk_size))[0][i:i+self.tile_data_size]
+        return chunk[0][i:i+self.tile_data_size]
+
+    def get_static_tile_type(self, x, y, default=None):  
+        chunk = self.chunk((x // self.chunk_size, y // self.chunk_size), default=default)
+        if chunk == default:
+            return chunk
+        i = self.convert_pos_to_i(x, y)
+        return chunk[0][i]
+
 
     def set_static_tile(self, x, y, tile):
         chunk = self.chunk((x // self.chunk_size, y // self.chunk_size))
         if chunk is not None:
+            if tile is None:
+                tile = (0, 0 ,0 ,0)
             i = self.convert_pos_to_i(x, y)
             chunk[0][i:i+self.tile_data_size] = tile
             return True
@@ -156,8 +204,14 @@ class GameMap:
         self.game_map[xy] = [bytearray([0]*self.chunk_arr_size), [], []]
         return self.game_map[xy]
 
+    def generate_chunk(self, x,y):      
+        if self.gen_type == TGENERATE_INFINITE_LANDS:
+            return self.generate_chunk_noise_island(x, y)
+        return
+
     def generate_chunk_noise_island(self, x,y):            
         static_tiles, dinamic_tiles, group_handlers = self.create_pass_chunk((x,y))
+        tile_index = 0
         octaves = 6
         freq_x = 35
         freq_y = 15
@@ -184,15 +238,16 @@ class GameMap:
                             tile_type = 2 # dirt                                         
                         else:
                             tile_type = 1 # grass
-                            if y_pos > 1 and static_tiles[y_pos - 1][x_pos] == 0:
+                            
+                            if y_pos > 1 and static_tiles[tile_index-self.chunk_arr_width] == 0:
                                 plant_tile_type = random_plant_selection() #plant
                                 if plant_tile_type is not None:
-                                    static_tiles[y_pos-1][x_pos] = plant_tile_type
+                                    static_tiles[tile_index-self.chunk_arr_width] = plant_tile_type
                 else:
                     # пусто  
                     # ставим растение     
                     if y_pos == CHUNK_SIZE-1 and\
-                        static_tile_of_game_map(tile_x, tile_y+1, default=0)==1:
+                        self.get_static_tile(tile_x, tile_y+1, default=0)==1:
                         tile_type = random_plant_selection()            
                     if tile_type is None:
                         # ставим облака
@@ -200,221 +255,29 @@ class GameMap:
                         # if 0 <= x_pos <= 2 and 0 <= y_pos <= 2 and x == 0 and y == 0:
                         if v201 > 0.33:
                             tile_type = 201 # cloud_1
-                            for vector in ((-1, 0),):# (0, -1)):
-                                o_tile_pos = (x_pos + vector[0], y_pos + vector[1])
-                                if o_tile_pos in cloud_tiles:
-                                    cloud_obj = cloud_tiles[o_tile_pos]
-                                    break
-                            else:                            
-                                cloud_obj = Cloud((tile_x, tile_y), [], (x, y))
-                                dinamic_tiles.append([201, cloud_obj])
-                            cloud_tiles[(x_pos, y_pos)] = cloud_obj
-                            cloud_obj.append(tile_x, tile_y, 1) # x, y, weight                
-                if tile_type is not None:
-                    static_tiles[y_pos][x_pos] = tile_type
-                tile_x += 1
-            tile_y += 1
-        return static_tiles, dinamic_tiles
-
-        
-
-# GENERATING MAP OR CHANK ========================================
-
-def static_tile_of_game_map(x, y, default=None):
-    cx = x//CHUNK_SIZE
-    cy = y//CHUNK_SIZE    
-    chunk = game_map.get((cx, cy))
-    if chunk:
-        return chunk[0][y % CHUNK_SIZE][x % CHUNK_SIZE]
-    else:
-        return default
-
-def set_static_tile(x, y, tile_type):
-    cx = x//CHUNK_SIZE
-    cy = y//CHUNK_SIZE    
-    chunk = game_map.get((cx, cy))
-    if chunk:        
-        chunk[0][y % CHUNK_SIZE][x % CHUNK_SIZE] = tile_type
-        # assert tile_type != 0 
-        return tile_type
-    else:      
-        # assert x > 4
-        return 
-
-def move_dinamic_obj(chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
-    chunk = game_map.get((new_chunk_x, new_chunk_y))
-    if chunk:
-        if (chunk_x, chunk_y) in game_map:
-            if obj in game_map[(chunk_x, chunk_y)][1]:
-                game_map[(chunk_x, chunk_y)][1].remove(obj)
-            # else:
-            #     raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
-            
-        chunk[1].append(obj)
-
-def random_plant_selection():
-    plant_tile_type = None
-    if random.randint(0, 10) == 0:
-        plant_tile_type = 101
-    elif random.randint(0, 10) == 0:
-        plant_tile_type = 102
-    return plant_tile_type
-
-def generate_chunk(x, y):
-    if map_generate_type == TGENERATE_INFINITE:
-        return generate_chunk_flat(x,y)
-    elif map_generate_type == TGENERATE_INFINITE_LANDS:
-        return generate_chunk_noise_island(x,y) #generate_chunk_island(x,y)
-
-def generate_chunk_flat(x,y):    
-    static_tiles = [[0]*CHUNK_SIZE for i in range(CHUNK_SIZE)]
-    dinamic_tiles = []
-    i = 0
-    m_a_g = [None] * CHUNK_SIZE
-    for y_pos in range(CHUNK_SIZE-1, -1, -1):        
-        for x_pos in range(CHUNK_SIZE):
-            tile_x = x * CHUNK_SIZE + x_pos
-            tile_y = y * CHUNK_SIZE + y_pos
-            tile_type = 0 # nothing
-            if tile_y > 10:
-                tile_type = 2 # dirt
-            elif tile_y == 10:
-                tile_type = random.randint(0, 1) # grass
-                m_a_g[x_pos] = tile_type
-            elif tile_y == 9:
-                if random.randint(1,5) == 1 and m_a_g[x_pos] is not None:
-                    tile_type = m_a_g[x_pos] # plant
-            if tile_type != 0:
-                static_tiles[y_pos][x_pos] = tile_type
-            i += 1
-    return static_tiles, dinamic_tiles
-
-def generate_chunk_island(x,y):    
-    static_tiles = [[0]*CHUNK_SIZE for i in range(CHUNK_SIZE)]    
-    dinamic_tiles = []
-    i = 0
-    for y_pos in range(CHUNK_SIZE):        
-        for x_pos in range(CHUNK_SIZE):
-            if random.randint(1,CHUNK_SIZE**2//16) == 1:
-                w = random.randint(5,15)
-                h = math.ceil(w / 2)
-                island_edges = ((x_pos, y_pos), (x_pos + w, y_pos), (x_pos+w, y_pos+ h), (x_pos, y_pos+h))
-                for edge in island_edges:
-                    if y_pos + edge[1] >= CHUNK_SIZE or x_pos + edge[0] >= CHUNK_SIZE:
-                        continue
-                    if static_tiles[edge[1]][edge[0]] != 0:    
-                        break
-                else:
-                    if static_tiles[y_pos][x_pos] == 0:
-                        for iy in range(h):
-                            if y_pos + iy >= CHUNK_SIZE:
-                                break                            
-                            for ix in range(iy, w - iy * 2 + iy):
-                                if x_pos + ix >= CHUNK_SIZE:
-                                    break
-                                if iy == 0 and y_pos > 0:
-                                    d_tile_type = None
-                                    if random.randint(1, 20) == 1:
-                                        d_tile_type = 101
-                                    elif random.randint(1, 20) == 1:
-                                        d_tile_type = 102
-                                    # if d_tile_type != 0:
-                                    if y_pos > 1:
-                                        if static_tiles[y_pos + iy - 2][x_pos + ix] < 100:
-                                            if d_tile_type is None:
-                                                d_tile_type = 0
-                                        else:
-                                            if d_tile_type is not None:
-                                                d_tile_type = 0
-                                            
-                                    if d_tile_type is not None:
-                                        static_tiles[y_pos + iy - 1][x_pos + ix] = d_tile_type
-
-
-                                tile_type = 2 # dirt
-                                if iy == 0:
-                                    tile_type = 1 # grass
-                                if iy > 2:
-                                    tile_type = 3 # stone
-                                    if random.randint(1, 10) == 1:
-                                        tile_type = 4 # blore                                        
-                                static_tiles[y_pos + iy][x_pos + ix] = tile_type
-    return static_tiles, dinamic_tiles
-
-# генерация чанка с островами на основе шумов перлинга
-def generate_chunk_noise_island(x,y):    
-    static_tiles = [[0]*CHUNK_SIZE for i in range(CHUNK_SIZE)]    
-    dinamic_tiles = []    
-    octaves = 6
-    freq_x = 35
-    freq_y = 15
-    # cloud_objs = [] # objects of class Cloud
-    cloud_tiles = {} # position tile cloud: object of class Cloud
-    for y_pos in range(CHUNK_SIZE): # local tile y in chunk (not px)
-        for x_pos in range(CHUNK_SIZE): # local tile x in chunk (not px)
-            tile_type = None
-            tile_x = x * CHUNK_SIZE + x_pos # global tile x (not px)
-            tile_y = y * CHUNK_SIZE + y_pos # global tile y (not px)
-
-            v = pnoise2(tile_x / freq_x, tile_y / freq_y, octaves, persistence=0.35)
-            if v > 0.1:
-                v3 = pnoise2(tile_x / freq_x, (tile_y-5-random.randint(0, 1)) / freq_y, octaves, persistence=0.35)
-                if v3 > 0.10:
-                    tile_type = 3 # stone
-                    v4 = pnoise2(tile_x / 5, tile_y / 5, 2, persistence=0.85)
-                    if v4 > 0.2:                    
-                        tile_type = 4 # blore
-                else:
-                    v2 = pnoise2((tile_x+1) / freq_x, (tile_y-2-random.randint(0, 1)) / freq_y, octaves, persistence=0.35)
-                    if v2 > 0.10:
-                        tile_type = 2 # dirt                                         
-                    else:
-                        tile_type = 1 # grass
-                        if y_pos > 1 and static_tiles[y_pos - 1][x_pos] == 0:
-                            plant_tile_type = random_plant_selection() #plant
-                            if plant_tile_type is not None:
-                                static_tiles[y_pos-1][x_pos] = plant_tile_type
-            else:
-                # пусто  
-                # ставим растение     
-                if y_pos == CHUNK_SIZE-1 and\
-                    static_tile_of_game_map(tile_x, tile_y+1, default=0)==1:
-                    tile_type = random_plant_selection()            
-                if tile_type is None:
-                    # ставим облака
-                    v201 = pnoise2(tile_x / 15, (tile_y) / 10-20, 5, persistence=0.3)
-                    # if 0 <= x_pos <= 2 and 0 <= y_pos <= 2 and x == 0 and y == 0:
-                    if v201 > 0.33:
-                        tile_type = 201 # cloud_1
-                        for vector in ((-1, 0),):# (0, -1)):
-                            o_tile_pos = (x_pos + vector[0], y_pos + vector[1])
-                            if o_tile_pos in cloud_tiles:
-                                cloud_obj = cloud_tiles[o_tile_pos]
+                            o_tile_index = tile_index - 1 if tile_index % self.chunk_size > 0 else -1
+                            if o_tile_index in cloud_tiles:
+                                cloud_obj = cloud_tiles[o_tile_index]
                                 break
-                        else:                            
-                            cloud_obj = Cloud((tile_x, tile_y), [], (x, y))
-                            dinamic_tiles.append([201, cloud_obj])
-                        cloud_tiles[(x_pos, y_pos)] = cloud_obj
-                        cloud_obj.append(tile_x, tile_y, 1) # x, y, weight                
-            if tile_type is not None:
-                static_tiles[y_pos][x_pos] = tile_type
-    return static_tiles, dinamic_tiles
+                            else:                            
+                                cloud_obj = Cloud((tile_x, tile_y))
+                                group_handlers.append(cloud_obj)
+                            cloud_tiles[tile_index] = cloud_obj
+                            cloud_obj.add_to_line(tile_x, tile_y, 1) # x, y, weight                
+                if tile_type is not None:
+                    static_tiles[tile_index] = tile_type
+                tile_x += 1
+                tile_index += self.tile_data_size
+            tile_y += 1
+        return static_tiles, dinamic_tiles, group_handlers
 
-def create_game_map(nums_game_map):
-    map_size = [len(nums_game_map[0]), len(nums_game_map)]
-    chunk_map_size = math.ceil(map_size[0] / CHUNK_SIZE), math.ceil(map_size[1] / CHUNK_SIZE)
-    game_map = {}    
-    for chunk_y in range(chunk_map_size[1]):
-        for chunk_x in range(chunk_map_size[0]):
-            game_map[(chunk_x, chunk_y)] = [[[int(nums_game_map[y][x]) 
-                for x in range(chunk_x * CHUNK_SIZE, min((chunk_x + 1) * CHUNK_SIZE, map_size[0]))] 
-                for y in range(chunk_y * CHUNK_SIZE, min((chunk_y + 1) * CHUNK_SIZE, map_size[1]))],
-                []] # static, dinamic
-            print((chunk_x, chunk_y))
-            print(*game_map[(chunk_x, chunk_y)], sep="\n")
-            pass
-    return game_map, map_size, chunk_map_size
-
+# gm = GameMap(2)
+# gm.generate_chunk_noise_island(0, 0)
+# gm.generate_chunk_noise_island(1, 0)
+# gm.generate_chunk_noise_island(0, 1)
+# gm.generate_chunk_noise_island(1, 1)
+# pass
+# GENERATING MAP OR CHANK ========================================
 
 game_map = [['1','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0',"0","0","0","0"]*4,
             ['0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0',"0","0","0","0"]*4,
@@ -432,12 +295,9 @@ game_map = [['1','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0'
 TGENERATE_LOAD = 0
 TGENERATE_INFINITE = 1
 TGENERATE_INFINITE_LANDS = 2
-map_generate_type = 2 # 0:load map,1: autogenerate
-if map_generate_type == TGENERATE_LOAD:
-    game_map, map_size, chunk_map_size = create_game_map(game_map)
-    map_rect = [0, 0] + map_size
-else:
-    game_map = {}
+generate_type = 2 # 0:load map,1: autogenerate
+game_map: GameMap = GameMap(generate_type)
+
 
 # HANDLERS GAME OBJECTS ==================================================
 
@@ -456,7 +316,7 @@ def collision_test(rect: pygame.Rect, static_tiles: dict, dynamic_tiles: list=[]
     for vertex in vertexes:
         # координаты угла в перещёте на блоки
         v_xy_map = v_x_map, v_y_map = (vertex[0] // TILE_SIZE, vertex[1] // TILE_SIZE)
-        if map_generate_type == TGENERATE_LOAD and not(0 <= v_x_map < map_size[0] and 0 <= v_y_map < map_size[1]):
+        if game_map.gen_type == TGENERATE_LOAD and not(0 <= v_x_map < game_map.map_size[0] and 0 <= v_y_map < game_map.map_size[1]):
             hit_static_lst.append((v_xy_map, -1)) 
         elif static_tiles.get(v_xy_map) in PHYSBODY_TILES:
             hit_static_lst.append((v_xy_map, static_tiles.get(v_xy_map)))
@@ -509,16 +369,17 @@ class PhiscalObject:
         pygame.draw.rect(screen,(255,255,0),self.rect)
 
 class Cloud:
-    def __init__(self, pos, tiles, chunk) -> None:
+    def __init__(self, pos, tiles=[], tiles_range=[], chunk=None) -> None:
         self.x, self.y = pos
         self.tiles = tiles
-        self.tiles_range = []
-        self.height = len(tiles)
+        self.tiles_range = tiles_range
+        # self.height = len(tiles)
         self.last_tact_update = 0
         self.chunk = chunk
         self.tiles_count = 0
 
     def update(self, tact):
+        return
         if self.tiles_count > 0:
             if tact - self.last_tact_update > 1 / wind:
                 self.last_tact_update = tact
@@ -591,20 +452,21 @@ class Cloud:
                 x_right_i = i
         return x_left, x_left_i, x_right, x_right_i, tile_y
 
-    def append(self, tile_x, tile_y, weight):
+    def add_to_line(self, tile_x, tile_y, weight) -> bool:        
+        if self.y != tile_y:
+            return False                
         tile = [tile_x, tile_y, weight]
-        y = tile_y - self.y
-        if y > (self.height-1):
-            self.tiles.append([]*(y-self.height+1))
-            self.height = y + 1
-        self.tiles[y].append(tile)
+        if tile_x == self.x:
+            self.tiles_range.append(tile_x)        
+        self.tiles.append(tile)
         self.tiles_count += 1
+        return True
 
             
 # CREATING PLAYER ==========================================================
 
 def dig_tile(x, y):
-    tile = static_tile_of_game_map(x, y, 0)    
+    tile = game_map.get_static_tile_type(x, y, 0)    
     if tile == 0:
         return
     i = 0
@@ -621,7 +483,7 @@ def dig_tile(x, y):
     else:
         print("Перепонен инвентарь", tile)
     
-    set_static_tile(x, y, 0)
+    game_map.set_static_tile(x, y, None)
 
 global player
 player = PhiscalObject(0, 0, TILE_SIZE-1, TILE_SIZE-1)    
@@ -663,10 +525,17 @@ def redraw_top():
         x += TILE_SIZE + 7
 redraw_top()
 
+global text_fps, true_fps
+
+def update_fps():
+    global text_fps, true_fps
+    true_fps = clock.get_fps()
+    text_fps = textfont.render(f"{int(true_fps)}fps", False, "red")
+update_fps()
+
 # MAIN LOOP =================================================================
 
 def main():    
-    clock = pygame.time.Clock()
     tact = 0
     true_scroll = [player.rect.x, player.rect.y]
     on_wall = False
@@ -692,10 +561,10 @@ def main():
 
         true_scroll[0] += (player.rect.x - true_scroll[0] - WINDOW_SIZE[0] // 2) / 20
         true_scroll[1] += (player.rect.y - true_scroll[1] - WINDOW_SIZE[1] // 2) / 20
-        if map_generate_type == TGENERATE_LOAD:
-            true_scroll = [max(map_rect[0], true_scroll[0]), max(map_rect[1], true_scroll[1])]
-            if true_scroll[0] > map_size[0] * TILE_SIZE - WINDOW_SIZE[0]:
-                true_scroll[0] = map_size[0] * TILE_SIZE - WINDOW_SIZE[0]
+        if game_map.gen_type == TGENERATE_LOAD:
+            true_scroll = [max(0, true_scroll[0]), max(0, true_scroll[1])]
+            if true_scroll[0] > game_map.map_size[0] * TILE_SIZE - WINDOW_SIZE[0]:
+                true_scroll[0] = game_map.map_size[0] * TILE_SIZE - WINDOW_SIZE[0]
         scroll = [int(true_scroll[0]), int(true_scroll[1])]
         # scroll = player.rect.x, player.rect.y
 
@@ -703,6 +572,7 @@ def main():
 
         static_tiles = {}
         dinamic_tiles = []
+        group_handlers = []
         scroll_chunk_x = ((scroll[0])//(TILE_SIZE)+ CHUNK_SIZE-1)//CHUNK_SIZE-1
         chunk_y = ((scroll[1])//(TILE_SIZE)+ CHUNK_SIZE-1)//CHUNK_SIZE-1   
         for cy in range(WINDOW_CHUNK_SIZE[1]):                
@@ -710,28 +580,33 @@ def main():
             for cx in range(WINDOW_CHUNK_SIZE[0]):
                 if DEBUG:
                     display.blit(chunk_img, (chunk_x*CHUNK_SIZE*TILE_SIZE-scroll[0], chunk_y*CHUNK_SIZE*TILE_SIZE-scroll[1]))
-                chunk_pos = (chunk_x, chunk_y)                
-                if chunk_pos not in game_map:
-                    if map_generate_type != TGENERATE_LOAD:
+                chunk_pos = (chunk_x, chunk_y)    
+                chunk = game_map.chunk(chunk_pos)            
+                if chunk is None:
+                    if game_map.gen_type != TGENERATE_LOAD:
                         # генериует статические и динамичские
-                        game_map[chunk_pos] = generate_chunk(*chunk_pos) # [static_lst, dinamic_lst]
-                chunk = game_map.get(chunk_pos)
+                        chunk = game_map.generate_chunk(chunk_x, chunk_y) # [static_lst, dinamic_lst]
                 if chunk:
                     # if cx  + cy == 0:
                     #     print("chunk_pos", chunk_pos)
                     dinamic_tiles += chunk[1]
-                    chunk_size = len(chunk[0][0]) if chunk else 0, len(chunk[0])
-                    for x in range(chunk_size[0]):
-                        for y in range(chunk_size[1]):
-                            tile = chunk[0][y][x]
-                            tile_xy = ((chunk_x*CHUNK_SIZE+x), (chunk_y*CHUNK_SIZE+y))
-                            if tile > 0:
+                    group_handlers += chunk[2]            
+                    index = 0        
+                    tile_y = chunk_y*CHUNK_SIZE
+                    for y in range(game_map.chunk_size):
+                        tile_x = chunk_x*CHUNK_SIZE
+                        for x in range(game_map.chunk_size):
+                            tile = chunk[0][index:index+game_map.tile_data_size]
+                            tile_type = tile[0]
+                            if tile_type > 0:
                                 # print(tile_xy)
-                                display.blit(tile_imgs[tile], (tile_xy[0]*TILE_SIZE-scroll[0], tile_xy[1]*TILE_SIZE-scroll[1]))
-                            if tile in PHYSBODY_TILES:                                
-                                static_tiles[tile_xy] = tile
-                            if chunk_pos[1] > 0:
-                                pass
+                                display.blit(tile_imgs[tile_type], (tile_x*TILE_SIZE-scroll[0], tile_y*TILE_SIZE-scroll[1]))
+                            if tile_type in PHYSBODY_TILES:                                
+                                static_tiles[(tile_x, tile_y)] = tile_type
+                            index += game_map.tile_data_size
+                            tile_x += 1
+                        tile_y += 1
+
                 chunk_x += 1
             chunk_y += 1
      
@@ -739,12 +614,14 @@ def main():
         
         for i in range(len(dinamic_tiles)):
             tile = dinamic_tiles[i]
-            new_tile = None
-            if tile[0] == 201: #cloud
-                tile[1].update(tact)
-            if new_tile is not None:
-                dinamic_tiles[i] = new_tile
+            tile.update(tact)
 
+        # PROCESSING GROUP TILES =======================================
+
+        for i in range(len(group_handlers)):
+            tile = group_handlers[i]            
+            tile.update(tact)
+           
         # PROCESSING PLAYER ACTIONS =======================================
 
         player_movement = [0,0]
@@ -828,9 +705,13 @@ def main():
                     on_down = False
                 elif event.key in (K_LCTRL, K_RCTRL):
                     dig = False
+            elif event.type == EVENT_100_MSEC:
+                update_fps()
          
         # DRAW DISPLAY GAME TO WINDOW ========================================
-        display.blit(top_surface, (0, 0))
+        display.blit(top_surface, (0, 0))        
+        display.blit(text_fps, (WINDOW_SIZE[0]-50, 5))
+
         # pygame.transform.scale(display,(WINDOW_SIZE[0]//1.8, WINDOW_SIZE[1]//1.8)), (100, 100)
         screen.blit(display, (0, 0))
         pygame.display.flip()

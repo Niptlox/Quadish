@@ -1,4 +1,5 @@
 ﻿import os
+from pygame.display import update
 
 from pygame.event import event_name
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -14,7 +15,7 @@ from pygame.locals import *
 
 # INIT GAME ================================================
 
-DEBUG = True
+DEBUG = False
 # WINDOW_SIZE = (2200, 1100)
 WINDOW_SIZE = (700*2, 400*2)
 FPS = 60
@@ -38,6 +39,14 @@ WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 1, \
     math.ceil(WINDOW_SIZE[1] / (TILE_SIZE * CHUNK_SIZE)) + 1
 # WINDOW_CHUNK_SIZE = (3, 3)
 print("WINDOW_CHUNK_SIZE", WINDOW_CHUNK_SIZE)
+
+
+# INIT TIME ================================================================
+
+clock = pygame.time.Clock()
+EVENT_100_MSEC = USEREVENT+1
+pygame.time.set_timer(EVENT_100_MSEC, 100, False)
+
 
 # INIT TEXT ==================================================
 
@@ -103,7 +112,7 @@ tile_imgs = {1: grass_img,
              203: cloud_img_3,             
              }
 count_tiles = len(tile_imgs)
-PHYSBODY_TILES = (1, 2, 3, 4)
+PHYSBODY_TILES = (1, 2, 3, 4,)
 
 
 # GENERATING MAP OR CHANK ========================================
@@ -551,10 +560,17 @@ def redraw_top():
         x += TILE_SIZE + 7
 redraw_top()
 
+global text_fps, true_fps
+
+def update_fps():
+    global text_fps, true_fps
+    true_fps = clock.get_fps()
+    text_fps = textfont.render(f"{int(true_fps)}fps", False, "red")
+update_fps()
+
 # MAIN LOOP =================================================================
 
 def main():    
-    clock = pygame.time.Clock()
     tact = 0
     true_scroll = [player.rect.x, player.rect.y]
     on_wall = False
@@ -615,7 +631,10 @@ def main():
                             tile_xy = ((chunk_x*CHUNK_SIZE+x), (chunk_y*CHUNK_SIZE+y))
                             if tile > 0:
                                 # print(tile_xy)
-                                display.blit(tile_imgs[tile], (tile_xy[0]*TILE_SIZE-scroll[0], tile_xy[1]*TILE_SIZE-scroll[1]))
+                                if tile in tile_imgs:
+                                    display.blit(tile_imgs[tile], (tile_xy[0]*TILE_SIZE-scroll[0], tile_xy[1]*TILE_SIZE-scroll[1]))
+                                else:
+                                    print("ERROR TILE!", tile )
                             if tile in PHYSBODY_TILES:                                
                                 static_tiles[tile_xy] = tile
                             if chunk_pos[1] > 0:
@@ -704,7 +723,6 @@ def main():
                     on_down = True
                 elif event.key in (K_LCTRL, K_RCTRL):
                     dig = True
-                    
             elif event.type == KEYUP:
                 if event.key == K_RIGHT:
                     moving_right = False
@@ -716,13 +734,18 @@ def main():
                     on_down = False
                 elif event.key in (K_LCTRL, K_RCTRL):
                     dig = False
-         
+            elif event.type == EVENT_100_MSEC:
+                update_fps()
+                
+
         # DRAW DISPLAY GAME TO WINDOW ========================================
         display.blit(top_surface, (0, 0))
+        display.blit(text_fps, (WINDOW_SIZE[0]-50, 5))
+
         # pygame.transform.scale(display,(WINDOW_SIZE[0]//1.8, WINDOW_SIZE[1]//1.8)), (100, 100)
         screen.blit(display, (0, 0))
         pygame.display.flip()
-        clock.tick(FPS)
+        true_fps = clock.tick(FPS)
 
         tact += 1
     pygame.quit()
