@@ -27,7 +27,7 @@ screen = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SHOWN, vsync=2)
 display = pygame.Surface(WINDOW_SIZE)
 
 TILE_SIZE = 48
-# TILE_SIZE = 16
+TILE_SIZE = 16
 # TILE_SIZE = 8
 TILE_RECT = (TILE_SIZE, TILE_SIZE)
 
