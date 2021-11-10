@@ -13,13 +13,17 @@ from noise import snoise2, pnoise2
 import pygame
 from pygame.locals import *
 
-# INIT GAME ================================================
-
+# DEBUG ====================================================
 DEBUG = True
 # DEBUG = False
+show_chunk_grid = True
+show_group_obj = True
+show_info_menu = True
+# INIT GAME ================================================
+
 WINDOW_SIZE = (2200, 1100)
 WINDOW_SIZE = (700*2, 400*2)
-FPS = 120
+FPS = 60
 
 pygame.init() # initiate pygame
 pygame.display.set_caption('Pygame Window')
@@ -53,8 +57,9 @@ pygame.time.set_timer(EVENT_100_MSEC, 100, False)
 
 pygame.font.init()
 # textfont = pygame.font.SysFont('Jokerman', 19)
-textfont = pygame.font.SysFont("Fenix", 19)
-textfont_info = pygame.font.Font('data/fonts/Teletactile.ttf', 10)
+textfont = pygame.font.SysFont("Fenix", 19, )
+# textfont = pygame.font.Font('data/fonts/Teletactile.ttf', 10, bold=True)
+textfont_info = pygame.font.Font('data/fonts/Teletactile.ttf', 10, )
 
 # texframe = font.render(text, False, text_color)
 text_color = "#1C1917"
@@ -115,8 +120,7 @@ tile_imgs = {1: grass_img,
              102: smalltree_img,
              151: group_img,
              201: cloud_img,
-             202: cloud_img_2,
-             203: cloud_img_3,             
+             202: (cloud_img,cloud_img_2,cloud_img_3),             
              }
 count_tiles = len(tile_imgs)
 PHYSBODY_TILES = (1, 2, 3, 4)
@@ -185,6 +189,22 @@ class GameMap:
             return True
         return False
 
+    def set_static_tile_group(self, x, y, group_id):
+        chunk = self.chunk((x // self.chunk_size, y // self.chunk_size))
+        if chunk is not None:
+            i = self.convert_pos_to_i(x, y)
+            chunk[0][i+3] = group_id
+            return True
+        return False
+
+    def set_static_tile_state(self, x, y, state):
+        chunk = self.chunk((x // self.chunk_size, y // self.chunk_size))
+        if chunk is not None:
+            i = self.convert_pos_to_i(x, y)
+            chunk[0][i+1] = state
+            return True
+        return False
+
     def move_dinamic_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
         chunk = self.chunk((new_chunk_x, new_chunk_y))
         if chunk:
@@ -200,28 +220,30 @@ class GameMap:
 
     def move_group_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
         chunk = self.chunk((new_chunk_x, new_chunk_y))
+        i = obj.id
         if chunk:
             ochunk = self.chunk((chunk_x, chunk_y))
-            if ochunk is not None and obj in ochunk[2]:
-                    ochunk[2].remove(obj)
-                    chunk[2].append(obj)
+            if ochunk is not None and i in ochunk[2]:
+                    del ochunk[2][i]
+                    chunk[2][i] = obj
                     return True
             else:
-                raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")        
+                raise Exception(f"Ошибка передвижения динамики. Объект {i, obj} не находится в чанке {(chunk_x, chunk_y)}")        
             return False
         return
 
     def del_group_obj(self, chunk_x, chunk_y, obj):
         chunk = self.chunk((chunk_x, chunk_y))
-        if chunk and obj in chunk[2]:        
-            chunk[2].remove(obj)                    
+        i = obj.id
+        if chunk and i in chunk[2]:        
+            del chunk[2][i]
             return True
         return False
 
     def add_group_obj(self, chunk_x, chunk_y, obj):
         chunk = self.chunk((chunk_x, chunk_y))
         if chunk:        
-            chunk[2].append(obj)                    
+            chunk[2][obj.id] = obj
             return True
         return False
 
@@ -235,7 +257,7 @@ class GameMap:
 
     def create_pass_chunk(self, xy):
         # self.game_map[xy] = [bytearray([0]*self.chunk_arr_size), [], []]
-        self.game_map[xy] = [[0]*self.chunk_arr_size, [], []]
+        self.game_map[xy] = [[0]*self.chunk_arr_size, [], {}]
         return self.game_map[xy]
 
     def generate_chunk(self, x,y):      
@@ -294,9 +316,11 @@ class GameMap:
                                 cloud_obj = cloud_tiles[o_tile_index]                                
                             else:                            
                                 cloud_obj = Cloud((tile_x, tile_y), (x, y))
-                                group_handlers.append(cloud_obj)
+                                group_handlers[id(cloud_obj)] = cloud_obj
                             cloud_tiles[tile_index] = cloud_obj
                             cloud_obj.add_to_line(tile_x, tile_y, 1) # x, y, weight                
+                            static_tiles[tile_index+1] = 1
+                            static_tiles[tile_index+3] = cloud_obj.id
                 if tile_type is not None:
                     static_tiles[tile_index] = tile_type
                 tile_x += 1
@@ -409,6 +433,7 @@ class Cloud:
         self.last_tact_update = 0
         self.chunk_x, self.chunk_y = chunk_pos
         self.tiles_count = 0 # ширина облака
+        self.id = id(self)
         
 
     def update(self, tact):
@@ -429,9 +454,11 @@ class Cloud:
                                 if cloud is None:                                    
                                     if game_map.get_static_tile_type(cx, self.y, 0) is not 0:
                                         cloud = Cloud((cx, self.y), (cx // game_map.chunk_size, self.chunk_y))
-                                        game_map.add_group_obj(cloud.chunk_x, cloud.chunk_y, cloud)
+                                        game_map.add_group_obj(cloud.chunk_x, cloud.chunk_y, cloud)                                        
+                                        game_map.set_static_tile_group(cx, self.y, cloud.id)
                                         cloud.add_to_line(cx, self.y, self.tiles_w[ci-1])
-                                else:                                
+                                else:      
+                                    game_map.set_static_tile_group(cx, self.y, cloud.id)
                                     cloud.add_to_line(cx, self.y, self.tiles_w[ci-1])
                                 ci += 1
                                 print(ci)                                                                                            
@@ -441,24 +468,62 @@ class Cloud:
                             return
                         del self.tiles_w[i:]
                         break
+                    else:
+                        game_map.set_static_tile_state(x, self.y, self.tiles_w[i-1])
                 # if 1:
+
                 #     pass
-                if wind_vector_x > 0:                    
+                if wind_vector_x > 0:
                     # wind ------>
-                    if game_map.get_static_tile_type(self.rx + 1, self.y) is 0:
+                    ttype = game_map.get_static_tile_type(self.rx + 1, self.y)
+                    if ttype is 0:
                         self.rx += 1
                         self.x += 1
-                        game_map.set_static_tile(self.rx, self.y, [201, self.tiles_w[-1], 0, 0])                        
-                        game_map.set_static_tile(self.x - 1, self.y, None)
-                elif wind_vector_x < 0:                   
+                        game_map.set_static_tile(self.rx, self.y, [201, self.tiles_w[-1], 0, self.id])
+                        game_map.set_static_tile(self.x - 1, self.y, None)                    
+                elif wind_vector_x < 0:
                     # wind <------- 
-                    if game_map.get_static_tile_type(self.x - 1, self.y) is 0:
+                    ttype = game_map.get_static_tile_type(self.x - 1, self.y)
+                    if ttype is 0:
                         self.rx -= 1
                         self.x -= 1
-                        game_map.set_static_tile(self.x, self.y, [201, self.tiles_w[-1], 0, 0])                        
+                        game_map.set_static_tile(self.x, self.y, [201, self.tiles_w[-1], 0, self.id])                        
                         game_map.set_static_tile(self.rx + 1, self.y, None)
-
-
+                    elif ttype == 201:
+                        tile = game_map.get_static_tile(self.x - 1, self.y)
+                        g_id = tile[3]
+                        chunk_x = (self.x-1) // game_map.chunk_size
+                        cloud = None
+                        i = 0
+                        while cloud is None and i < 2:
+                            chunk = game_map.chunk((chunk_x - i, self.chunk_y))
+                            if chunk is None:
+                                break
+                            cloud = chunk[2].get(g_id)
+                            i += 1                            
+                        if cloud:                            
+                            ci = 0
+                            for cx in range(self.x, self.rx+1):
+                                game_map.set_static_tile_group(cx, self.y, cloud.id)
+                                cloud.add_to_line(cx, self.y, self.tiles_w[ci-1])
+                                ci += 1
+                            self.set_tiles_count(0)
+                    elif self.tiles_count > 1:                        
+                        i = 0
+                        while self.tiles_w[i] >= 3: 
+                            i += 1                            
+                            if i >= self.tiles_count-1:
+                                break
+                        else:                            
+                            n_w = min(self.tiles_w[i] + self.tiles_w[i+1], 3)
+                            self.tiles_w[i+1] = self.tiles_w[i+1] - (n_w - self.tiles_w[i])
+                            self.tiles_w[i] = n_w
+                            if self.tiles_w[i+1] <= 0:
+                                self.rx -= 1
+                                del self.tiles_w[-1]
+                                game_map.set_static_tile(self.rx + 1, self.y, None)
+                                self.set_tiles_count(self.tiles_count - 1)
+                            return
                 chunk_x = self.x // game_map.chunk_size
                 if chunk_x != self.chunk_x:
                     game_map.move_group_obj(self.chunk_x, self.chunk_y, chunk_x, self.chunk_y, self)
@@ -585,7 +650,15 @@ def main():
     player_speed = 4.1 * (WINDOW_SIZE[0] / 700) * (60 / FPS)
     running = True
     air_timer = 0
+    pause = False
     while running:     
+        if pause:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == KEYDOWN and event.key == K_p:
+                    pause = False
+            continue
         display.fill(sky)
 
         # CALCULATION SCROLL MAP AND PLAYER ==================================
@@ -603,13 +676,13 @@ def main():
 
         static_tiles = {}
         dinamic_tiles = []
-        group_handlers = []
+        group_handlers = {}
         scroll_chunk_x = ((scroll[0])//(TILE_SIZE)+ CHUNK_SIZE-1)//CHUNK_SIZE-1
         chunk_y = ((scroll[1])//(TILE_SIZE)+ CHUNK_SIZE-1)//CHUNK_SIZE-1   
         for cy in range(WINDOW_CHUNK_SIZE[1]):                
             chunk_x = scroll_chunk_x
             for cx in range(WINDOW_CHUNK_SIZE[0]):
-                if DEBUG:
+                if show_chunk_grid:
                     display.blit(chunk_img, (chunk_x*CHUNK_SIZE*TILE_SIZE-scroll[0], chunk_y*CHUNK_SIZE*TILE_SIZE-scroll[1]))
                 chunk_pos = (chunk_x, chunk_y)    
                 chunk = game_map.chunk(chunk_pos)            
@@ -621,7 +694,7 @@ def main():
                     # if cx  + cy == 0:
                     #     print("chunk_pos", chunk_pos)
                     dinamic_tiles += chunk[1]
-                    group_handlers += chunk[2]            
+                    group_handlers.update(chunk[2])
                     index = 0        
                     tile_y = chunk_y*CHUNK_SIZE
                     for y in range(game_map.chunk_size):
@@ -631,7 +704,11 @@ def main():
                             tile_type = tile[0]
                             if tile_type > 0:
                                 # print(tile_xy)
-                                display.blit(tile_imgs[tile_type], (tile_x*TILE_SIZE-scroll[0], tile_y*TILE_SIZE-scroll[1]))
+                                if tile_type == 201:
+                                    img = tile_imgs[tile_type+1][tile[1]-1]
+                                else:
+                                    img = tile_imgs[tile_type]
+                                display.blit(img, (tile_x*TILE_SIZE-scroll[0], tile_y*TILE_SIZE-scroll[1]))
                             if tile_type in PHYSBODY_TILES:                                
                                 static_tiles[(tile_x, tile_y)] = tile_type
                             index += game_map.tile_data_size
@@ -649,10 +726,10 @@ def main():
 
         # PROCESSING GROUP TILES =======================================
 
-        for i in range(len(group_handlers)):
-            tile = group_handlers[i]            
-            tile.update(tact)            
-            display.blit(tile_imgs[151], (tile.x*TILE_SIZE-scroll[0], tile.y*TILE_SIZE-scroll[1]))
+        for tile in group_handlers.values():
+            tile.update(tact)
+            if show_group_obj:
+                display.blit(tile_imgs[151], (tile.x*TILE_SIZE-scroll[0], tile.y*TILE_SIZE-scroll[1]))
            
         # PROCESSING PLAYER ACTIONS =======================================
 
@@ -725,6 +802,8 @@ def main():
                     on_down = True
                 elif event.key in (K_LCTRL, K_RCTRL):
                     dig = True
+                elif event.key == K_p:
+                    pause = not pause
                     
             elif event.type == KEYUP:
                 if event.key == K_RIGHT:
@@ -738,11 +817,13 @@ def main():
                 elif event.key in (K_LCTRL, K_RCTRL):
                     dig = False
             elif event.type == EVENT_100_MSEC:
-                redraw_info()
+                if show_info_menu:
+                    redraw_info()
          
         # DRAW DISPLAY GAME TO WINDOW ========================================
-        display.blit(top_surface, (0, 0))        
-        display.blit(info_surface, (WINDOW_SIZE[0]-200, 0))
+        display.blit(top_surface, (0, 0))  
+        if show_info_menu:      
+            display.blit(info_surface, (WINDOW_SIZE[0]-200, 0))
 
         # pygame.transform.scale(display,(WINDOW_SIZE[0]//1.8, WINDOW_SIZE[1]//1.8)), (100, 100)
         screen.blit(display, (0, 0))
