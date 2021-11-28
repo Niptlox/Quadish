@@ -1,8 +1,8 @@
-﻿import os
+﻿import pygame
+from pygame.locals import *
 from pygame.display import update
-
 from pygame.event import event_name
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+from pygame.math import Vector2
 
 import math
 import random
@@ -10,8 +10,10 @@ from copy import deepcopy
 
 from noise import snoise2, pnoise2
 
-import pygame
-from pygame.locals import *
+from time import time
+
+import os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 # DEBUG ====================================================
 DEBUG = True
@@ -19,10 +21,13 @@ DEBUG = True
 show_chunk_grid = True
 show_group_obj = True
 show_info_menu = True
+
+CHUNK_BD_COLOR = (230, 20, 20)
 # INIT GAME ================================================
 
 WINDOW_SIZE = (2200, 1100)
 WINDOW_SIZE = (700*2, 400*2)
+
 FPS = 60
 
 pygame.init() # initiate pygame
@@ -42,7 +47,7 @@ CHUNK_SIZE_PX = CHUNK_SIZE * TILE_SIZE
 # колво чанков отрисываемых на экране
 WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 1, \
     math.ceil(WINDOW_SIZE[1] / (TILE_SIZE * CHUNK_SIZE)) + 1
-# WINDOW_CHUNK_SIZE = (3, 3)
+# WINDOW_CHUNK_SIZE = (2, 1)
 print("WINDOW_CHUNK_SIZE", WINDOW_CHUNK_SIZE)
 
 random.seed(12321)
@@ -68,8 +73,6 @@ text_color_light = "#F5F5F4"
 
 # STRUCTS OF DINAMIC ==========================================
 
-cloud_struct = [["my_x, my_y"], [["tile_x, tile_y, density(0;1)"],...]]
-
 # CREATING TILE IMAGES ========================================
 
 BORDER_COLOR = "#1C1917"
@@ -79,11 +82,29 @@ def create_tile_image(color, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
     pygame.draw.rect(img, color, ((bd, bd), (size[0]-bd*2, size[0]-bd*2)), border_radius=bd*2)
     return img
 
-
 COLORKEY = (0, 255, 0)
+def load_img(path, size=TILE_RECT, colorkey=COLORKEY):
+    img = pygame.image.load(path).convert()
+    img = pygame.transform.scale(img, size)
+    if colorkey:
+        img.set_colorkey(colorkey)
+    return img
+
+HAND_SIZE = int(TILE_SIZE//2.5) # 40//2.5== 16
+HAND_RECT = (HAND_SIZE, HAND_SIZE)
+def transform_hand(surf, size=HAND_RECT): 
+    if type(surf) is list:
+        surf = [pygame.transform.smoothscale(s, size) for s in surf]
+    else:
+        surf = pygame.transform.smoothscale(surf, size)
+    return surf
+
 sky = "#A5F3FC"
 
 player_img = create_tile_image("#E7E5E4", bd=2)
+
+hand_pass_img = pygame.transform.smoothscale(player_img, HAND_RECT)
+player_hand_img = hand_pass_img
 
 dirt_img = create_tile_image("#694837")
 
@@ -96,21 +117,29 @@ blore_img = create_tile_image("#155E75") # blue ore
 bush_img = pygame.image.load("data/sprites/tiles/bush.png")
 bush_img = pygame.transform.scale(bush_img, TILE_RECT)
 
-smalltree_img = pygame.image.load("data/sprites/tiles/small_tree.png").convert()
-smalltree_img = pygame.transform.scale(smalltree_img, TILE_RECT)
-smalltree_img.set_colorkey(COLORKEY)
+smalltree_img = load_img("data/sprites/tiles/small_tree.png")
 
 cloud_img = create_tile_image("#CBD5E1")
-cloud_img_2 = create_tile_image("#94A3B8")
-cloud_img_3 = create_tile_image("#64748B")
-cloud_imgs = [cloud_img,cloud_img_2,cloud_img_3]
+cloud_imgs = [create_tile_image((203-i,213-i,230-i)) for i in range(0, 130, 30)]
 
-group_img = pygame.image.load("data/sprites/tiles/group.png")
-group_img = pygame.transform.scale(group_img, TILE_RECT)
-group_img.set_colorkey(COLORKEY)
+break_1_img = load_img("data/sprites/tiles/break_1.png")
+break_1_img.set_alpha(100)
+break_2_img = load_img("data/sprites/tiles/break_2.png")
+break_2_img.set_alpha(100)
+break_3_img = load_img("data/sprites/tiles/break_3.png")
+break_3_img.set_alpha(100)
+break_imgs = [break_1_img, break_2_img, break_3_img]
 
 
-chunk_img = create_tile_image(sky, bd=1, size=(CHUNK_SIZE*TILE_SIZE, CHUNK_SIZE*TILE_SIZE), bd_color="red")
+dig_rect_img = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA, 32)
+pygame.draw.rect(dig_rect_img, "#FDE047", ((0, 0), (TILE_SIZE-1, TILE_SIZE-1)),width=2, border_radius=-2)
+ 
+
+
+group_img = load_img("data/sprites/tiles/group.png")
+
+rain_img = load_img("data/sprites/tiles/rain.png")
+
 
 tile_imgs = {1: grass_img, 
              2: dirt_img, 
@@ -120,10 +149,42 @@ tile_imgs = {1: grass_img,
              102: smalltree_img,
              151: group_img,
              201: cloud_img,
-             202: (cloud_img,cloud_img_2,cloud_img_3),             
-             }
+             202: cloud_imgs,             
+             }    
 count_tiles = len(tile_imgs)
+
+tile_hand_imgs = {k: transform_hand(i) for k, i in tile_imgs.items()}
+tile_hand_imgs[102] = load_img("data/sprites/tiles/small_tree_hand.png", HAND_RECT) #тк есть прозрачность
+
+# INIT_TILES ====================================================
+
 PHYSBODY_TILES = (1, 2, 3, 4)
+
+TILES_SOLIDITY = {
+    1: 15,
+    2: 20,
+    3: 35,
+    4: 60,
+    101: 25,
+    102: 25,
+
+}
+
+# INIT PICKAXE ==================================================
+
+PICKAXES_STRENGTH = {
+    1: 5,
+    77: 777
+}
+PICKAXES_SPEED = {
+    1: 8,
+    77: 777
+}
+PICKAXES_CAPABILITY = {
+    1: [1,2,3,101,102],
+    77: None
+}
+
 
 # CLASS GAMEMAP===================================================
 
@@ -165,9 +226,9 @@ class GameMap:
             index += self.tile_data_size
 
     def get_static_tile(self, x, y, default=None):        
-        chunk = self.chunk((x // self.chunk_size, y // self.chunk_size), default=default)
-        if chunk == default:
-            return chunk
+        chunk = self.chunk((x // self.chunk_size, y // self.chunk_size))
+        if chunk is None:
+            return default
         i = self.convert_pos_to_i(x, y)
         return chunk[0][i:i+self.tile_data_size]
 
@@ -177,7 +238,6 @@ class GameMap:
             return chunk
         i = self.convert_pos_to_i(x, y)
         return chunk[0][i]
-
 
     def set_static_tile(self, x, y, tile):
         chunk = self.chunk((x // self.chunk_size, y // self.chunk_size))
@@ -194,6 +254,15 @@ class GameMap:
         if chunk is not None:
             i = self.convert_pos_to_i(x, y)
             chunk[0][i+3] = group_id
+            return True
+        return False
+
+    def set_static_tile_solidity(self, x, y, sol):
+        """Установить прочность тайла"""
+        chunk = self.chunk((x // self.chunk_size, y // self.chunk_size))
+        if chunk is not None:
+            i = self.convert_pos_to_i(x, y)
+            chunk[0][i+1] = sol
             return True
         return False
 
@@ -247,10 +316,27 @@ class GameMap:
             return True
         return False
 
+    def del_dinamic_obj(self, chunk_x, chunk_y, obj):
+        chunk = self.chunk((chunk_x, chunk_y))
+        if chunk:        
+            chunk[1].remove(obj)
+            return True
+        return False
+
+    def add_dinamic_obj(self, chunk_x, chunk_y, obj):
+        chunk = self.chunk((chunk_x, chunk_y))
+        if chunk:        
+            chunk[1].append(obj)
+            return True
+        return False
+
     def convert_pos_to_i(self, x, y):
         #cx, cy = x % self.chunk_size, y % self.chunk_size
         #i = (cy * self.chunk_size + cx) * self.tile_data_size        
         return ((y % self.chunk_size) * self.chunk_size + (x % self.chunk_size)) * self.tile_data_size
+
+    def get_tile_ttile(self, ttile):
+        return [ttile, TILES_SOLIDITY.get(ttile, -1), 0, 0]
 
     def set_chunk_arr2(self, arr):
         pass
@@ -271,8 +357,6 @@ class GameMap:
         octaves = 6
         freq_x = 35
         freq_y = 15
-        # cloud_objs = [] # objects of class Cloud
-        cloud_tiles = {} # position tile cloud: object of class Cloud
         base_x = x * CHUNK_SIZE
         base_y = y * CHUNK_SIZE
         tile_y = base_y  # global tile y (not px)
@@ -298,31 +382,20 @@ class GameMap:
                             if y_pos > 1 and static_tiles[tile_index-self.chunk_arr_width] == 0:
                                 plant_tile_type = random_plant_selection() #plant
                                 if plant_tile_type is not None:
-                                    static_tiles[tile_index-self.chunk_arr_width] = plant_tile_type
+                                    pl_i = tile_index-self.chunk_arr_width
+                                    static_tiles[pl_i] = plant_tile_type
+                                    static_tiles[pl_i+1] = TILES_SOLIDITY.get(plant_tile_type, -1)
+                                    
                 else:
                     # пусто  
                     # ставим растение     
                     if y_pos == CHUNK_SIZE-1 and\
                         self.get_static_tile(tile_x, tile_y+1, default=0)==1:
                         tile_type = random_plant_selection()            
-                    if tile_type is None:
-                        # ставим облака
-                        v201 = pnoise2(tile_x / 15, (tile_y) / 10-20, 5, persistence=0.3)
-                        # if 0 <= x_pos <= 2 and 0 <= y_pos <= 2 and x == 0 and y == 0:
-                        if v201 > 0.33:
-                            tile_type = 201 # cloud_1
-                            o_tile_index = tile_index - self.tile_data_size if tile_index % self.chunk_arr_width > 0 else -1
-                            if o_tile_index in cloud_tiles:
-                                cloud_obj = cloud_tiles[o_tile_index]                                
-                            else:                            
-                                cloud_obj = Cloud((tile_x, tile_y), (x, y))
-                                group_handlers[id(cloud_obj)] = cloud_obj
-                            cloud_tiles[tile_index] = cloud_obj
-                            cloud_obj.add_to_line(tile_x, tile_y, 1) # x, y, weight                
-                            static_tiles[tile_index+1] = 1
-                            static_tiles[tile_index+3] = cloud_obj.id
+                    
                 if tile_type is not None:
                     static_tiles[tile_index] = tile_type
+                    static_tiles[tile_index+1] = TILES_SOLIDITY.get( tile_type, -1)
                 tile_x += 1
                 tile_index += self.tile_data_size
             tile_y += 1
@@ -336,19 +409,6 @@ class GameMap:
 # pass
 # GENERATING MAP OR CHANK ========================================
 
-game_map = [['1','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0',"0","0","0","0"]*4,
-            ['0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0',"0","0","0","0"]*4,
-            ['0','0','0','0','0','0','0','0','0','0','0','0','2','0','0','0','0','0','0',"0","0","0","0"]*4,
-            ['0','0','0','3','3','0','0','0','0','0','0','0','1','0','0','0','0','0','0',"0","0","0","0"]*4,
-            ['0','0','0','0','0','0','0','2','2','2','2','2','1','0','0','0','0','0','0',"0","0","0","0"]*4,
-            ['0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0',"0","0","0","0"]*4,
-            ['2','2','0','0','0','0','0','0','0','0','0','0','0','0','0','0','0','2','2',"0","0","0","0"]*4,
-            ['1','1','2','3','3','2','2','2','2','2','2','2','1','2','2','2','2','1','1',"1","1","1","2"]*4,
-            ['1','1','1','3','3','1','1','1','1','1','1','1','1','1','1','1','1','1','1',"1","1","1","2"]*4,
-            ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1',"1","1","1","2"]*4,
-            ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1',"1","1","1","2"]*4,
-            ['1','2','1','0','1','1','1','2','1','2','1','1','2','1','0','0','2','0','1',"1","1","1","2"]*4,
-            ['1','0','1','2','1','2','1','1','1','0','1','1','0','1','1','1','1','1','1',"1","1","1","2"]*4]
 TGENERATE_LOAD = 0
 TGENERATE_INFINITE = 1
 TGENERATE_INFINITE_LANDS = 2
@@ -425,155 +485,90 @@ class PhiscalObject:
     def draw(self):
         pygame.draw.rect(screen,(255,255,0),self.rect)
 
-class Cloud:
-    def __init__(self, pos, chunk_pos) -> None:
-        self.x, self.y = pos # left x
-        self.rx = self.x # right x        
-        self.tiles_w = [] # объемы(состояние) тайлов в облаке
-        self.last_tact_update = 0
-        self.chunk_x, self.chunk_y = chunk_pos
-        self.tiles_count = 0 # ширина облака
-        self.id = id(self)
-        
-
-    def update(self, tact):
-        if self.tiles_count > 0:
-            if tact - self.last_tact_update > wind_to_one:
-                self.last_tact_update = tact
-                wind_vector_x = DIRECTION_VECTORS[wind_direction][0]
-                i = 0
-                for x in range(self.x, self.rx+1):
-                    i += 1
-                    tile_type = game_map.get_static_tile_type(x, self.y, 0)
-                    if tile_type != 201:
-                        # головыу остовляем, хвост отрезвем @### N###
-                        if i < self.tiles_count:                            
-                            cloud = None
-                            ci = i + 1
-                            for cx in range(x + 1, self.rx+1):
-                                if cloud is None:                                    
-                                    if game_map.get_static_tile_type(cx, self.y, 0) is not 0:
-                                        cloud = Cloud((cx, self.y), (cx // game_map.chunk_size, self.chunk_y))
-                                        game_map.add_group_obj(cloud.chunk_x, cloud.chunk_y, cloud)                                        
-                                        game_map.set_static_tile_group(cx, self.y, cloud.id)
-                                        cloud.add_to_line(cx, self.y, self.tiles_w[ci-1])
-                                else:      
-                                    game_map.set_static_tile_group(cx, self.y, cloud.id)
-                                    cloud.add_to_line(cx, self.y, self.tiles_w[ci-1])
-                                ci += 1
-                                print(ci)                                                                                            
-                            
-                        self.rx = x - 1                            
-                        if not self.set_tiles_count(i - 1):
-                            return
-                        del self.tiles_w[i:]
-                        break
-                    else:
-                        game_map.set_static_tile_state(x, self.y, self.tiles_w[i-1])
-                # if 1:
-
-                #     pass
-                if wind_vector_x > 0:
-                    # wind ------>
-                    ttype = game_map.get_static_tile_type(self.rx + 1, self.y)
-                    if ttype is 0:
-                        self.rx += 1
-                        self.x += 1
-                        game_map.set_static_tile(self.rx, self.y, [201, self.tiles_w[-1], 0, self.id])
-                        game_map.set_static_tile(self.x - 1, self.y, None)                    
-                elif wind_vector_x < 0:
-                    # wind <------- 
-                    ttype = game_map.get_static_tile_type(self.x - 1, self.y)
-                    if ttype is 0:
-                        self.rx -= 1
-                        self.x -= 1
-                        game_map.set_static_tile(self.x, self.y, [201, self.tiles_w[-1], 0, self.id])                        
-                        game_map.set_static_tile(self.rx + 1, self.y, None)
-                    elif ttype == 201:
-                        tile = game_map.get_static_tile(self.x - 1, self.y)
-                        g_id = tile[3]
-                        chunk_x = (self.x-1) // game_map.chunk_size
-                        cloud = None
-                        i = 0
-                        while cloud is None and i < 2:
-                            chunk = game_map.chunk((chunk_x - i, self.chunk_y))
-                            if chunk is None:
-                                break
-                            cloud = chunk[2].get(g_id)
-                            i += 1                            
-                        if cloud:                            
-                            ci = 0
-                            for cx in range(self.x, self.rx+1):
-                                game_map.set_static_tile_group(cx, self.y, cloud.id)
-                                cloud.add_to_line(cx, self.y, self.tiles_w[ci-1])
-                                ci += 1
-                            self.set_tiles_count(0)
-                    elif self.tiles_count > 1:                        
-                        i = 0
-                        while self.tiles_w[i] >= 3: 
-                            i += 1                            
-                            if i >= self.tiles_count-1:
-                                break
-                        else:                            
-                            n_w = min(self.tiles_w[i] + self.tiles_w[i+1], 3)
-                            self.tiles_w[i+1] = self.tiles_w[i+1] - (n_w - self.tiles_w[i])
-                            self.tiles_w[i] = n_w
-                            if self.tiles_w[i+1] <= 0:
-                                self.rx -= 1
-                                del self.tiles_w[-1]
-                                game_map.set_static_tile(self.rx + 1, self.y, None)
-                                self.set_tiles_count(self.tiles_count - 1)
-                            return
-                chunk_x = self.x // game_map.chunk_size
-                if chunk_x != self.chunk_x:
-                    game_map.move_group_obj(self.chunk_x, self.chunk_y, chunk_x, self.chunk_y, self)
-                    self.chunk_x = chunk_x
-
-    def add_to_line(self, tile_x, tile_y, weight) -> bool:        
-        if self.y != tile_y:
-            return False                
-        tile = [tile_x, tile_y, weight]
-        self.rx = max(self.rx, tile_x)
-        self.tiles_w.append(weight)
-        
-        self.tiles_count += 1
-        return True
-
-    def set_tiles_count(self, count):
-        self.tiles_count = count
-        if count <= 0:
-            game_map.del_group_obj(self.chunk_x, self.chunk_y, self)
-            return False
-        return True
-
-            
 # CREATING PLAYER ==========================================================
+def set_tile(x, y):
+    global pickaxe_time, set_time
+    cell = inventory[active_cell]
+    if time() - pickaxe_time < 1 or time() - set_time < 0.6 or cell is None:        
+        return False
+    ttile = inventory[active_cell][0]
+    if ttile in {101, 102} and game_map.get_static_tile_type(x, y + 1, 0) in {101, 102, 0}:
+        return False
+    inventory[active_cell][1] -= 1
+    game_map.set_static_tile(x, y, game_map.get_tile_ttile(ttile))
+    if inventory[active_cell][1] == 0:
+        inventory[active_cell] = None
+    choose_active_cell()
+    redraw_top()    
+    set_time = time()
+    return True
 
 def dig_tile(x, y):
-    tile = game_map.get_static_tile_type(x, y, 0)    
-    if tile == 0:
-        return
-    i = 0
-    while i < inventory_size:
-        if inventory[i] is None:
-            inventory[i] = [tile, 1]
-            redraw_top()
-            break
-        if inventory[i][1] < cell_size and inventory[i][0] == tile:
-            inventory[i][1] += 1
-            redraw_top()
-            break
-        i += 1
+    global pickaxe_time, set_time
+    tile = game_map.get_static_tile(x, y)    
+    if tile is None or tile[1] == -1:
+        return 
+    d_ttile = game_map.get_static_tile_type(x, y-1)    
+    if d_ttile in {101, 102}:
+        return False
+    ttile = tile[0]
+    if ttile == 0:
+        return set_tile(x, y)
+    sol = tile[1] # прочность
+    if time() - set_time < 1 or time() - pickaxe_time < 1 / PICKAXES_SPEED[pickaxe]:
+        # время нового удара ещё не подошло
+        return False
+    pickaxe_time = time()
+    if PICKAXES_CAPABILITY[pickaxe] is not None and ttile not in PICKAXES_CAPABILITY[pickaxe]:
+        # мы не можем выкопать этой киркой
+        return False
+    stg = PICKAXES_STRENGTH[pickaxe]
+    sol -= stg
+    if sol <= 0:
+        i = 0
+        while i < inventory_size:
+            if inventory[i] is None:
+                inventory[i] = [ttile, 1]
+                redraw_top()
+                break
+            if inventory[i][1] < cell_size and inventory[i][0] == ttile:
+                inventory[i][1] += 1
+                redraw_top()
+                break
+            i += 1
+        else:
+            print("Перепонен инвентарь", ttile)
+        
+        game_map.set_static_tile(x, y, None)
     else:
-        print("Перепонен инвентарь", tile)
-    
-    game_map.set_static_tile(x, y, None)
+        game_map.set_static_tile_solidity(x, y, sol)
+    choose_active_cell()
+    return True
+
+
+def choose_active_cell(cell=-1):
+    global active_cell, player_hand_img
+    if cell != -1:
+        active_cell = cell
+    player_hand_img = hand_pass_img
+    if inventory[active_cell]:
+        player_hand_img = tile_hand_imgs[inventory[active_cell][0]]
+    redraw_top()
+
 
 global player
 player = PhiscalObject(0, 0, TILE_SIZE-1, TILE_SIZE-1)    
 inventory_size = 16
 inventory = [None] * inventory_size
+active_cell = 0
 cell_size = 100
+
+pickaxe = 77
+pickaxe_time = 0
+# время последнего удара
+set_time = 0
+# время последнего установки блока
+NUM_KEYS = [K_1, K_2, K_3, K_4, K_5, K_6, K_7, K_8, K_9, K_0]
 
 # GLOBAL VARS================================================================
 
@@ -595,7 +590,10 @@ def redraw_top():
     x = 0
     i = 0
     for i in range(inventory_size):
-        pygame.draw.rect(top_surface, "#000000", 
+        color = "#000000"
+        if i == active_cell:
+            color = "#FFFFFF"
+        pygame.draw.rect(top_surface, color, 
             (x, 0, TILE_SIZE + 7, TILE_SIZE + 7), 1)
         cell = inventory[i]
         if cell is not None:
@@ -631,7 +629,8 @@ def update_fps():
     global true_fps
     true_fps = clock.get_fps()    
 
-def main():    
+def main():  
+    global active_cell
     tact = 0
     true_scroll = [player.rect.x, player.rect.y]
     on_wall = False
@@ -639,8 +638,16 @@ def main():
     moving_right = False
     moving_left = False
     dig = False 
+    dig_pos = None
+    punch = False
+    punch_tick = 0
+    punch_speed = 0.8
+    min_hand_space = TILE_SIZE // 1.5
+    hand_space = min_hand_space
     on_up = False
     on_down = False
+    num_down = -1
+
     vertical_momentum= 0
     jump_speed = 10
     jump_count = 0
@@ -650,6 +657,7 @@ def main():
     player_speed = 4.1 * (WINDOW_SIZE[0] / 700) * (60 / FPS)
     running = True
     air_timer = 0
+    choose_active_cell()
     pause = False
     while running:     
         if pause:
@@ -679,11 +687,23 @@ def main():
         group_handlers = {}
         scroll_chunk_x = ((scroll[0])//(TILE_SIZE)+ CHUNK_SIZE-1)//CHUNK_SIZE-1
         chunk_y = ((scroll[1])//(TILE_SIZE)+ CHUNK_SIZE-1)//CHUNK_SIZE-1   
+
+        # SHOW DEBUG GRID CHUNKS ++++
+        if show_chunk_grid:
+            ch_x = scroll_chunk_x*CHUNK_SIZE*TILE_SIZE-scroll[0]
+            for cx in range(WINDOW_CHUNK_SIZE[0]):                                                                
+                pygame.draw.line(display, CHUNK_BD_COLOR, (ch_x, 0), (ch_x, WINDOW_SIZE[1]))
+                ch_x += CHUNK_SIZE_PX
+            ch_y = chunk_y*CHUNK_SIZE*TILE_SIZE-scroll[1]
+            for cy in range(WINDOW_CHUNK_SIZE[1]):
+                pygame.draw.line(display, CHUNK_BD_COLOR, (0, ch_y), (WINDOW_SIZE[0]-1, ch_y))
+                ch_y += CHUNK_SIZE_PX
+        #-----------------------------
+
+        # SHOW AND LOAD TILES ++++++++
         for cy in range(WINDOW_CHUNK_SIZE[1]):                
             chunk_x = scroll_chunk_x
             for cx in range(WINDOW_CHUNK_SIZE[0]):
-                if show_chunk_grid:
-                    display.blit(chunk_img, (chunk_x*CHUNK_SIZE*TILE_SIZE-scroll[0], chunk_y*CHUNK_SIZE*TILE_SIZE-scroll[1]))
                 chunk_pos = (chunk_x, chunk_y)    
                 chunk = game_map.chunk(chunk_pos)            
                 if chunk is None:
@@ -705,10 +725,16 @@ def main():
                             if tile_type > 0:
                                 # print(tile_xy)
                                 if tile_type == 201:
-                                    img = tile_imgs[tile_type+1][tile[1]-1]
+                                    img = tile_imgs[tile_type+1][tile[2]-1]
                                 else:
-                                    img = tile_imgs[tile_type]
-                                display.blit(img, (tile_x*TILE_SIZE-scroll[0], tile_y*TILE_SIZE-scroll[1]))
+                                    img = tile_imgs[tile_type]                                
+                                b_pos = (tile_x*TILE_SIZE-scroll[0], tile_y*TILE_SIZE-scroll[1])
+                                display.blit(img, b_pos)
+                                sol = tile[1]
+                                if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
+                                    br_i = 2 - int(sol / (TILES_SOLIDITY[tile_type] / 3))
+                                    display.blit(break_imgs[br_i], b_pos)
+
                             if tile_type in PHYSBODY_TILES:                                
                                 static_tiles[(tile_x, tile_y)] = tile_type
                             index += game_map.tile_data_size
@@ -721,8 +747,9 @@ def main():
         # PROCESSING DINAMIC TILES =======================================
         
         for i in range(len(dinamic_tiles)):
-            tile = dinamic_tiles[i]
+            tile = dinamic_tiles[i]            
             tile.update(tact)
+            tile.draw(display, scroll)
 
         # PROCESSING GROUP TILES =======================================
 
@@ -760,22 +787,57 @@ def main():
             if vertical_momentum > 0:
                 vertical_momentum = 0
                 jump_count = min(max_jump_count, jump_count)
-                on_wall = True
+                on_wall = True                
         
-        if dig:
-            px, py = player.rect.centerx // TILE_SIZE, player.rect.centery // TILE_SIZE
-            if moving_right:
-                dig_tile(px + 1, py)
-            if moving_left:
-                dig_tile(px - 1, py)
-            if on_down:
-                dig_tile(px, py + 1)
-            if on_up:
-                dig_tile(px, py - 1)
-
-
         display.blit(player_img, (player.rect.x-scroll[0], player.rect.y-scroll[1]))
 
+        # SHOW PLAYER HAND ===============================================
+
+        pVec = Vector2(player.rect.centerx-scroll[0], player.rect.centery-scroll[1])
+        mVec = Vector2(pygame.mouse.get_pos())
+        
+        hVec = mVec - pVec
+        if dig:
+            if hVec.length_squared() <= (TILE_SIZE * 2.5) ** 2:
+                dig_pos = Vector2(scroll) + mVec
+            else: 
+                dig_pos = hVec.normalize() * TILE_SIZE * 1.2 + Vector2(player.rect.center)
+        if hVec.length_squared() == 0:
+            hVec = Vector2(1, 0)
+            
+        hVec.scale_to_length(hand_space)
+        real_hVec = hVec + pVec - Vector2(HAND_SIZE//2, HAND_SIZE//2)
+
+        if num_down != -1:
+            choose_active_cell(num_down)
+            num_down = -1
+            
+        display.blit(player_hand_img, real_hVec)
+        
+        # DIG TILE =======================================================
+
+        if dig:
+            # dig = False
+            px, py = int(dig_pos.x // TILE_SIZE), int(dig_pos.y // TILE_SIZE)
+            
+            new_punch = dig_tile(px, py)
+            if new_punch is not None:
+                display.blit(dig_rect_img, (px * TILE_SIZE-scroll[0], py * TILE_SIZE-scroll[1]))
+            if new_punch:
+                punch = True
+                punch_tick = 0
+                hand_space = min_hand_space
+        if punch:                
+            punch_tick += 1
+            if punch_tick < 10:
+                hand_space += punch_speed
+            elif punch_tick > 20:
+                punch = False
+                punch_tick = 0
+                hand_space = min_hand_space
+            else:
+                hand_space -= punch_speed
+        
 
         # PROCESSING PYGAME EVENTS =======================================
 
@@ -783,11 +845,11 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == KEYDOWN:
-                if event.key == K_RIGHT:
+                if event.key in (K_RIGHT, K_d):
                     moving_right = True
-                elif event.key == K_LEFT:
+                elif event.key in (K_LEFT, K_a):
                     moving_left = True
-                elif event.key == K_UP:
+                elif event.key in (K_UP, K_w, K_SPACE):
                     on_up = True
                     if on_wall:
                         vertical_momentum = -jump_speed
@@ -799,23 +861,33 @@ def main():
                         jump_count += 1
                         vertical_momentum = -jump_speed
                 elif event.key == K_DOWN:
-                    on_down = True
-                elif event.key in (K_LCTRL, K_RCTRL):
-                    dig = True
+                    on_down = True                
                 elif event.key == K_p:
                     pause = not pause
-                    
+                elif event.key in NUM_KEYS:
+                    num_down = NUM_KEYS.index(event.key) 
             elif event.type == KEYUP:
-                if event.key == K_RIGHT:
+                if event.key in (K_RIGHT, K_d):
                     moving_right = False
-                elif event.key == K_LEFT:
+                elif event.key in (K_LEFT, K_a):
                     moving_left = False
-                elif event.key == K_UP:
+                elif event.key in (K_UP, K_w, K_SPACE):
                     on_up = False                
                 elif event.key == K_DOWN:
                     on_down = False
-                elif event.key in (K_LCTRL, K_RCTRL):
+            elif event.type == MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    dig = True
+            elif event.type == MOUSEBUTTONUP:
+                if event.button == 1:
                     dig = False
+            elif event.type == MOUSEWHEEL:
+                active_cell += event.y
+                if active_cell == -1:
+                    active_cell = inventory_size - 1
+                elif active_cell == inventory_size:
+                    active_cell = 0
+                choose_active_cell()
             elif event.type == EVENT_100_MSEC:
                 if show_info_menu:
                     redraw_info()
