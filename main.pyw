@@ -599,7 +599,7 @@ inventory = [None] * inventory_size
 active_cell = 0
 cell_size = 100
 
-pickaxe = 77
+pickaxe = 1
 pickaxe_time = 0
 # время последнего удара
 set_time = 0

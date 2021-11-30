@@ -2,4 +2,5 @@ from ..common import *
 
 class ScreenMap:
     
-    def __init__(self, )
+    def __init__(self, ):
+        pass
