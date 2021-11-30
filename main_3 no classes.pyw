@@ -16,8 +16,6 @@ from time import time
 import os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-from units.common import *
-
 # DEBUG ====================================================
 DEBUG = True
 # DEBUG = False
@@ -28,6 +26,10 @@ show_info_menu = True
 CHUNK_BD_COLOR = (230, 20, 20)
 # INIT GAME ================================================
 
+WINDOW_SIZE = (2200, 1100)
+WINDOW_SIZE = (700*2, 400*2)
+
+FPS = 60
 
 pygame.init() # initiate pygame
 pygame.display.set_caption('Pygame Window')
@@ -36,6 +38,17 @@ screen = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SCALED, vsync=2)
 
 display = pygame.Surface(WINDOW_SIZE)
 
+TILE_SIZE = 48
+# TILE_SIZE = 16
+# TILE_SIZE = 8
+TILE_RECT = (TILE_SIZE, TILE_SIZE)
+
+CHUNK_SIZE = 16
+
+CHUNK_SIZE_PX = CHUNK_SIZE * TILE_SIZE
+# колво чанков отрисываемых на экране
+WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 1, \
+    math.ceil(WINDOW_SIZE[1] / (TILE_SIZE * CHUNK_SIZE)) + 1
 # WINDOW_CHUNK_SIZE = (2, 1)
 print("WINDOW_CHUNK_SIZE", WINDOW_CHUNK_SIZE)
 
@@ -412,25 +425,22 @@ class GameMap:
 def save_game_map(num=0):
     file_p=f'data/maps/game_map-{num}.pcl'
     print(f"GamaMap: '{file_p}' - SAVING...")
-    if input("Вы уверены? если да ('t' или 'д') если нет любое другое: ").lower() in ("t", "д"):
-        with open(file_p, 'wb') as f:
-            pickle.dump({"game_map": game_map, "inventory": inventory, "player": player}, f)
-            print("GamaMap - SAVE!")
+    with open(file_p, 'wb') as f:
+        pickle.dump({"game_map": game_map, "inventory": inventory, "player": player}, f)
+        print("GamaMap - SAVE!")
 
 def load_game_map(num=0):
     global game_map, inventory, player
     file_p=f'data/maps/game_map-{num}.pcl'
     print(f"GamaMap: '{file_p}' - LOADING...")    
-    if input("Вы уверены? если да ('t' или 'д') если нет любое другое: ").lower() in ("t", "д"):
+    if input("Вы уверены? если да ('t' или 'д') если нет любое другое").lower() in ("t", "д"):
         try:
             with open(file_p, 'rb') as f:
                 data = pickle.load(f)
                 game_map = data["game_map"]
                 inventory = data["inventory"]
-                pl = data["player"]
-                if type(pl) is PhiscalObject:
-                    pl = pl.rect.topleft
-                player.rect.topleft = pl
+                player = data["player"]
+                
                 print("GamaMap - LOAD!")
                 redraw_top()
         except FileNotFoundError:
@@ -666,7 +676,7 @@ def update_fps():
     true_fps = clock.get_fps()    
 
 def main():  
-    global active_cell, pickaxe
+    global active_cell
     tact = 0
     true_scroll = [player.rect.x, player.rect.y]
     on_wall = False
@@ -900,8 +910,6 @@ def main():
                     on_down = True                
                 elif event.key == K_u:
                     pause = not pause
-                elif event.key == K_j:                    
-                    pickaxe = 77 if pickaxe == 1 else 1
                 elif event.key == K_t:
                     player.rect.center = (0, 0)
                 elif event.key == K_o:
