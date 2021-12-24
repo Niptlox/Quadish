@@ -33,7 +33,7 @@ class Player(Entitys.PhiscalObject):
         self.max_jump_count = 5
         self.fall_speed = 0.3 #* (60 / FPS)
         self.max_fall_speed = 7 #* (60 / FPS)
-        self.player_speed = 4.1 * (WINDOW_SIZE[0] / 700) * (60 / FPS)
+        self.self.player_speed = 4.1 * (WINDOW_SIZE[0] / 700) * (60 / FPS)
         self.running = True
         self.air_timer = 0
 
@@ -50,6 +50,85 @@ class Player(Entitys.PhiscalObject):
         self.set_time = 0
         # время последнего установки блока
         
+    def update(self):
+
+        player_movement = [0,0]
+        if self.moving_right:
+            player_movement[0] += self.player_speed
+        if self.moving_left:
+            player_movement[0] -= self.player_speed
+ 
+        player_movement[1] += vertical_momentum
+        vertical_momentum += fall_speed
+        if vertical_momentum > max_fall_speed:
+            vertical_momentum = max_fall_speed
+
+        
+        collisions = player.move(player_movement, static_tiles)
+
+        if collisions['bottom']:
+            self.air_timer = 0
+            self.jump_count = 0
+            self.vertical_momentum = 0
+        else:
+            self.air_timer += 1
+        if collisions['top']:
+            self.vertical_momentum = 0
+        self.on_wall = False
+        if (collisions['left'] and self.moving_left) or (collisions['right'] and self.moving_right):
+            if self.vertical_momentum > 0:
+                self.vertical_momentum = 0
+                self.jump_count = min(self.max_jump_count, self.jump_count)
+                self.on_wall = True                
+        
+        self.display.blit(self.player_img, (self.player.rect.x-self.scroll[0], self.player.rect.y-self.scroll[1]))
+
+        # SHOW PLAYER HAND ===============================================
+
+        pVec = Vector2(player.rect.centerx-scroll[0], player.rect.centery-scroll[1])
+        mVec = Vector2(pygame.mouse.get_pos())
+        
+        hVec = mVec - pVec
+        if dig:
+            if hVec.length_squared() <= (TILE_SIZE * 2.5) ** 2:
+                dig_pos = Vector2(scroll) + mVec
+            else: 
+                dig_pos = hVec.normalize() * TILE_SIZE * 1.2 + Vector2(player.rect.center)
+        if hVec.length_squared() == 0:
+            hVec = Vector2(1, 0)
+            
+        hVec.scale_to_length(hand_space)
+        real_hVec = hVec + pVec - Vector2(HAND_SIZE//2, HAND_SIZE//2)
+
+        if num_down != -1:
+            choose_active_cell(num_down)
+            num_down = -1
+            
+        display.blit(player_hand_img, real_hVec)
+        
+        # DIG TILE =======================================================
+
+        if dig:
+            # dig = False
+            px, py = int(dig_pos.x // TILE_SIZE), int(dig_pos.y // TILE_SIZE)
+            
+            new_punch = dig_tile(px, py)
+            if new_punch is not None:
+                display.blit(dig_rect_img, (px * TILE_SIZE-scroll[0], py * TILE_SIZE-scroll[1]))
+            if new_punch:
+                punch = True
+                punch_tick = 0
+                hand_space = min_hand_space
+        if punch:                
+            punch_tick += 1
+            if punch_tick < 10:
+                hand_space += punch_speed
+            elif punch_tick > 20:
+                punch = False
+                punch_tick = 0
+                hand_space = min_hand_space
+            else:
+                hand_space -= punch_speed
 
         
 
