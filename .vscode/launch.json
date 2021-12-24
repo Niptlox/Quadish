@@ -8,7 +8,7 @@
             "name": "Python: Текущий файл",
             "type": "python",
             "request": "launch",
-            "program": "${file}",
+            "program": "C:/George/Programming/Python/Projects/Games_Py_game/Cubeee/exp.py",
             "console": "integratedTerminal"
         }
     ]

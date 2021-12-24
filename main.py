@@ -17,24 +17,14 @@ import os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 from units.common import *
+from units.Tiles import *
 
-# DEBUG ====================================================
-DEBUG = True
-# DEBUG = False
-show_chunk_grid = True
-show_group_obj = True
-show_info_menu = True
-
-CHUNK_BD_COLOR = (230, 20, 20)
 # INIT GAME ================================================
 
 
-pygame.init() # initiate pygame
-pygame.display.set_caption('Pygame Window')
-# screen = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SHOWN, vsync=2)
-screen = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SCALED, vsync=2)
 
-display = pygame.Surface(WINDOW_SIZE)
+# screen = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SHOWN, vsync=2)
+
 
 # WINDOW_CHUNK_SIZE = (2, 1)
 print("WINDOW_CHUNK_SIZE", WINDOW_CHUNK_SIZE)
@@ -62,135 +52,12 @@ text_color_light = "#F5F5F4"
 
 # STRUCTS OF DINAMIC ==========================================
 
-# CREATING TILE IMAGES ========================================
-
-BORDER_COLOR = "#1C1917"
-def create_tile_image(color, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
-    img = pygame.Surface(size)
-    img.fill(bd_color)
-    pygame.draw.rect(img, color, ((bd, bd), (size[0]-bd*2, size[0]-bd*2)), border_radius=bd*2)
-    return img
-
-COLORKEY = (0, 255, 0)
-def load_img(path, size=TILE_RECT, colorkey=COLORKEY):
-    img = pygame.image.load(path).convert()
-    img = pygame.transform.scale(img, size)
-    if colorkey:
-        img.set_colorkey(colorkey)
-    return img
-
-HAND_SIZE = int(TILE_SIZE//2.5) # 40//2.5== 16
-HAND_RECT = (HAND_SIZE, HAND_SIZE)
-def transform_hand(surf, size=HAND_RECT): 
-    if type(surf) is list:
-        surf = [pygame.transform.smoothscale(s, size) for s in surf]
-    else:
-        surf = pygame.transform.smoothscale(surf, size)
-    return surf
-
-sky = "#A5F3FC"
-
-player_img = create_tile_image("#E7E5E4", bd=2)
-
-hand_pass_img = pygame.transform.smoothscale(player_img, HAND_RECT)
-player_hand_img = hand_pass_img
-
-dirt_img = create_tile_image("#694837")
-
-grass_img = create_tile_image("#16A34A")
-
-stone_img = create_tile_image("#57534E")
-
-blore_img = create_tile_image("#155E75") # blue ore
-
-bush_img = load_img("data/sprites/tiles/bush.png")
-
-smalltree_img = load_img("data/sprites/tiles/small_tree.png")
-
-table_img = load_img("data/sprites/tiles/table.png")
-chear_img = load_img("data/sprites/tiles/chear.png")
-water_img = load_img("data/sprites/tiles/water.png")
-
-cloud_img = create_tile_image("#CBD5E1")
-cloud_imgs = [create_tile_image((203-i,213-i,230-i)) for i in range(0, 130, 30)]
-
-break_1_img = load_img("data/sprites/tiles/break_1.png")
-break_1_img.set_alpha(100)
-break_2_img = load_img("data/sprites/tiles/break_2.png")
-break_2_img.set_alpha(100)
-break_3_img = load_img("data/sprites/tiles/break_3.png")
-break_3_img.set_alpha(100)
-break_imgs = [break_1_img, break_2_img, break_3_img]
-
-
-dig_rect_img = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA, 32)
-pygame.draw.rect(dig_rect_img, "#FDE047", ((0, 0), (TILE_SIZE-1, TILE_SIZE-1)),width=2, border_radius=-2)
- 
-
-
-group_img = load_img("data/sprites/tiles/group.png")
-
-rain_img = load_img("data/sprites/tiles/rain.png")
-
-
-tile_imgs = {1: grass_img, 
-             2: dirt_img, 
-             3: stone_img,
-             4: blore_img,
-             101: bush_img,
-             102: smalltree_img,
-             120: water_img,
-             121: table_img,
-             122: chear_img,
-             151: group_img,
-             201: cloud_img,
-             202: cloud_imgs,             
-             }    
-count_tiles = len(tile_imgs)
-
-tile_hand_imgs = {k: transform_hand(i) for k, i in tile_imgs.items()}
-tile_hand_imgs[102] = load_img("data/sprites/tiles/small_tree_hand.png", HAND_RECT) #тк есть прозрачность
-tile_hand_imgs[121] = load_img("data/sprites/tiles/table_hand.png", HAND_RECT) #тк есть прозрачность
-tile_hand_imgs[122] = load_img("data/sprites/tiles/chear_hand.png", HAND_RECT) #тк есть прозрачность
-
-# INIT_TILES ====================================================
-
-
-PHYSBODY_TILES = {1, 2, 3, 4}
-
-STANDING_TILES = {0, 101, 102, 120, 121, 122}
-TILES_SOLIDITY = {
-    1: 15,
-    2: 20,
-    3: 35,
-    4: 60,
-    101: 25,
-    102: 25,
-    120: 100,
-    121: 100,
-    122: 100,
-
-}
-
-# INIT PICKAXE ==================================================
-
-PICKAXES_STRENGTH = {
-    1: 5,
-    77: 777
-}
-PICKAXES_SPEED = {
-    1: 8,
-    77: 777
-}
-PICKAXES_CAPABILITY = {
-    1: [1,2,3,101,102],
-    77: None
-}
-
 
 # CLASS GAMEMAP===================================================
-
+def randint(i1, i2):
+    pass
 def random_plant_selection():
+    plant_tile_type = random.choices(['red', 'black', 'green'], [18, 18, 2], k=1)
     plant_tile_type = None
     if random.randint(0, 10) == 0:
         plant_tile_type = 101
@@ -654,7 +521,7 @@ def redraw_info():
     info_surface.fill(top_bg_color)
     text_fps = textfont_info.render(f" fps: {int(true_fps)}", False, "white")
     text_pos_real = textfont_info.render(f"rpos: {player.rect.x, player.rect.y}", False, "white")
-    text_pos = textfont_info.render(f" pos: {player.rect.x//game_map.tile_size, player.rect.y//game_map.tile_size}", False, "white")
+    text_pos = textfont_info.render(f" pos: {player.rect.x//TILE_SIZE, player.rect.y//TILE_SIZE}", False, "white")
     info_surface.blit(text_fps, (8, 5))
     info_surface.blit(text_pos_real, (8, 25))
     info_surface.blit(text_pos, (8, 45))
@@ -669,8 +536,8 @@ def main():
     global active_cell, pickaxe
     tact = 0
     true_scroll = [player.rect.x, player.rect.y]
+
     on_wall = False
-    jump_on_wall = False
     moving_right = False
     moving_left = False
     dig = False 
@@ -680,8 +547,6 @@ def main():
     punch_speed = 0.8
     min_hand_space = TILE_SIZE // 1.5
     hand_space = min_hand_space
-    on_up = False
-    on_down = False
     num_down = -1
 
     vertical_momentum= 0
@@ -700,7 +565,7 @@ def main():
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == KEYDOWN and event.key == K_p:
+                elif event.type == KEYDOWN and event.key == K_u:
                     pause = False
             continue
         display.fill(sky)
