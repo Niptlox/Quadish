@@ -5,7 +5,7 @@ from units import Entitys
 from units.map import ScreenMap, GameMap
 from units.UI import GameUI
 from time import time
-from units.Tiles import STANDING_TILES, hand_pass_img
+from units.Tiles import PICKAXES_CAPABILITY, PICKAXES_SPEED, PICKAXES_STRENGTH, STANDING_TILES, hand_pass_img
 
 
 
@@ -70,7 +70,7 @@ class Player(Entitys.PhiscalObject):
         return True
 
     def dig_tile(self, x, y):        
-        tile = self.game_map.get_static_tile(x, y)    
+        tile = self.game_map.get_static_tile(x, y)
         if tile is None or tile[1] == -1:
             return 
         d_ttile = self.game_map.get_static_tile_type(x, y-1)    
