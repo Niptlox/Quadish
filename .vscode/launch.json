@@ -5,10 +5,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Текущий файл",
+            "name": "Py: game.py",
             "type": "python",
             "request": "launch",
-            "program": "C:/George/Programming/Python/Projects/Games_Py_game/Cubeee/exp.py",
+            "program": "C:/George/Programming/Python/Projects/Games_Py_game/Cubeee/game.py",
             "console": "integratedTerminal"
         }
     ]

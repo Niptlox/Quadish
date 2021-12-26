@@ -3,9 +3,11 @@ from ..Tiles import *
 import random
 from noise import pnoise2
 import pickle
+import glob 
 
 
 class GameMap:
+    save_slots = 16
     def __init__(self, generate_type) -> None:
         self.gen_type = generate_type        
         self.tile_data_size = 4        
@@ -13,6 +15,10 @@ class GameMap:
         self.chunk_arr_width = CHUNK_SIZE * self.tile_data_size
         self.chunk_arr_size = self.tile_data_size * CHUNK_SIZE ** 2
         self.game_map = {}
+
+    def set_vars(self, vrs):
+        for k, i in vrs.items():
+            self.__dict__[k] = i
 
     def chunk(self, xy, default=None):
         res = self.game_map.get(xy, default)
@@ -208,33 +214,47 @@ class GameMap:
             tile_y += 1
         return static_tiles, dinamic_tiles, group_handlers
 
-def save_game_map(num=0):
-    file_p=f'data/maps/game_map-{num}.pcl'
-    print(f"GamaMap: '{file_p}' - SAVING...")
-    if input("Вы уверены? если да ('t' или 'д') если нет любое другое: ").lower() in ("t", "д"):
-        with open(file_p, 'wb') as f:
-            pickle.dump({"game_map": game_map, "inventory": inventory, "player": game_map.player}, f)
+    def save_game_map(self, game, num=0):
+        file_p=f'data/maps/game_map-{num}.pclv'
+        print(f"GamaMap: '{file_p}' - SAVING...")
+        if 1 or input("Вы уверены? если да ('t' или 'д') если нет любое другое: ").lower() in ("t", "д"):
+            with open(file_p, 'wb') as f:                
+                d = {"game_map_vars": vars(self), "player_vars": game.player.get_vars()}
+                pickle.dump({"game_map_vars": vars(self), "player_vars": game.player.get_vars()}, f)
             print("GamaMap - SAVE!")
+            return True
 
-def load_game_map(num=0):
-    global game_map, inventory, player
-    file_p=f'data/maps/game_map-{num}.pcl'
-    print(f"GamaMap: '{file_p}' - LOADING...")    
-    if input("Вы уверены? если да ('t' или 'д') если нет любое другое: ").lower() in ("t", "д"):
-        try:
-            with open(file_p, 'rb') as f:
-                data = pickle.load(f)
-                game_map = data["game_map"]
-                inventory = data["inventory"]
-                pl = data["player"]
-                if type(pl) is game_map.PhiscalObject:
-                    pl = pl.rect.topleft
-                game_map.player.rect.topleft = pl
-                print("GamaMap - LOAD!")
-                game_map.redraw_top()
-        except FileNotFoundError:
-            print("Такой карты нет!")
-    return
+    def open_game_map(self, game, num=0):
+        file_p=f'data/maps/game_map-{num}.pclv'
+        print(f"GamaMap: '{file_p}' - LOADING...")    
+        if 1 or input("Вы уверены? если да ('t' или 'д') если нет любое другое: ").lower() in ("t", "д"):
+            try:
+                with open(file_p, 'rb') as f:
+                    data = pickle.load(f)
+                    game_map = data["game_map_vars"]                    
+                    self.set_vars(game_map)
+                    player = data["player_vars"]
+                    game.player.set_vars(player)
+                                         
+                    
+                    game.ui.redraw_top()
+            except FileNotFoundError:
+                print("Такой карты нет!")
+                return  False        
+        print("GamaMap - LOAD!")
+        return file_p
+
+    def get_list_maps(self):
+        path = 'data/maps/'
+        files = glob.glob(path + '*.pclv', recursive=False)
+        return files
+
+    def get_list_num_maps(self):        
+        files = self.get_list_maps()
+        ar = [int(f.split("-")[1].split(".")[0]) for f in files]
+        return ar
+
+
 
 def random_plant_selection():
     plant_tile_type = random.choices(['red', 'black', 'green'], [18, 18, 2], k=1)

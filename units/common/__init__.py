@@ -17,7 +17,6 @@ pygame.display.set_caption('Cubeee')
 screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SCALED, vsync=2)
 display_ = pygame.Surface(WINDOW_SIZE)
 
-
 # TILE ==================================================
 
 TILE_SIZE = 48
@@ -56,6 +55,9 @@ generate_type = 2 # 0:load map,1: autogenerate
 # Player ===========================================================
 
 NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9, pg.K_0]
+
+HAND_SIZE = int(TILE_SIZE//2.5) # 40//2.5== 16
+HAND_RECT = (HAND_SIZE, HAND_SIZE)
 
 # INIT TIME ================================================================
 

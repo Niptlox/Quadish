@@ -17,8 +17,7 @@ def load_img(path, size=TILE_RECT, colorkey=COLORKEY):
         img.set_colorkey(colorkey)
     return img
 
-HAND_SIZE = int(TILE_SIZE//2.5) # 40//2.5== 16
-HAND_RECT = (HAND_SIZE, HAND_SIZE)
+
 def transform_hand(surf, size=HAND_RECT): 
     if type(surf) is list:
         surf = [pygame.transform.smoothscale(s, size) for s in surf]
