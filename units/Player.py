@@ -24,6 +24,10 @@ class Player(Entitys.PhiscalObject):
         self.on_up = False                
         self.dig = False 
         self.dig_pos = None
+        self.dig_dist = 3
+        self.set = False
+        self.set_dist = 5
+
         self.punch = False
         self.punch_tick = 0
         self.punch_speed = 0.8
@@ -95,11 +99,16 @@ class Player(Entitys.PhiscalObject):
                 self.on_up = False                
         # =========================================
         elif event.type == MOUSEBUTTONDOWN:
-            if event.button == 1:
+            print(event.button)
+            if event.button in (1, 2):
                 self.dig = True
+            if event.button == 3:
+                self.set = True
         elif event.type == MOUSEBUTTONUP:
             if event.button == 1:
                 self.dig = False
+            if event.button == 3:
+                self.set = False
         # ========================================
         elif event.type == MOUSEWHEEL:
             self.active_cell += event.y
@@ -146,18 +155,17 @@ class Player(Entitys.PhiscalObject):
 
         pVec = Vector2(self.rect.centerx-scroll[0], self.rect.centery-scroll[1])
         mVec = Vector2(pygame.mouse.get_pos())
-        
-        hVec = mVec - pVec
-        if self.dig:
-            if hVec.length_squared() <= (TILE_SIZE * 2.5) ** 2:
-                dig_pos = Vector2(scroll) + mVec
-            else: 
-                dig_pos = hVec.normalize() * TILE_SIZE * 1.2 + Vector2(self.rect.center)
-        if hVec.length_squared() == 0:
+        # вектор от плеера до мышки
+        hVec = mVec - pVec 
+        # мышь в серединк игрока
+        hVec_len_sqr = hVec.length_squared()        
+        if hVec_len_sqr == 0:            
             hVec = Vector2(1, 0)
-            
-        hVec.scale_to_length(self.hand_space)
-        real_hVec = hVec + pVec - Vector2(HAND_SIZE//2, HAND_SIZE//2)
+            hVec_len_sqr = 1
+        hVec_norm = hVec.normalize()    
+
+        # координаты руки для отрисовки    
+        real_hVec = hVec_norm * self.hand_space + pVec - Vector2(HAND_SIZE//2, HAND_SIZE//2)
 
         if self.num_down != -1:
             self.choose_active_cell(self.num_down)
@@ -166,18 +174,30 @@ class Player(Entitys.PhiscalObject):
         self.ui.display.blit(self.hand_img, real_hVec)
         
         # DIG TILE =======================================================
+        new_punch = None
+        if self.dig or self.set:
+            if hVec_len_sqr <= (TILE_SIZE * 2.5) ** 2:
+                # мышка в радиусе для копки
+                dig_pos = Vector2(scroll) + mVec
+            else: 
+                # копаем самй ближ длок в сторону мышки
+                dig_pos = hVec_norm * TILE_SIZE * 1.2 + Vector2(self.rect.center)
 
-        if self.dig:
+            px, py = int(dig_pos.x // TILE_SIZE), int(dig_pos.y // TILE_SIZE)            
+            if self.dig:
+                new_punch = self.dig_tile(px, py)
+            else:
+                new_punch = self.set_tile(px, py)
+
+                
             # dig = False
-            px, py = int(dig_pos.x // TILE_SIZE), int(dig_pos.y // TILE_SIZE)
             
-            new_punch = self.dig_tile(px, py)
-            if new_punch is not None:
-                self.ui.display.blit(self.dig_rect_img, (px * TILE_SIZE-scroll[0], py * TILE_SIZE-scroll[1]))
-            if new_punch:
-                self.punch = True
-                self.punch_tick = 0
-                self.hand_space = self.min_hand_space
+        if new_punch is not None:
+            self.ui.display.blit(self.dig_rect_img, (px * TILE_SIZE-scroll[0], py * TILE_SIZE-scroll[1]))
+        if new_punch:
+            self.punch = True
+            self.punch_tick = 0
+            self.hand_space = self.min_hand_space
         if self.punch:                
             self.punch_tick += 1
             if self.punch_tick < 10:
@@ -191,9 +211,12 @@ class Player(Entitys.PhiscalObject):
 
         
 
-    def set_tile(self, x, y):        
+    def set_tile(self, x, y):  
+        tile = self.game_map.get_static_tile(x, y)      
+        if tile is None or tile[0] != 0:
+            return 
         cell = self.inventory[self.active_cell]
-        if time() - self.pickaxe_time < 1 or time() - self.set_time < 0.6 or cell is None:        
+        if time() - self.set_time < 0.6 or cell is None:        
             return False
         ttile = self.inventory[self.active_cell][0]
         if ttile in STANDING_TILES and self.game_map.get_static_tile_type(x, y + 1, 0) in STANDING_TILES:
@@ -207,6 +230,8 @@ class Player(Entitys.PhiscalObject):
         self.set_time = time()
         return True
 
+    
+
     def dig_tile(self, x, y):        
         tile = self.game_map.get_static_tile(x, y)
         if tile is None or tile[1] == -1:
@@ -216,9 +241,9 @@ class Player(Entitys.PhiscalObject):
             return False
         ttile = tile[0]
         if ttile == 0:
-            return self.set_tile(x, y)
+            return #self.set_tile(x, y)
         sol = tile[1] # прочность
-        if time() - self.set_time < 1 or time() - self.pickaxe_time < 1 / PICKAXES_SPEED[self.pickaxe]:
+        if time() - self.pickaxe_time < 1 / PICKAXES_SPEED[self.pickaxe]:
             # время нового удара ещё не подошло
             return False
         self.pickaxe_time = time()
