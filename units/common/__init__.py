@@ -9,7 +9,7 @@ WINDOW_SIZE = (2200, 1100)
 WINDOW_SIZE = (700*2, 400*2)
 WSIZE = WINDOW_SIZE
 
-FPS = 60
+FPS = 30
 
 pygame.init() # initiate pygame
 pygame.display.set_caption('Cubeee')
@@ -19,7 +19,7 @@ display_ = pygame.Surface(WINDOW_SIZE)
 
 # TILE ==================================================
 
-TILE_SIZE = 48
+TILE_SIZE = 32
 TSIZE = TILE_SIZE
 # TILE_SIZE = 16
 # TILE_SIZE = 8
@@ -39,7 +39,7 @@ WCSIZE = WINDOW_CHUNK_SIZE
 # DEBUG ====================================================
 DEBUG = True
 # DEBUG = False
-show_chunk_grid = True
+show_chunk_grid = False
 show_group_obj = True
 show_info_menu = True
 

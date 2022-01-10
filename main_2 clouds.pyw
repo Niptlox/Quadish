@@ -1,8 +1,8 @@
 ﻿import os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 from pygame.display import update
 
 from pygame.event import event_name
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 import math
 import random

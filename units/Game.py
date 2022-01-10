@@ -1,4 +1,6 @@
 from time import sleep
+
+from pygame import image
 from units.common import *
 from pygame.locals import *
 
@@ -6,10 +8,10 @@ from units.map.GameMap import GameMap
 from units.map.ScreenMap import ScreenMap
 from units.UI.UI import GameUI, SwitchMapUI
 from units.Player import Player
-
+from units.Cursor import set_cursor, CURSOR_NORMAL
 
 EXIT = 0
-
+set_cursor(CURSOR_NORMAL)
 
 class App:
     screen = screen_
@@ -105,7 +107,7 @@ class GameScene(Scene):
                 self.running = EXIT
             if event.type == KEYDOWN:
                 if event.key == K_u:
-                    pause = not pause
+                    self.pause = not self.pause
                 elif event.key == K_o:
                     # self.game_map.load_game_map(self.player.active_cell)
                     self.new_scene = self.app.openm_scene
@@ -118,7 +120,7 @@ class GameScene(Scene):
                 if show_info_menu:
                     self.ui.redraw_info()
             self.player.pg_event(event)            
-                      
+
     def update(self):
         self.ui.draw_sky()
 

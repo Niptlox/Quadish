@@ -5,7 +5,7 @@ from units import Entitys
 from time import time
 from units.Tiles import PICKAXES_CAPABILITY, PICKAXES_SPEED, PICKAXES_STRENGTH, STANDING_TILES
 from units.Tiles import hand_pass_img, player_img, dig_rect_img, tile_hand_imgs
-
+from units.Cursor import set_cursor, cursor_add_img, CURSOR_DIG, CURSOR_NORMAL, CURSOR_SET
 
 
 class Player(Entitys.PhiscalObject):
@@ -27,6 +27,7 @@ class Player(Entitys.PhiscalObject):
         self.dig_dist = 3
         self.set = False
         self.set_dist = 5
+        self.auto_block_select = True 
 
         self.punch = False
         self.punch_tick = 0
@@ -36,12 +37,14 @@ class Player(Entitys.PhiscalObject):
         self.num_down = -1
 
         self.vertical_momentum= 0
-        self.jump_speed = 10
+        self.jump_speed = 7
         self.jump_count = 0
-        self.max_jump_count = 5
-        self.fall_speed = 0.3 #* (60 / FPS)
-        self.max_fall_speed = 7 #* (60 / FPS)
-        self.player_speed = 4.1 * (WINDOW_SIZE[0] / 700) * (60 / FPS)
+        self.max_jump_count = 4
+        self.fall_speed = 0.45
+        self.max_fall_speed = 15
+        self.speed = 0
+        self.accelerate_x = 2 # ускорение шага
+        self.max_speed = 11
         self.running = True
         self.air_timer = 0
 
@@ -74,15 +77,7 @@ class Player(Entitys.PhiscalObject):
                 self.moving_left = True
             elif event.key in (K_UP, K_w, K_SPACE):
                 self.on_up = True                
-                if self.on_wall:
-                    self.vertical_momentum = -self.jump_speed
-                    
-                elif self.air_timer < 6:
-                    self.jump_count += 1
-                    self.vertical_momentum = -self.jump_speed
-                elif self.jump_count < self.max_jump_count:
-                    self.jump_count += 1
-                    self.vertical_momentum = -self.jump_speed
+                self.jump()                
             # =========================================
             elif event.key == K_j and self.on_up:                    
                 self.pickaxe = 77 if self.pickaxe == 1 else 1
@@ -112,9 +107,9 @@ class Player(Entitys.PhiscalObject):
         # ========================================
         elif event.type == MOUSEWHEEL:
             self.active_cell += event.y
-            if self.active_cell == -1:
+            if self.active_cell <= -1:
                 self.active_cell = self.inventory_size - 1
-            elif self.active_cell == self.inventory_size:
+            elif self.active_cell >= self.inventory_size:
                 self.active_cell = 0
             self.choose_active_cell()            
 
@@ -122,15 +117,26 @@ class Player(Entitys.PhiscalObject):
         scroll = self.game.screen_map.scroll
         player_movement = [0,0]
         if self.moving_right:
-            player_movement[0] += self.player_speed
-        if self.moving_left:
-            player_movement[0] -= self.player_speed
- 
+            if self.speed < 0:
+                self.speed //= 2                
+            self.speed += self.accelerate_x
+            if self.speed > self.max_speed:
+                self.speed = self.max_speed
+        elif self.moving_left:
+            if self.speed > 0:
+                self.speed //= 2               
+                if self.speed == -1: self.speed = 0                 
+            self.speed -=self.accelerate_x
+            if self.speed < -self.max_speed:
+                self.speed = -self.max_speed
+        else:            
+            self.speed //= 2
+            if self.speed == -1: self.speed = 0
+        player_movement[0] += self.speed
         player_movement[1] += self.vertical_momentum
         self.vertical_momentum += self.fall_speed
         if self.vertical_momentum > self.max_fall_speed:
             self.vertical_momentum = self.max_fall_speed
-
         
         collisions = self.move(player_movement, self.game.screen_map.static_tiles)
 
@@ -174,26 +180,54 @@ class Player(Entitys.PhiscalObject):
         self.ui.display.blit(self.hand_img, real_hVec)
         
         # DIG TILE =======================================================
+        cursor = CURSOR_NORMAL
+        cursor_block_id = -1
+        dig_in_dist = set_in_dist = False
+        if self.inventory[self.active_cell] is None:
+            if hVec_len_sqr <= (TILE_SIZE * self.dig_dist) ** 2:
+                dig_in_dist = True # можно копать на тек растянии
+                cursor = CURSOR_DIG
+        else:
+            if hVec_len_sqr <= (TILE_SIZE * self.set_dist) ** 2:
+                set_in_dist = True # можно ставить на тек растянии                    
+                cursor_block_id = 1000 + self.inventory[self.active_cell][0]                
+                cursor = None
+
         new_punch = None
-        if self.dig or self.set:
-            if hVec_len_sqr <= (TILE_SIZE * 2.5) ** 2:
+        if self.set:
+            if set_in_dist:
+                #  or hVec_len_sqr <= (TILE_SIZE * self.set_dist) ** 2 убрано тк мы ставим только если в руке есть блок
+                # мышка в радиусе для копки
+                set_pos = Vector2(scroll) + mVec
+            elif self.auto_block_select: 
+                # копаем самй ближ длок в сторону мышки
+                set_pos = hVec_norm * TILE_SIZE * 1.2 + Vector2(self.rect.center)
+            else:
+                set_pos = None
+
+            px, py = int(set_pos.x // TILE_SIZE), int(set_pos.y // TILE_SIZE)                    
+            
+        
+            new_punch = self.set_tile(px, py)
+        elif self.dig:
+            if dig_in_dist or hVec_len_sqr <= (TILE_SIZE * self.dig_dist) ** 2:
                 # мышка в радиусе для копки
                 dig_pos = Vector2(scroll) + mVec
-            else: 
+                cursor = CURSOR_DIG
+            elif self.auto_block_select: 
                 # копаем самй ближ длок в сторону мышки
                 dig_pos = hVec_norm * TILE_SIZE * 1.2 + Vector2(self.rect.center)
-
-            px, py = int(dig_pos.x // TILE_SIZE), int(dig_pos.y // TILE_SIZE)            
-            if self.dig:
-                new_punch = self.dig_tile(px, py)
+                cursor = CURSOR_DIG
             else:
-                new_punch = self.set_tile(px, py)
-
-                
-            # dig = False
-            
+                dig_pos = None                
+            if dig_pos:                
+                px, py = int(dig_pos.x // TILE_SIZE), int(dig_pos.y // TILE_SIZE)                                
+                new_punch = self.dig_tile(px, py)
+        
         if new_punch is not None:
             self.ui.display.blit(self.dig_rect_img, (px * TILE_SIZE-scroll[0], py * TILE_SIZE-scroll[1]))
+                
+                
         if new_punch:
             self.punch = True
             self.punch_tick = 0
@@ -208,7 +242,10 @@ class Player(Entitys.PhiscalObject):
                 self.hand_space = self.min_hand_space
             else:
                 self.hand_space -= self.punch_speed
-
+        if cursor is not None:
+            set_cursor(cursor)      
+        elif cursor_block_id != -1:
+            cursor_add_img(self.hand_img, cursor_block_id)      
         
 
     def set_tile(self, x, y):  
@@ -281,3 +318,12 @@ class Player(Entitys.PhiscalObject):
             self.hand_img = tile_hand_imgs[self.inventory[self.active_cell][0]]
         self.ui.redraw_top()
 
+    def jump(self):
+        if self.on_wall:
+            self.vertical_momentum = -self.jump_speed            
+        elif self.air_timer < 6:
+            self.jump_count += 1
+            self.vertical_momentum = -self.jump_speed 
+        elif self.jump_count < self.max_jump_count:
+            self.jump_count += 1
+            self.vertical_momentum = -self.jump_speed * (self.jump_count*0.25+1)

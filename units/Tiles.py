@@ -12,7 +12,8 @@ def create_tile_image(color, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
 COLORKEY = (0, 255, 0)
 def load_img(path, size=TILE_RECT, colorkey=COLORKEY):
     img = pygame.image.load(path).convert()
-    img = pygame.transform.scale(img, size)
+    if size:
+        img = pygame.transform.scale(img, size)
     if colorkey:
         img.set_colorkey(colorkey)
     return img
@@ -86,9 +87,10 @@ tile_imgs = {1: grass_img,
 count_tiles = len(tile_imgs)
 
 tile_hand_imgs = {k: transform_hand(i) for k, i in tile_imgs.items()}
-tile_hand_imgs[102] = load_img("data/sprites/tiles/small_tree_hand.png", HAND_RECT) #тк есть прозрачность
+tile_hand_imgs[102] = load_img("data/sprites/tiles/small_tree_hand.png", HAND_RECT) #тк есть прозрачность создана собственная картинка
 tile_hand_imgs[121] = load_img("data/sprites/tiles/table_hand.png", HAND_RECT) #тк есть прозрачность
 tile_hand_imgs[122] = load_img("data/sprites/tiles/chear_hand.png", HAND_RECT) #тк есть прозрачность
+
 
 # INIT_TILES ====================================================
 
