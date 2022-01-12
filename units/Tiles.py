@@ -41,10 +41,13 @@ stone_img = create_tile_image("#57534E")
 
 blore_img = create_tile_image("#155E75") # blue ore
 
-bush_img = load_img("data/sprites/tiles/bush.png")
+wood_img = load_img("data/sprites/tiles/wood.png")
+
+bush_img = load_img("data/sprites/tiles/bush.png") # куст
 
 smalltree_img = load_img("data/sprites/tiles/small_tree.png")
 
+door_img = load_img("data/sprites/tiles/door.png")
 table_img = load_img("data/sprites/tiles/table.png")
 chear_img = load_img("data/sprites/tiles/chear.png")
 water_img = load_img("data/sprites/tiles/water.png")
@@ -53,7 +56,7 @@ cloud_img = create_tile_image("#CBD5E1")
 cloud_imgs = [create_tile_image((203-i,213-i,230-i)) for i in range(0, 130, 30)]
 
 break_1_img = load_img("data/sprites/tiles/break_1.png")
-break_1_img.set_alpha(100)
+break_1_img.set_alpha(100) # прозрачность 100 из 255
 break_2_img = load_img("data/sprites/tiles/break_2.png")
 break_2_img.set_alpha(100)
 break_3_img = load_img("data/sprites/tiles/break_3.png")
@@ -75,11 +78,13 @@ tile_imgs = {1: grass_img,
              2: dirt_img, 
              3: stone_img,
              4: blore_img,
+             11: wood_img,
              101: bush_img,
              102: smalltree_img,
              120: water_img,
              121: table_img,
              122: chear_img,
+             123: door_img,
              151: group_img,
              201: cloud_img,
              202: cloud_imgs,             
@@ -94,21 +99,23 @@ tile_hand_imgs[122] = load_img("data/sprites/tiles/chear_hand.png", HAND_RECT) #
 
 # INIT_TILES ====================================================
 
-
-PHYSBODY_TILES = {1, 2, 3, 4}
-
-STANDING_TILES = {0, 101, 102, 120, 121, 122}
+# блоки через которые нельзя пройти
+PHYSBODY_TILES = {1, 2, 3, 4, 11, 124}
+# блоки которые должны стоять на блоке
+STANDING_TILES = {0, 101, 102, 120, 121, 122, 123} 
+# Ппочность блоков
 TILES_SOLIDITY = {
     1: 15,
     2: 20,
     3: 35,
     4: 60,
+    11: 45,
+    123: 45,
     101: 25,
     102: 25,
     120: 100,
     121: 100,
     122: 100,
-
 }
 
 # INIT PICKAXE ==================================================
@@ -122,6 +129,6 @@ PICKAXES_SPEED = {
     77: 777
 }
 PICKAXES_CAPABILITY = {
-    1: [1,2,3,101,102],
+    1: [1,2,3,11,101,102, 123],
     77: None
 }

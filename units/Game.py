@@ -1,8 +1,7 @@
-from time import sleep
-
-from pygame import image
-from units.common import *
+import subprocess
 from pygame.locals import *
+from units.common import *
+from units.App import *
 
 from units.map.GameMap import GameMap
 from units.map.ScreenMap import ScreenMap
@@ -10,77 +9,11 @@ from units.UI.UI import GameUI, SwitchMapUI
 from units.Player import Player
 from units.Cursor import set_cursor, CURSOR_NORMAL
 
-EXIT = 0
 set_cursor(CURSOR_NORMAL)
 
-class App:
-    screen = screen_
-    def __init__(self, scene=None):
-        self.clock = pg.time.Clock()
-        self.running= True        
-        self.scene = scene  # Тек сцена
-        self.last_scene = self.scene  # Прошлая сцена
-        
-    def pg_events(self):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.running = EXIT
-
-    def main(self):        
-        self.running = True        
-        while self.running:            
-            self.pg_events()
-            self.update()
-            self.clock.tick(FPS)        
-
-    def update(self):
-        if self.scene is not None:            
-            scene = self.scene.main()
-            if scene is None: 
-                scene = self.last_scene
-            elif scene is EXIT:
-                self.running = EXIT
-            self.last_scene = self.scene
-            self.scene = scene
-
-
-class Scene(App):
-    def __init__(self, app) -> None:
-        super().__init__()
-        self.app = app
-        self.new_scene = None
-        self.display = display_
-
-    def main(self):
-        self.running = True
-        while self.running:            
-            self.clock.tick(FPS)   
-            self.pg_events()
-            self.update()            
-        if self.running is EXIT:
-            return EXIT     
-        return self.new_scene
-
-
-class SceneUI(Scene):
-    def __init__(self, app, UI) -> None:
-        super().__init__(app=app)
-        self.ui = UI(self)
-        self.ui.init_ui()
-
-    def pg_events(self):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.running = EXIT
-            if event.type == KEYDOWN:
-                if event.key == K_ESCAPE:
-                    self.running = False
-                    self.new_scene = None
-            self.ui.pg_event(event)
-
-    def update(self):
-        self.ui.draw()
-
+def open_help():
+    subprocess.Popen(('start', 'help.txt'), shell = True)
+    
 
 class Game(App):
     def __init__(self) -> None:
@@ -107,13 +40,18 @@ class GameScene(Scene):
                 self.running = EXIT
             if event.type == KEYDOWN:
                 if event.key == K_u:
-                    self.pause = not self.pause
+                    self.running = False
+                    self.new_scene = self.app.savem_scene
                 elif event.key == K_o:
                     # self.game_map.load_game_map(self.player.active_cell)
                     self.new_scene = self.app.openm_scene
                     self.running = False
                 elif event.key == K_p:
                     #self.game_map.save_game_map(self.player.active_cell) 
+                    self.running = False
+                    self.new_scene = self.app.savem_scene
+                elif event.key == K_F1:
+                    open_help()
                     self.running = False
                     self.new_scene = self.app.savem_scene
             elif event.type == EVENT_100_MSEC:

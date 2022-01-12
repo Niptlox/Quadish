@@ -9,7 +9,7 @@ from units.Cursor import set_cursor, cursor_add_img, CURSOR_DIG, CURSOR_NORMAL, 
 
 
 class Player(Entitys.PhiscalObject):
-    width, height = TILE_RECT
+    width, height = TSIZE-2, TSIZE-2
     player_img = player_img
     dig_rect_img = dig_rect_img
     hand_img = hand_pass_img
@@ -36,11 +36,12 @@ class Player(Entitys.PhiscalObject):
         self.hand_space = self.min_hand_space
         self.num_down = -1
 
+        self.spawn_point = (0, 0)
         self.vertical_momentum= 0
-        self.jump_speed = 7
+        self.jump_speed = 10
         self.jump_count = 0
         self.max_jump_count = 4
-        self.fall_speed = 0.45
+        self.fall_speed = 0.7
         self.max_fall_speed = 15
         self.speed = 0
         self.accelerate_x = 2 # ускорение шага
@@ -82,7 +83,13 @@ class Player(Entitys.PhiscalObject):
             elif event.key == K_j and self.on_up:                    
                 self.pickaxe = 77 if self.pickaxe == 1 else 1
             elif event.key == K_t:
-                self.rect.center = (0, 0)
+                self.rect.center = self.spawn_point
+            elif event.key == K_h:
+                self.spawn_point = self.rect.center
+                print("Spawnpoint set:", self.spawn_point)
+            elif event.key == K_e:
+                if self.get_from_inventory(11, 1): # дерево
+                    self.put_to_inventory(123, 1) # дверь
             elif event.key in NUM_KEYS:
                 self.num_down = NUM_KEYS.index(event.key) 
         elif event.type == KEYUP:
@@ -106,7 +113,7 @@ class Player(Entitys.PhiscalObject):
                 self.set = False
         # ========================================
         elif event.type == MOUSEWHEEL:
-            self.active_cell += event.y
+            self.active_cell -= event.y
             if self.active_cell <= -1:
                 self.active_cell = self.inventory_size - 1
             elif self.active_cell >= self.inventory_size:
@@ -253,7 +260,7 @@ class Player(Entitys.PhiscalObject):
         if tile is None or tile[0] != 0:
             return 
         cell = self.inventory[self.active_cell]
-        if time() - self.set_time < 0.6 or cell is None:        
+        if time() - self.set_time < 0.3 or cell is None:        
             return False
         ttile = self.inventory[self.active_cell][0]
         if ttile in STANDING_TILES and self.game_map.get_static_tile_type(x, y + 1, 0) in STANDING_TILES:
@@ -277,8 +284,9 @@ class Player(Entitys.PhiscalObject):
         if d_ttile in {101, 102}:
             return False
         ttile = tile[0]
+        count_items = 1
         if ttile == 0:
-            return #self.set_tile(x, y)
+            return #self.set_tile(x, y)        
         sol = tile[1] # прочность
         if time() - self.pickaxe_time < 1 / PICKAXES_SPEED[self.pickaxe]:
             # время нового удара ещё не подошло
@@ -287,29 +295,69 @@ class Player(Entitys.PhiscalObject):
         if PICKAXES_CAPABILITY[self.pickaxe] is not None and ttile not in PICKAXES_CAPABILITY[self.pickaxe]:
             # мы не можем выкопать этой киркой
             return False
+        if ttile == 102: # smalltree_img
+            ttile = 11 # wood_img
+            count_items = 5
         stg = PICKAXES_STRENGTH[self.pickaxe]
         sol -= stg
         if sol <= 0:
-            i = 0
-            while i < self.inventory_size:
-                if self.inventory[i] is None:
-                    self.inventory[i] = [ttile, 1]
-                    self.ui.redraw_top()
-                    break
-                if self.inventory[i][1] < self.cell_size and self.inventory[i][0] == ttile:
-                    self.inventory[i][1] += 1
-                    self.ui.redraw_top()
-                    break
-                i += 1
-            else:
-                print("Перепонен инвентарь", ttile)
             
+            self.put_to_inventory(ttile, count_items)
             self.game_map.set_static_tile(x, y, None)
         else:
             self.game_map.set_static_tile_solidity(x, y, sol)
         self.choose_active_cell()
         return True
-
+    
+    def put_to_inventory(self, ttile, count=1):
+        i = 0
+        while i < self.inventory_size:
+            if self.inventory[i] is None:
+                self.inventory[i] = [ttile, min(count, self.cell_size)]
+                if count > self.cell_size:
+                    count -= self.cell_size
+                    continue
+                break
+            if self.inventory[i][1] < self.cell_size and self.inventory[i][0] == ttile:
+                free_place = self.cell_size - self.inventory[i][1]
+                if count > free_place:
+                    self.inventory[i][1] += free_place
+                    count -= free_place
+                else:
+                    self.inventory[i][1] += count                    
+                    break
+            i += 1
+        else:
+            print("Перепонен инвентарь", ttile)
+        self.ui.redraw_top()
+        
+    def find_in_inventory(self, ttile, count=1):
+        all_cnt = 0
+        for i in filter(lambda x: x, self.inventory):
+            tt, ct = i[:2]
+            if tt == ttile:
+                all_cnt += ct
+                if all_cnt >= count:
+                    return True
+        return False
+                
+    def get_from_inventory(self, ttile, count):        
+        if not self.find_in_inventory(ttile, count):
+            return False        
+        # мы знаем что ttile есть в инвенторе
+        for i in range(self.inventory_size):
+            if self.inventory[i]:
+                tt, ct = self.inventory[i][:2]
+                if tt == ttile:
+                    if ct <= count:
+                        count -= ct
+                        self.inventory[i] = None
+                    else:
+                        self.inventory[i][1] -= count
+                        break
+        return True                                            
+            
+                
     def choose_active_cell(self, cell=-1):
         if cell != -1:
             self.active_cell = cell

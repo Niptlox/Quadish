@@ -1,3 +1,4 @@
+from pygame import surface
 from units.common import *
 from units.Tiles import *
 from time import time
@@ -20,7 +21,6 @@ class ScreenMap:
     def update(self):
         tt = time()
         p = self.player
-        gm = self.game_map
         self.true_scroll[0] += (p.rect.x - self.true_scroll[0] - WSIZE[0] // 2) / 20
         self.true_scroll[1] += (p.rect.y - self.true_scroll[1] - WSIZE[1] // 2) / 20
         self.scroll = scroll = [int(self.true_scroll[0]), int(self.true_scroll[1])]
@@ -48,10 +48,10 @@ class ScreenMap:
             chunk_x = scroll_chunk_x
             for cx in range(WCSIZE[0]):
                 chunk_pos = (chunk_x, chunk_y)    
-                chunk = gm.chunk(chunk_pos)            
+                chunk = self.game_map.chunk(chunk_pos)            
                 if chunk is None:
                     # генериует статические и динамичские чанки
-                    chunk = gm.generate_chunk(chunk_x, chunk_y) # [static_lst, dinamic_lst]
+                    chunk = self.game_map.generate_chunk(chunk_x, chunk_y) # [static_lst, dinamic_lst]
                 if chunk:
                     # if cx  + cy == 0:
                     #     print("chunk_pos", chunk_pos)
@@ -62,7 +62,7 @@ class ScreenMap:
                     for y in range(CSIZE):
                         tile_x = chunk_x*CSIZE
                         for x in range(CSIZE):
-                            tile = chunk[0][index:index+gm.tile_data_size]
+                            tile = chunk[0][index:index+self.game_map.tile_data_size]
                             tile_type = tile[0]
                             if tile_type > 0:
                                 b_pos = (tile_x*TILE_SIZE-scroll[0], tile_y*TILE_SIZE-scroll[1])
@@ -81,7 +81,7 @@ class ScreenMap:
 
                             if tile_type in PHYSBODY_TILES:                                
                                 static_tiles[(tile_x, tile_y)] = tile_type
-                            index += gm.tile_data_size
+                            index += self.game_map.tile_data_size
                             tile_x += 1
                         tile_y += 1
 
@@ -94,4 +94,55 @@ class ScreenMap:
 
         tt = time() - tt
         None
-            
+    
+    def chunk_thread(self, idx=0):
+        """idx - индекс потока"""
+        while True:
+            if self.chunks_for_processing[idx]:                
+                self.chunks_result[idx] = self.chunk_processing(self.chunks_for_processing[idx])
+                
+        
+        
+    def chunk_processing(self, chunk_x, chunk_y):     
+        static_tiles = {}
+        dinamic_tiles = []
+        group_handlers = {}
+   
+        chunk_pos = (chunk_x, chunk_y)    
+        chunk = self.game_map.chunk(chunk_pos)            
+        if chunk is None:
+            # генериует статические и динамичские чанки
+            chunk = self.game_map.generate_chunk(chunk_x, chunk_y) # [static_lst, dinamic_lst]
+        if chunk:
+            # if cx  + cy == 0:
+            #     print("chunk_pos", chunk_pos)
+            dinamic_tiles += chunk[1]
+            group_handlers.update(chunk[2])
+            index = 0        
+            tile_y = chunk_y*CSIZE
+            for y in range(CSIZE):
+                tile_x = chunk_x*CSIZE
+                for x in range(CSIZE):
+                    tile = chunk[0][index:index+self.game_map.tile_data_size]
+                    tile_type = tile[0]
+                    if tile_type > 0:
+                        b_pos = (tile_x*TILE_SIZE-self.scroll[0], tile_y*TILE_SIZE-self.scroll[1])
+                        if srect_d.collidepoint(*b_pos):
+                            # print(tile_xy)
+                            if tile_type == 201:
+                                img = tile_imgs[tile_type+1][tile[2]-1]
+                            else:
+                                img = tile_imgs[tile_type]                                
+
+                            self.display.blit(img, b_pos)
+                            sol = tile[1]
+                            if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
+                                br_i = 2 - int(sol / (TILES_SOLIDITY[tile_type] / 3))
+                                self.display.blit(break_imgs[br_i], b_pos)
+
+                    if tile_type in PHYSBODY_TILES:                                
+                        static_tiles[(tile_x, tile_y)] = tile_type
+                    index += self.game_map.tile_data_size
+                    tile_x += 1
+                tile_y += 1
+

@@ -26,7 +26,7 @@ TSIZE = TILE_SIZE
 TILE_RECT = (TILE_SIZE, TILE_SIZE)
 TRECT = TILE_RECT
 
-CHUNK_SIZE = 16
+CHUNK_SIZE = 32
 CSIZE = CHUNK_SIZE
 
 CHUNK_SIZE_PX = CHUNK_SIZE * TILE_SIZE
@@ -39,7 +39,7 @@ WCSIZE = WINDOW_CHUNK_SIZE
 # DEBUG ====================================================
 DEBUG = True
 # DEBUG = False
-show_chunk_grid = False
+show_chunk_grid = 1 
 show_group_obj = True
 show_info_menu = True
 
