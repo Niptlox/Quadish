@@ -4,7 +4,9 @@ import pygame as pg
 import math
 
 # INIT GAME ==============================================
+
 print("INIT GAME VARS")
+GAME_VERSION = "0.4"
 WINDOW_SIZE = (2200, 1100)
 WINDOW_SIZE = (700*2, 400*2)
 WSIZE = WINDOW_SIZE
@@ -59,8 +61,20 @@ NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K
 HAND_SIZE = int(TILE_SIZE//2.5) # 40//2.5== 16
 HAND_RECT = (HAND_SIZE, HAND_SIZE)
 
+FALL_SPEED = 0.7
+MAX_FALL_SPEED = 15*4
+
 # INIT TIME ================================================================
 
 EVENT_100_MSEC = pg.USEREVENT+1
 pygame.time.set_timer(EVENT_100_MSEC, 100, False)
 
+"""
+   0   
+  000  
+ 00000 
+0000000
+ 00000 
+  000  
+   0   
+"""

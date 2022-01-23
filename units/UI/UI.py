@@ -1,3 +1,4 @@
+from pygame import Surface
 from pygame.constants import MOUSEBUTTONDOWN
 from units.Texture import BLACK, WHITE
 from units.common import *
@@ -123,6 +124,7 @@ class SwitchMapUI(UI):
         n = self.app.game.game_map.save_slots
         imgs = [createImagesButton(btn_rect.size, f"Карта #{i}", font=textfont_btn)
                 for i in range(n)]
+        self.img_btns = imgs
         funcs = [lambda b, i=i: self.open_map(b, i) for i in range(n)]
         btns = createVSteckButtons(btn_rect.size, btn_rect.centerx, 0, 15, imgs, funcs,
                                     screenOffset=(self.rect.x + self.btns_scroll[0], 
@@ -163,6 +165,17 @@ class SwitchMapUI(UI):
     def set_disabled_btns(self, ar):
         for i in range(len(ar)):
             self.btns[i].set_disabled(ar[i])
+
+    def set_check_btns(self, ar):
+        check = Surface((10, 10))
+        check.fill("#EF4444")
+        for i in range(len(ar)):
+            if ar[i]:
+                img = self.img_btns[i][0].copy()
+                img.blit(check, (0, 0))
+                self.btns[i].imgUpB = img 
+            else:
+                self.btns[i].imgUpB = self.img_btns[i][0]
 
     def open_map(self, but, num):
         res = self.app.open_map(num)

@@ -11,9 +11,10 @@ from units.Cursor import set_cursor, CURSOR_NORMAL
 
 set_cursor(CURSOR_NORMAL)
 
+
 def open_help():
-    subprocess.Popen(('start', 'help.txt'), shell = True)
-    
+    subprocess.Popen(('start', 'help.txt'), shell=True)
+
 
 class Game(App):
     def __init__(self) -> None:
@@ -23,16 +24,16 @@ class Game(App):
         super().__init__(self.game_scene)
 
 
-class GameScene(Scene):        
+class GameScene(Scene):
     def __init__(self, app) -> None:
         super().__init__(app)
         self.game_map = GameMap(generate_type)
-        
-        self.ui = GameUI(self)
-        self.player = Player(self, self.game_map, 0, 0)        
-        self.screen_map = ScreenMap(self.display, self.game_map, self.player)        
-        self.ui.init_ui()
 
+        self.ui = GameUI(self)
+        self.player = Player(self, self.game_map, 0, 0)
+        self.screen_map = ScreenMap(self.display, self.game_map, self.player)
+        self.ui.init_ui()
+        self.tact = 0
 
     def pg_events(self):
         for event in pygame.event.get():
@@ -47,7 +48,7 @@ class GameScene(Scene):
                     self.new_scene = self.app.openm_scene
                     self.running = False
                 elif event.key == K_p:
-                    #self.game_map.save_game_map(self.player.active_cell) 
+                    # self.game_map.save_game_map(self.player.active_cell)
                     self.running = False
                     self.new_scene = self.app.savem_scene
                 elif event.key == K_F1:
@@ -57,16 +58,16 @@ class GameScene(Scene):
             elif event.type == EVENT_100_MSEC:
                 if show_info_menu:
                     self.ui.redraw_info()
-            self.player.pg_event(event)            
+            self.player.pg_event(event)
 
     def update(self):
         self.ui.draw_sky()
 
-        self.screen_map.update()
-        self.player.update()
+        self.screen_map.update(self.tact)
+        self.player.update(self.tact)
 
         self.ui.draw()
-
+        self.tact += 1
 
 
 class OpenMapSceneUI(SceneUI):
@@ -75,23 +76,29 @@ class OpenMapSceneUI(SceneUI):
         super().__init__(app, lambda app: SwitchMapUI(app, "Загрузить карту"))
 
     def open_map(self, num=0):
-        self.running = False # -> выход из процесса этой сцены
-        self.new_scene = None # -> переход на прошлую сцену
+        self.running = False  # -> выход из процесса этой сцены
+        self.new_scene = None  # -> переход на прошлую сцену
         return self.game.game_map.open_game_map(self.game, num)
 
     def main(self):
-        ar = self.game.game_map.get_list_num_maps()        
+        ar = self.game.game_map.get_list_num_maps()
         ar = [i not in ar for i in range(self.game.game_map.save_slots)]
         self.ui.set_disabled_btns(ar)
         return super().main()
 
+
 class SaveMapSceneUI(SceneUI):
     def __init__(self, app: Game) -> None:
         self.game = app.game_scene
-        super().__init__(app, lambda app: SwitchMapUI(app, "Сохранить карту"))                
+        super().__init__(app, lambda app: SwitchMapUI(app, "Сохранить карту"))
 
     def open_map(self, num=0):
-        self.running = False # -> выход из процесса этой сцены
-        self.new_scene = None # -> переход на прошлую сцену
+        self.running = False  # -> выход из процесса этой сцены
+        self.new_scene = None  # -> переход на прошлую сцену
         return self.game.game_map.save_game_map(self.game, num)
 
+    def main(self):
+        ar = self.game.game_map.get_list_num_maps()
+        ar = [i in ar for i in range(self.game.game_map.save_slots)]
+        self.ui.set_check_btns(ar)
+        return super().main()

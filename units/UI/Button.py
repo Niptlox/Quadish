@@ -48,8 +48,9 @@ class Button(pygame.sprite.Sprite):
     # image = load_image("bomb.png")
     # image_boom = load_image("boom.png")
 
-    def __init__(self, func, rect, imgUpB, imgInB=None, imgDownB=None, group=None, screenXY=None, disabled=False):
-        """вызов func(button) - по пораметру передаём кнопку"""
+    def __init__(self, func, rect, imgUpB, imgInB=None, imgDownB=None, group=None, screenXY=None, disabled=False):        
+        """func, rect, imgUpB, imgInB=None, imgDownB=None, group=None, screenXY=None, disabled=False
+        вызов func(button) - по пораметру передаёться кнопка"""
         # если рамеры == -1 то берётся размер кнопки
         self.func = func
         if group is not None:
