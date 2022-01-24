@@ -1,3 +1,7 @@
+from _ast import Tuple
+from typing import List, Dict, Any
+
+from units.Creatures import Slime
 from ..common import *
 from ..Tiles import *
 import random
@@ -9,7 +13,8 @@ import glob
 class GameMap:
     save_slots = 16
 
-    def __init__(self, generate_type) -> None:
+    def __init__(self, game, generate_type) -> None:
+        self.game = game
         self.gen_type = generate_type
         self.tile_data_size = 4
         self.map_size = [-1, -1]
@@ -21,7 +26,7 @@ class GameMap:
         for k, i in vrs.items():
             self.__dict__[k] = i
 
-    def chunk(self, xy, default=None):
+    def chunk(self, xy, default=None) :
         res = self.game_map.get(xy, default)
         return res
 
@@ -97,17 +102,18 @@ class GameMap:
         return False
 
     def move_dinamic_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
-        print(chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj)
+        # print(chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj)
         chunk = self.chunk((new_chunk_x, new_chunk_y))
-        if chunk:
-            ochunk = self.chunk((chunk_x, chunk_y))
-            if ochunk is not None and obj in ochunk[1]:
-                ochunk[1].remove(obj)
-                chunk[1].append(obj)
-                return True
-            # else:
-            #     raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
-            return False
+        if not chunk:
+            chunk = self.generate_chunk(new_chunk_x, new_chunk_y)
+        ochunk = self.chunk((chunk_x, chunk_y))
+        if ochunk is not None and obj in ochunk[1]:
+            ochunk[1].remove(obj)
+            chunk[1].append(obj)
+            return True
+        # else:
+        #     raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
+
         return
 
     def move_group_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
@@ -162,9 +168,6 @@ class GameMap:
     def get_tile_ttile(self, ttile):
         return [ttile, TILES_SOLIDITY.get(ttile, -1), 0, 0]
 
-    def set_chunk_arr2(self, arr):
-        pass
-
     def create_pass_chunk(self, xy):
         # self.game_map[xy] = [bytearray([0]*self.chunk_arr_size), [], []]
         self.game_map[xy] = [[0] * self.chunk_arr_size, [], {}]
@@ -197,6 +200,10 @@ class GameMap:
                         v4 = pnoise2(tile_x / 5, tile_y / 5, 2, persistence=0.85)
                         if v4 > 0.2:
                             tile_type = 4  # blore
+                        else:
+                            v5 = pnoise2(tile_x / 10, tile_y / 10, 2, persistence=0.6)
+                            if v5 > 0.2:
+                                tile_type = 5  # granite
                     else:
                         v2 = pnoise2((tile_x + 1) / freq_x, (tile_y - 2 - random.randint(0, 1)) / freq_y, octaves,
                                      persistence=0.35)
@@ -211,6 +218,8 @@ class GameMap:
                                     pl_i = tile_index - self.chunk_arr_width
                                     static_tiles[pl_i] = plant_tile_type
                                     static_tiles[pl_i + 1] = TILES_SOLIDITY.get(plant_tile_type, -1)
+                                    if random.randint(0, 7) == 1:
+                                        dinamic_tiles.append(Slime(self.game, tile_x*TSIZE, tile_y*TSIZE))
 
                 else:
                     # пусто  

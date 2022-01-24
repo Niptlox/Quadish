@@ -27,10 +27,10 @@ class Game(App):
 class GameScene(Scene):
     def __init__(self, app) -> None:
         super().__init__(app)
-        self.game_map = GameMap(generate_type)
+        self.game_map = GameMap(self, generate_type)
 
         self.ui = GameUI(self)
-        self.player = Player(self, self.game_map, 0, 0)
+        self.player = Player(self, 0, 0)
         self.screen_map = ScreenMap(self.display, self.game_map, self.player)
         self.ui.init_ui()
         self.tact = 0

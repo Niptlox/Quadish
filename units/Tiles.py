@@ -49,6 +49,9 @@ blore_img = create_tile_image("#155E75")  # blue ore
 
 tnt_img = create_tile_image("#B91C1C")  # tnt
 
+granite_img = create_tile_image("#09070A")
+
+
 tnt_1_img = create_tile_image("#F87171")  # tnt activ
 tnt_imgs = [tnt_1_img, create_tile_image("#FECACA")]  # tnt activ
 
@@ -85,6 +88,7 @@ tile_imgs = {1: grass_img,
              2: dirt_img,
              3: stone_img,
              4: blore_img,
+             5: granite_img,
              9: tnt_img,
              11: wood_img,
 
@@ -111,7 +115,7 @@ tile_hand_imgs[122] = load_img("data/sprites/tiles/chear_hand.png", HAND_RECT)  
 # INIT_TILES ====================================================
 
 # блоки через которые нельзя пройти
-PHYSBODY_TILES = {1, 2, 3, 4, 9, 11, 124}
+PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 124}
 # блоки которые должны стоять на блоке
 STANDING_TILES = {0, 101, 102, 120, 121, 122, 123}
 # Ппочность блоков
@@ -120,7 +124,8 @@ TILES_SOLIDITY = {
     2: 20,
     3: 35,
     4: 60,
-    9: 80,
+    5: 80,
+    9: 60,
     11: 45,
     123: 45,
     101: 25,
@@ -130,6 +135,7 @@ TILES_SOLIDITY = {
     122: 100,
 }
 
+DYNAMITE_NOT_BREAK = {5, 120}  # granite water
 # INIT PICKAXE ==================================================
 
 PICKAXES_STRENGTH = {

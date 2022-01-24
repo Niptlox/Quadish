@@ -14,8 +14,8 @@ class Player(Entitys.PhiscalObject):
     dig_rect_img = dig_rect_img
     hand_img = hand_pass_img
 
-    def __init__(self, game, game_map, x, y) -> None:
-        super().__init__(game_map, x, y, self.width, self.height, use_physics=True)
+    def __init__(self, game, x, y) -> None:
+        super().__init__(game, x, y, self.width, self.height, use_physics=True)
         self.game = game
         self.ui = game.ui
         self.tact = 0
@@ -273,7 +273,7 @@ class Player(Entitys.PhiscalObject):
             return False
         self.inventory[self.active_cell][1] -= 1
         if ttile == 9:  # tnt
-            obj = Entitys.Dynamite(self.game, self.game_map, x * TSIZE, y * TSIZE)
+            obj = Entitys.Dynamite(self.game, x * TSIZE, y * TSIZE)
             self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(x, y), obj)
         else:
             self.game_map.set_static_tile(x, y, self.game_map.get_tile_ttile(ttile))

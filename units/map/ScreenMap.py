@@ -27,7 +27,10 @@ class ScreenMap:
         tt = time()
         p = self.player
         self.true_scroll[0] += (p.rect.x - self.true_scroll[0] - WSIZE[0] // 2) / 20
-        self.true_scroll[1] += (p.rect.y - self.true_scroll[1] - WSIZE[1] // 2) / 20
+        offset_y = (p.rect.y - self.true_scroll[1] - WSIZE[1] // 2)
+        if abs(offset_y) > TSIZE * 3:
+            offset_y *= abs(offset_y) / (2 * TSIZE)
+        self.true_scroll[1] += offset_y / 20
         self.scroll = scroll = [int(self.true_scroll[0]), int(self.true_scroll[1])]
 
         static_tiles = {}
@@ -86,8 +89,8 @@ class ScreenMap:
                                         br_i = 2 - int(sol / (TILES_SOLIDITY[tile_type] / 3))
                                         self.display.blit(break_imgs[br_i], b_pos)
 
-                            if tile_type in PHYSBODY_TILES:
-                                static_tiles[(tile_x, tile_y)] = tile_type
+                            # if tile_type in PHYSBODY_TILES:
+                            static_tiles[(tile_x, tile_y)] = tile_type
                             index += self.game_map.tile_data_size
                             tile_x += 1
                         tile_y += 1

@@ -62,7 +62,7 @@ HAND_SIZE = int(TILE_SIZE//2.5) # 40//2.5== 16
 HAND_RECT = (HAND_SIZE, HAND_SIZE)
 
 FALL_SPEED = 0.7
-MAX_FALL_SPEED = 15*4
+MAX_FALL_SPEED = 1000
 
 # INIT TIME ================================================================
 
