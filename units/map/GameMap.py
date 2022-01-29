@@ -2,6 +2,7 @@ from _ast import Tuple
 from typing import List, Dict, Any
 
 from units.Creatures import Slime
+from units.Entity import PhiscalObject
 from ..common import *
 from ..Tiles import *
 import random
@@ -23,10 +24,30 @@ class GameMap:
         self.game_map = {}
 
     def set_vars(self, vrs):
+        # convert dynamic objs
+        for pos, chunk in vrs["game_map"].items():
+            for i in range(len(chunk[1])):
+                type_obj, vrs_obj = chunk[1][i]
+                obj: PhiscalObject = type_obj(self.game, 0, 0)
+                obj.set_vars(vrs_obj)
+                chunk[1][i] = obj
+        # set vars
         for k, i in vrs.items():
             self.__dict__[k] = i
 
-    def chunk(self, xy, default=None) :
+    def get_vars(self):
+        d = self.__dict__.copy()
+        print("==", d["game_map"][0, 0])
+        # === convert dynamic_objs ===
+        game_map = {}
+        for pos, chunk in d["game_map"].items():
+            game_map[pos] = chunk.copy()
+            game_map[pos][1] = [(type(obj), obj.get_vars()) for obj in chunk[1]]
+        d["game_map"] = game_map
+        d.pop("game")
+        return d
+
+    def chunk(self, xy, default=None):
         res = self.game_map.get(xy, default)
         return res
 
@@ -219,7 +240,7 @@ class GameMap:
                                     static_tiles[pl_i] = plant_tile_type
                                     static_tiles[pl_i + 1] = TILES_SOLIDITY.get(plant_tile_type, -1)
                                     if random.randint(0, 7) == 1:
-                                        dinamic_tiles.append(Slime(self.game, tile_x*TSIZE, tile_y*TSIZE))
+                                        dinamic_tiles.append(Slime(self.game, tile_x * TSIZE, tile_y * TSIZE))
 
                 else:
                     # пусто  
@@ -242,9 +263,11 @@ class GameMap:
         print(f"GamaMap: '{file_p}' - SAVING...")
         if 1 or input("Вы уверены? если да ('t' или 'д') если нет любое другое: ").lower() in ("t", "д"):
             with open(file_p, 'wb') as f:
-                d = {"game_map_vars": vars(self), "player_vars": game.player.get_vars()}
+                print({"game_map_vars": self.get_vars(), "player_vars": game.player.get_vars(),
+                       "game_version": GAME_VERSION})
                 pickle.dump(
-                    {"game_map_vars": vars(self), "player_vars": game.player.get_vars(), "game_version": GAME_VERSION},
+                    {"game_map_vars": self.get_vars(), "player_vars": game.player.get_vars(),
+                     "game_version": GAME_VERSION},
                     f)
             print("GamaMap - SAVE!")
             return True

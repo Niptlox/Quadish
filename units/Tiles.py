@@ -12,6 +12,11 @@ def create_tile_image(color, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
     return img
 
 
+def create_border(surface, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
+    pygame.draw.rect(surface, bd_color, ((0, 0), (size[0], size[1])), width=bd)
+    return surface
+
+
 COLORKEY = (0, 255, 0)
 
 
@@ -39,6 +44,8 @@ player_img = create_tile_image("#E7E5E4", bd=2)
 hand_pass_img = pygame.transform.smoothscale(player_img, HAND_RECT)
 player_hand_img = hand_pass_img
 
+none_img = create_tile_image("#FFAAFF")
+
 dirt_img = create_tile_image("#694837")
 
 grass_img = create_tile_image("#16A34A")
@@ -49,8 +56,8 @@ blore_img = create_tile_image("#155E75")  # blue ore
 
 tnt_img = create_tile_image("#B91C1C")  # tnt
 
-granite_img = create_tile_image("#09070A")
-
+# granite_img = create_tile_image("#09070A")
+granite_img = create_border(load_img("data/sprites/tiles/granite.png"))
 
 tnt_1_img = create_tile_image("#F87171")  # tnt activ
 tnt_imgs = [tnt_1_img, create_tile_image("#FECACA")]  # tnt activ
@@ -84,14 +91,17 @@ group_img = load_img("data/sprites/tiles/group.png")
 
 rain_img = load_img("data/sprites/tiles/rain.png")
 
-tile_imgs = {1: grass_img,
+slime_item_img = load_img("data/sprites/tiles/slime_item.png", HAND_RECT)
+
+tile_imgs = {0: none_img,
+             1: grass_img,
              2: dirt_img,
              3: stone_img,
              4: blore_img,
              5: granite_img,
              9: tnt_img,
              11: wood_img,
-
+             51: slime_item_img,
              101: bush_img,
              102: smalltree_img,
              120: water_img,
@@ -107,17 +117,19 @@ tile_imgs = {1: grass_img,
 count_tiles = len(tile_imgs)
 
 tile_hand_imgs = {k: transform_hand(i) for k, i in tile_imgs.items()}
-tile_hand_imgs[102] = load_img("data/sprites/tiles/small_tree_hand.png",
+tile_hand_imgs[102] = load_img("data/sprites/tiles/small_tree_item.png",
                                HAND_RECT)  # тк есть прозрачность создана собственная картинка
-tile_hand_imgs[121] = load_img("data/sprites/tiles/table_hand.png", HAND_RECT)  # тк есть прозрачность
-tile_hand_imgs[122] = load_img("data/sprites/tiles/chear_hand.png", HAND_RECT)  # тк есть прозрачность
+tile_hand_imgs[121] = load_img("data/sprites/tiles/table_item.png", HAND_RECT)  # тк есть прозрачность
+tile_hand_imgs[122] = load_img("data/sprites/tiles/chear_item.png", HAND_RECT)  # тк есть прозрачность
 
 # INIT_TILES ====================================================
 
 # блоки через которые нельзя пройти
 PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 124}
 # блоки которые должны стоять на блоке
-STANDING_TILES = {0, 101, 102, 120, 121, 122, 123}
+STANDING_TILES = {101, 102, 120, 121, 122, 123}
+# блоки которые должны стоять на блоке
+ITEM_TILES = {51, }
 # Ппочность блоков
 TILES_SOLIDITY = {
     1: 15,
@@ -149,4 +161,24 @@ PICKAXES_SPEED = {
 PICKAXES_CAPABILITY = {
     1: [1, 2, 3, 4, 9, 11, 101, 102, 123],
     77: None
+}
+
+
+def item_of_break_tile(ttile):
+    count_items = 1
+    if ttile == 102:  # smalltree_img
+        ttile = 11  # wood_img
+        count_items = 5
+    return ttile, count_items
+
+
+# Swords ========================================================
+
+SWORD_STRENGTH = {
+    1: 10,
+    77: 777
+}
+SWORD_SPEED = {
+    1: 1,
+    77: 777
 }

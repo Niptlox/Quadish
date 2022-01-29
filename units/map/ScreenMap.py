@@ -29,8 +29,9 @@ class ScreenMap:
         self.true_scroll[0] += (p.rect.x - self.true_scroll[0] - WSIZE[0] // 2) / 20
         offset_y = (p.rect.y - self.true_scroll[1] - WSIZE[1] // 2)
         if abs(offset_y) > TSIZE * 3:
-            offset_y *= abs(offset_y) / (2 * TSIZE)
-        self.true_scroll[1] += offset_y / 20
+            offset_y *= min(abs(offset_y) / (2 * TSIZE), 10)
+        self.true_scroll[1] += float(offset_y / 20)
+
         self.scroll = scroll = [int(self.true_scroll[0]), int(self.true_scroll[1])]
 
         static_tiles = {}
@@ -105,13 +106,17 @@ class ScreenMap:
         tt = time() - tt
 
     def update_dynamic(self):
-        for dtile in self.dynamic_tiles:
-            alive = dtile.update(self.tact)
-            if not alive:
+        i = 0
+        while i < len(self.dynamic_tiles):
+            dtile = self.dynamic_tiles[i]
+            dtile.update(self.tact)
+            if not dtile.alive:
+                self.dynamic_tiles.pop(i)
                 self.game_map.del_dinamic_obj(*GameMap.to_chunk_xy(*GameMap.to_tile_xy(*dtile.rect.topleft)), dtile)
                 continue
             pos = dtile.rect.x - self.scroll[0], dtile.rect.y - self.scroll[1]
             dtile.draw(self.display, pos)
+            i += 1
 
 
 
