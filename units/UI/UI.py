@@ -74,7 +74,8 @@ class GameUI(UI):
         if self.recipes_info_index is not None:
             self.display.blit(self.recipes_info_index_surface,
                               (
-                              self.recipes_rect.x + self.recipes_info_index * self.cell_size, self.recipes_rect.bottom))
+                                  self.recipes_rect.x + self.recipes_info_index * self.cell_size,
+                                  self.recipes_rect.bottom))
         if show_info_menu:
             self.display.blit(self.info_surface, (WINDOW_SIZE[0] - 200, 0))
 
@@ -254,3 +255,21 @@ class SwitchMapUI(UI):
         res = self.app.open_map(num)
         if not res:
             print("Нету карты")
+
+
+class EndUI(UI):
+    def init_ui(self):
+        self.rect_surface = pg.Rect((0, 0, 250, 150))
+        w, h = self.screen.get_size()
+        self.rect_surface.center = w // 2, h // 2
+        self.surface = pg.Surface(self.rect_surface.size).convert_alpha()
+        self.surface.fill((82, 82, 91, 150))
+        text = textfont_btn.render(
+            f"Вы погибли...", True, "white")
+        w, h = text.get_size()
+        self.surface.blit(text, (self.rect_surface.w // 2 - w // 2, self.rect_surface.h // 2 - h // 2))
+
+    def draw(self):
+        self.screen.blit(self.display, (0, 0))
+        self.screen.blit(self.surface, self.rect_surface)
+        pg.display.flip()

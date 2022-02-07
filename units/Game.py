@@ -3,7 +3,7 @@ import subprocess
 from units.App import *
 from units.Cursor import set_cursor, CURSOR_NORMAL
 from units.Player import Player
-from units.UI.UI import GameUI, SwitchMapUI
+from units.UI.UI import GameUI, SwitchMapUI, EndUI
 from units.map.GameMap import GameMap
 from units.map.ScreenMap import ScreenMap
 
@@ -19,6 +19,7 @@ class Game(App):
         self.game_scene = GameScene(self)
         self.openm_scene = OpenMapSceneUI(self)
         self.savem_scene = SaveMapSceneUI(self)
+        self.end_scene = EndSceneUI(self)
         super().__init__(self.game_scene)
 
 
@@ -65,7 +66,8 @@ class GameScene(Scene):
 
         self.screen_map.update(self.tact)
         if not self.player.update(self.tact):
-            self.running = EXIT
+            self.running = False
+            self.new_scene = self.app.end_scene
 
         self.ui.draw()
         self.tact += 1
@@ -103,3 +105,13 @@ class SaveMapSceneUI(SceneUI):
         ar = [i in ar for i in range(self.game.game_map.save_slots)]
         self.ui.set_check_btns(ar)
         return super().main()
+
+
+class EndSceneUI(Scene):
+    def __init__(self, app):
+        super().__init__(app)
+        self.ui = EndUI(self)
+        self.ui.init_ui()
+
+    def update(self):
+        self.ui.draw()
