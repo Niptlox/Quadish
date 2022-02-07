@@ -140,7 +140,6 @@ class Player(Entity.PhysicalObject):
                 self.on_up = False
                 # =========================================
         elif event.type == MOUSEBUTTONDOWN:
-            print(event.button)
             if event.button in (1, 2):
                 self.dig = True
             if event.button == 3:
