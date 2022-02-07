@@ -53,3 +53,4 @@ class ItemsTile(Items):
     def set_vars(self, vrs):
         super().set_vars(vrs)
         self.sprite = tile_hand_imgs.get(self.index, self.sprite)
+

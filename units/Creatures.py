@@ -107,6 +107,7 @@ class Slime(Creature):
             self.reduction_step = 6
             self.jump_speed = 12
             self.move_speed = 4
+            self.drop_items = [(ItemsTile, (51, (10, 20))), (ItemsTile, (63, (0, 5))), (ItemsTile, (66, (1, 2)))]
             super().__init__(game, x, y)
 
         self.sprites = slime_animation(self.color, self.rect.size, self.reduction_step)
