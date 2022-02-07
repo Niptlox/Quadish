@@ -259,13 +259,13 @@ class SwitchMapUI(UI):
 
 class EndUI(UI):
     def init_ui(self):
-        self.rect_surface = pg.Rect((0, 0, 250, 150))
+        self.rect_surface = pg.Rect((0, 0, 220, 100))
         w, h = self.screen.get_size()
         self.rect_surface.center = w // 2, h // 2
         self.surface = pg.Surface(self.rect_surface.size).convert_alpha()
         self.surface.fill((82, 82, 91, 150))
         text = textfont_btn.render(
-            f"Вы погибли...", True, "white")
+            f"Вы погибли...", True, "red")
         w, h = text.get_size()
         self.surface.blit(text, (self.rect_surface.w // 2 - w // 2, self.rect_surface.h // 2 - h // 2))
 
