@@ -1,8 +1,7 @@
-from pygame import surface
-from units.common import *
-from units.Tiles import *
 from time import time
 
+from units.biomes import biome_tiles, biome_colors
+from units.Tiles import *
 # rect для отрисовки
 from units.map.GameMap import GameMap
 
@@ -10,6 +9,8 @@ srect_d = pg.Rect(-TSIZE, -TSIZE, WSIZE[0] + TSIZE, WSIZE[1] + TSIZE)
 
 
 class ScreenMap:
+    display_rect = srect_d
+
     def __init__(self, display, game_map, player):
         self.display = display
         self.game_map: GameMap = game_map
@@ -22,10 +23,18 @@ class ScreenMap:
         self.dynamic_tiles = []
         self.group_handlers = {}
 
+    def teleport_to_player(self):
+        self.true_scroll[0] = self.player.rect.x - WSIZE[0] // 2
+        self.true_scroll[1] = self.player.rect.y - WSIZE[1] // 2
+
     def update(self, tact):
         self.tact = tact
         tt = time()
         p = self.player
+        # climate = self.game_map.get_tile_climate(p.rect.x // TSIZE, p.rect.y // TSIZE)
+        # if climate:
+        #     biome_color = biome_colors[climate[0]]
+        #     self.display.fill(biome_color)
         self.true_scroll[0] += (p.rect.x - self.true_scroll[0] - WSIZE[0] // 2) / 20
         offset_y = (p.rect.y - self.true_scroll[1] - WSIZE[1] // 2)
         if abs(offset_y) > TSIZE * 3:
@@ -53,6 +62,7 @@ class ScreenMap:
         # -----------------------------
 
         # SHOW AND LOAD TILES ++++++++
+
         for cy in range(WCSIZE[1]):
             chunk_x = scroll_chunk_x
             for cx in range(WCSIZE[0]):
@@ -68,12 +78,11 @@ class ScreenMap:
                     group_handlers.update(chunk[2])
                     index = 0
                     tile_y = chunk_y * CSIZE
+                    i = 0
                     for y in range(CSIZE):
                         tile_x = chunk_x * CSIZE
                         for x in range(CSIZE):
                             tile = chunk[0][index:index + self.game_map.tile_data_size]
-                            if not tile:
-                                continue
                             tile_type = tile[0]
                             if tile_type > 0:
                                 b_pos = (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1])
@@ -83,17 +92,39 @@ class ScreenMap:
                                         img = tile_imgs[tile_type + 1][tile[2] - 1]
                                     else:
                                         img = tile_imgs[tile_type]
-
+                                    if tile_type == 1:
+                                        biome = self.game_map.get_tile_climate(tile_x, tile_y)[0]
+                                        if biome in grass_imgs:
+                                            img = grass_imgs[biome][0]
+                                            if static_tiles.get((tile_x - 1, tile_y), 0) == 0:
+                                                img = grass_imgs[biome][1]
+                                                if self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
+                                                    img = grass_imgs[biome][3]
+                                            elif self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
+                                                img = grass_imgs[biome][2]
+                                        else:
+                                            if static_tiles.get((tile_x - 1, tile_y), 0) == 0:
+                                                img = grass_L_img
+                                                if self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
+                                                    img = grass_LR_img
+                                            elif self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
+                                                img = grass_R_img
+                                    # elif tile_type == 3:
+                                    #     img = biome_tiles[chunk[4][i][0]]
                                     self.display.blit(img, b_pos)
                                     sol = tile[1]
                                     if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
                                         br_i = 2 - int(sol / (TILES_SOLIDITY[tile_type] / 3))
                                         self.display.blit(break_imgs[br_i], b_pos)
-
+                            # else:
+                            #     b_pos = (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1])
+                            #     img = biome_tiles[chunk[4][i][0]]
+                            #     self.display.blit(img, b_pos)
                             # if tile_type in PHYSBODY_TILES:
                             static_tiles[(tile_x, tile_y)] = tile_type
                             index += self.game_map.tile_data_size
                             tile_x += 1
+                            i += 1
                         tile_y += 1
 
                 chunk_x += 1
@@ -111,13 +142,12 @@ class ScreenMap:
             dtile = self.dynamic_tiles[i]
             dtile.update(self.tact)
             if not dtile.alive:
-                self.dynamic_tiles.pop(i)
                 self.game_map.del_dinamic_obj(*GameMap.to_chunk_xy(*GameMap.to_tile_xy(*dtile.rect.topleft)), dtile)
+                self.dynamic_tiles.pop(i)
                 continue
             pos = dtile.rect.x - self.scroll[0], dtile.rect.y - self.scroll[1]
             dtile.draw(self.display, pos)
             i += 1
-
 
 
 '''

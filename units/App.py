@@ -1,33 +1,36 @@
-from units.common import *
-from pygame.locals import *
 import pygame as pg
+from pygame.locals import *
+
+from units.common import *
 
 EXIT = 0
 
+
 class App:
     screen = screen_
+
     def __init__(self, scene=None):
         self.clock = pg.time.Clock()
-        self.running= True        
+        self.running = True
         self.scene = scene  # Тек сцена
         self.last_scene = self.scene  # Прошлая сцена
-        
+
     def pg_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = EXIT
 
-    def main(self):        
-        self.running = True        
-        while self.running:            
+    def main(self):
+        self.running = True
+        while self.running:
             self.pg_events()
             self.update()
-            self.clock.tick(FPS)        
+            self.clock.tick(FPS)
 
     def update(self):
-        if self.scene is not None:            
+        if self.scene is not None:
             scene = self.scene.main()
-            if scene is None: 
+            if scene is None:
                 scene = self.last_scene
             elif scene is EXIT:
                 self.running = EXIT
@@ -44,12 +47,12 @@ class Scene(App):
 
     def main(self):
         self.running = True
-        while self.running:            
-            self.clock.tick(FPS)   
+        while self.running:
+            self.clock.tick(FPS)
             self.pg_events()
-            self.update()            
+            self.update()
         if self.running is EXIT:
-            return EXIT     
+            return EXIT
         return self.new_scene
 
 
@@ -71,4 +74,3 @@ class SceneUI(Scene):
 
     def update(self):
         self.ui.draw()
-

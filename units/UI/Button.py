@@ -1,5 +1,3 @@
-import pygame
-from pygame import event
 from units.Texture import *
 
 DARK = "#27272A"

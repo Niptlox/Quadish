@@ -1,22 +1,29 @@
+import random
+from time import time
+
+from units.Entity import PhysicalObject, collision_test
 from units.Items import ItemsTile
 from units.common import *
-from pygame.locals import *
-from pygame import Vector2
-from units import Entity
-import random
 
 
-class Creature(Entity.PhiscalObject):
+class Creature(PhysicalObject):
+    class_obj = OBJ_CREATURE
     width, height = TSIZE, TSIZE
     sprite = pg.Surface((width, height))
     max_lives = -1
     # Вещи после смерти [(item_cls, (type_obj, cnt)), (item_cls, params), ...]
     drop_items = []
+    enemy = False
+    punch_damage = 0
+    punch_speed = 1
+    punch_discard = 0
 
-    def __init__(self, game_map, x, y):
-        super().__init__(game_map, x, y, self.width, self.height, use_physics=True, sprite=self.sprite)
+    def __init__(self, game, x, y):
+        super().__init__(game, x, y, self.width, self.height, use_physics=True, sprite=self.sprite)
         self.lives = self.max_lives
         self.lives_surface = pg.Surface((self.rect.w, 6)).convert_alpha()
+        self.punch_reload_time = 1 / self.punch_speed
+        self.last_punch_time = 0
 
     def get_vars(self):
         d = super().get_vars()
@@ -24,6 +31,11 @@ class Creature(Entity.PhiscalObject):
 
     def update(self, tact):
         self.update_physics()
+        if self.enemy:
+            if self.rect.colliderect(self.game.player.rect):
+                if time() > self.punch_reload_time + self.last_punch_time:
+                    self.last_punch_time = time()
+                    self.game.player.damage(self.punch_damage)
 
     def jump(self, y):
         self.physical_vector.y -= y
@@ -43,9 +55,9 @@ class Creature(Entity.PhiscalObject):
         super().kill()
         for item_cls, params in self.drop_items:
             item_cls(self.game, *params)
-            x, y = self.rect.topleft
+            x, y = self.rect.x + random.randint(0, TSIZE - HAND_SIZE), self.rect.y
             items = item_cls(self.game, *params,
-                             pos=(self.rect.x + random.randint(0, TSIZE - HAND_SIZE), self.rect.y))
+                             pos=(x, y))
             self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(x // TSIZE, y // TSIZE), items)
 
 
@@ -66,21 +78,42 @@ class Slime(Creature):
     colors = ['#ADFF2F', '#7FFF00', '#7CFC00', '#00FF00', '#32CD32', '#98FB98', '#90EE90', '#00FA9A', '#00FF7F',
               '#3CB371', '#2E8B57', '#228B22', '#008000', '#006400', '#9ACD32', '#6B8E23', '#808000', '#556B2F',
               '#66CDAA', '#8FBC8F', '#20B2AA', '#008B8B', '#008080']
+    color_hard = "#E11D48"
+    max_lives_hard = 150
+    punch_damage_hard = 15
     max_lives = 20
-    drop_items = [(ItemsTile, (51, 2))]
+    drop_items = [(ItemsTile, (51, (1, 3)))]
+    jump_speed = 8
+    move_speed = 2
 
-    def __init__(self, game_map, x, y):
-        super().__init__(game_map, x, y)
+    enemy = True
+    punch_damage = 5
+    punch_speed = 1
+    punch_discard = 0
+
+    def __init__(self, game, x, y):
+        super().__init__(game, x, y)
         self.move_direction = 0
         self.move_tact = 0
         self.i_sprite = 0
         self.jump_state = -1
         self.color = random.choice(self.colors)
+        if random.randint(0, 100) < 5:
+            self.color = self.color_hard
+            self.max_lives = self.max_lives_hard
+            self.lives = self.max_lives_hard
+            self.punch_damage = self.punch_damage_hard
+            self.width, self.height = TSIZE * 2, TSIZE * 2 - 8
+            self.reduction_step = 6
+            self.jump_speed = 12
+            self.move_speed = 4
+            super().__init__(game, x, y)
+
         self.sprites = slime_animation(self.color, self.rect.size, self.reduction_step)
         self.sprite = self.sprites[0]
 
     def update(self, tact):
-        self.update_physics()
+        super().update(tact)
         if self.collisions["bottom"]:
             if self.jump_state == 1:
                 self.rect.height += self.reduction_step
@@ -96,7 +129,7 @@ class Slime(Creature):
                 if self.i_sprite <= 0:
                     self.jump_state = 1
             elif self.jump_state == 0:
-                self.jump(8)
+                self.jump(self.jump_speed)
                 self.jump_state = -1
 
         self.sprite = self.sprites[self.i_sprite]
@@ -104,5 +137,36 @@ class Slime(Creature):
         if self.move_tact <= 0:
             self.move_tact = random.randint(30, 205)
             self.move_direction = random.randint(-1, 1)
-        self.movement_vector.x += self.move_direction * 2
+        self.movement_vector.x += self.move_direction * self.move_speed
         return True
+
+
+class Cow(Creature):
+    width, height = int(TSIZE * 1), int(TSIZE * 0.8)
+    colors = ["#FFFAFA", "#FAEBD7", "#FDF4E3", "#FAF0E6"]
+    max_lives = 20
+    drop_items = [(ItemsTile, (52, (1, 2)))]
+
+    def __init__(self, game, x, y):
+        super().__init__(game, x, y)
+        self.move_direction = 0
+        self.move_tact = 0
+        self.color = random.choice(self.colors)
+        self.sprite = pg.Surface((self.rect.w, self.rect.h))
+        self.sprite.fill(self.color)
+        self.jump_speed = 7
+
+    def update(self, tact):
+        self.update_physics()
+        # if self.collisions["bottom"]:
+        self.movement_vector.x += self.move_direction * 2
+        if self.collisions["bottom"] and (self.collisions["left"] or self.collisions["right"]):
+            self.jump(self.jump_speed)
+        self.move_tact -= 1
+        if self.move_tact <= 0:
+            self.move_tact = random.randint(30, 205)
+            self.move_direction = random.randint(-1, 1)
+        return True
+
+
+CREATURES = [Creature, Slime, Cow]

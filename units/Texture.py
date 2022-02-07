@@ -1,7 +1,7 @@
-import pygame
 import os
 import sys
-from pygame import Color
+
+import pygame
 
 printD = lambda *st, sep=" ", end="\n": print("DEBAG:", *st, sep=sep, end=end)
 
@@ -113,3 +113,10 @@ def load_animation(path, frame_durations, size=None, colorkey=COLORKEY):
             animation_frames.append(animation_image)
         n += 1
     return animation_frames
+
+
+def rot_center(image, angle, x, y):
+    rotated_image = pygame.transform.rotate(image, angle)
+    new_rect = rotated_image.get_rect(center=image.get_rect(center=(x, y)).center)
+
+    return rotated_image, new_rect

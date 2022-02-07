@@ -1,11 +1,11 @@
+from math import sin, cos, pi
 from random import randint
 
+from units.Entity import PhysicalObject, collision_test
+# from units.Items import ItemsTile
 from units.Items import ItemsTile
 from units.Tiles import item_of_break_tile
-from math import sin, cos, pi
 from units.Tiles import tnt_imgs, DYNAMITE_NOT_BREAK
-
-from units.Entity import PhiscalObject, collision_test
 from units.common import *
 
 
@@ -24,8 +24,9 @@ def create_circle_pattern(radius):
     return ar
 
 
-class Dynamite(PhiscalObject):
-    boom_radius = 5
+class Dynamite(PhysicalObject):
+    class_obj = OBJ_TILE
+    boom_radius = 8
     pattern = create_circle_pattern(boom_radius)
 
     def __init__(self, game, x, y):
@@ -37,6 +38,10 @@ class Dynamite(PhiscalObject):
         self.period = 10  # период мигания
         self.boom_tact = FPS * 2
         self.image_state = 0
+
+    def set_vars(self, vrs):
+        super().set_vars(vrs)
+        self.sprite = tnt_imgs[self.image_state]
 
     def update(self, tact):
         if self.arise_tact == -1:
@@ -55,7 +60,8 @@ class Dynamite(PhiscalObject):
 
     def detonation_obj(self):
         tx, ty = self.rect.x // TSIZE, self.rect.y // TSIZE
-        d = self.boom_radius * 2 + 1
+        d = self.boom_radius
+        dt = d * TSIZE
         boom_rect = pg.Rect(0, 0, d * TSIZE, d * TSIZE)
         boom_rect.center = self.rect.center
         _, hit_dynamic_lst = collision_test(self.game_map, boom_rect, {}, self.game.screen_map.dynamic_tiles)
@@ -66,9 +72,11 @@ class Dynamite(PhiscalObject):
         for obj in hit_dynamic_lst:
             if obj is not self:
                 if obj.rect.x != self.rect.x:
-                    obj.physical_vector.x += 1 / ((obj.rect.x - self.rect.x) / TSIZE) * d
+                    # 1 / ((obj.rect.x - self.rect.x) / TSIZE)* d
+                    obj.physical_vector.x += dt / (obj.rect.x - self.rect.x)
                 if obj.rect.y != self.rect.y:
-                    obj.physical_vector.y += 1 / ((obj.rect.y - self.rect.y) / TSIZE) * d
+                    # 1 / ((obj.rect.y - self.rect.y) / TSIZE) * d
+                    obj.physical_vector.y += dt / (obj.rect.y - self.rect.y)
                 else:
                     obj.physical_vector.y -= 2
                 obj.damage(randint(8, 10))
@@ -79,14 +87,17 @@ class Dynamite(PhiscalObject):
         for x, y in self.pattern:
             ix, iy = tx + x - self.boom_radius, ty + y - self.boom_radius
             ttile = self.game_map.get_static_tile_type(ix, iy)
+            if ttile == 0:
+                continue
+            elif ttile in DYNAMITE_NOT_BREAK:
+                continue
+            self.game_map.set_static_tile(ix, iy, None)
             if ttile == 9:  # tnt
                 obj = Dynamite(self.game, ix * TSIZE, iy * TSIZE)
                 self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix, iy), obj)
-            elif ttile in DYNAMITE_NOT_BREAK:
                 continue
-            elif ttile == 0:
-                continue
-            self.game_map.set_static_tile(ix, iy, None)
-            ttile, count_items = item_of_break_tile(ttile)
-            items = ItemsTile(self.game, ttile, count_items, (ix * TSIZE + randint(0, TSIZE - HAND_SIZE), iy * TSIZE))
-            self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix, iy), items)
+
+            res = item_of_break_tile(ttile)
+            for ttile, count_items in res:
+                items = ItemsTile(self.game, ttile, count_items, (ix * TSIZE + randint(0, TSIZE - HAND_SIZE), iy * TSIZE))
+                self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix, iy), items)

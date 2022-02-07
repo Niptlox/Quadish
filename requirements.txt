@@ -1,0 +1,4 @@
+pillow
+numpy
+noise==1.2.2
+pygame==2.0.2

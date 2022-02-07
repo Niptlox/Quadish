@@ -1,12 +1,12 @@
+import math
+
 import pygame
 import pygame as pg
-
-import math
 
 # INIT GAME ==============================================
 
 print("INIT GAME VARS")
-GAME_VERSION = "0.4"
+GAME_VERSION = "0.7"
 WINDOW_SIZE = (2200, 1100)
 WINDOW_SIZE = (700 * 2, 400 * 2)
 WSIZE = WINDOW_SIZE
@@ -16,15 +16,16 @@ FPS = 30
 pygame.init()  # initiate pygame
 pygame.display.set_caption('Cubeee')
 
-screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SCALED, vsync=2)
+# screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SCALED, vsync=2)
+screen_ = pygame.display.set_mode(WINDOW_SIZE, vsync=2)
 display_ = pygame.Surface(WINDOW_SIZE)
 
 # TILE ==================================================
 
 TILE_SIZE = 32
+# TILE_SIZE = 8
 TSIZE = TILE_SIZE
 # TILE_SIZE = 16
-# TILE_SIZE = 8
 TILE_RECT = (TILE_SIZE, TILE_SIZE)
 TRECT = TILE_RECT
 
@@ -41,12 +42,29 @@ WCSIZE = WINDOW_CHUNK_SIZE
 # DEBUG ====================================================
 DEBUG = True
 # DEBUG = False
-show_chunk_grid = 1
+show_chunk_grid = False
 show_entity_border = False
 show_group_obj = True
 show_info_menu = True
 
 CHUNK_BD_COLOR = (230, 20, 20)
+
+# PhiscalObject ==================================================
+
+OBJ_NONE = 0
+OBJ_CREATURE = 2
+OBJ_ITEM = 4
+OBJ_TILE = 8
+
+# ITEMS ==========================================================
+
+CLS_NONE = 0
+CLS_TILE = 2
+CLS_TOOL = 4
+CLS_WEAPON = 8
+CLS_SWORD = 16
+CLS_PICKAXE = 32
+CLS_EAT = 64
 
 # GENERATING MAP OR CHANK ========================================
 
@@ -59,11 +77,22 @@ generate_type = 2  # 0:load map,1: autogenerate
 
 NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9, pg.K_0]
 
-HAND_SIZE = int(TILE_SIZE // 2.5)  # 40//2.5== 16
+HAND_SIZE = int(TILE_SIZE // 1.5)
 HAND_RECT = (HAND_SIZE, HAND_SIZE)
 
 FALL_SPEED = 0.7
-MAX_FALL_SPEED = 1000
+MAX_FALL_SPEED = 100
+AUTO_BUILD = True  # копать ближайший если мышка далеко
+
+RECIPES = [
+    [(123, 1), ((11, 2),)],  # дверь
+    [(9, 1), ((64, 2), (11, 1), (51, 2), (61, 1))],  # Tnt
+    # [(9, 1), ((3, 3),)],  # tnt
+    [(501, 1), ((11, 2), (64, 3), (51, 1), (3, 1))],  # sword
+    [(502, 1), ((11, 4), (64, 6), (51, 2), (3, 2), (501, 1), (63, 3))],  # gold sword
+    [(531, 1), ((11, 4), (64, 5), (51, 1), (3, 1))],  # pickaxe
+    [(532, 1), ((11, 7), (64, 7), (51, 7), (3, 7), (531, 1), (502, 1), (63, 5))],  # gold pickaxe
+]
 
 # INIT TIME ================================================================
 

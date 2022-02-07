@@ -1,28 +1,37 @@
-from random import randint
-
-from units.Creatures import Slime, Creature
-from units.Items import Items, ItemsTile
-from units.common import *
-from pygame.locals import *
-from pygame import Vector2
-from units import Entity
-from units import Entities
 from time import time
-from units.Tiles import PICKAXES_CAPABILITY, PICKAXES_SPEED, PICKAXES_STRENGTH, STANDING_TILES, ITEM_TILES, SWORD_SPEED
-from units.Tiles import hand_pass_img, player_img, dig_rect_img, tile_hand_imgs, item_of_break_tile
-from units.Cursor import set_cursor, cursor_add_img, CURSOR_DIG, CURSOR_NORMAL, CURSOR_SET
+
+from pygame import Vector2
+from pygame.locals import *
+
+from units import Entity
+from units.Items import Items, ItemsTile
+from units.Texture import rot_center
+# from units.Tiles import PICKAXES_CAPABILITY, PICKAXES_SPEED, PICKAXES_STRENGTH, STANDING_TILES, ITEM_TILES
+from units.Tiles import hand_pass_img, player_img, dig_rect_img, tile_hand_imgs
+from units.Tools import ToolHand, ToolSword, ItemSword, ItemPickaxe, TOOLS
+from units.common import *
 
 
-class Player(Entity.PhiscalObject):
+# from units.Cursor import set_cursor, cursor_add_img, CURSOR_DIG, CURSOR_NORMAL, CURSOR_SET
+
+
+class Player(Entity.PhysicalObject):
     width, height = TSIZE - 2, TSIZE - 2
     player_img = player_img
     dig_rect_img = dig_rect_img
     hand_img = hand_pass_img
+    max_lives = 20
 
     def __init__(self, game, x, y) -> None:
         super().__init__(game, x, y, self.width, self.height, use_physics=True)
         self.game = game
         self.ui = game.ui
+
+        self.alive = True
+        self.lives = self.max_lives
+        self.lives_surface = pg.Surface((self.rect.w, 6)).convert_alpha()
+        self.eat = False
+
         self.tact = 0
         self.on_wall = False
         self.moving_right = False
@@ -42,7 +51,7 @@ class Player(Entity.PhiscalObject):
         self.hand_space = self.min_hand_space
         self.num_down = -1
         self.get_item_rect = pg.Rect((0, 0, self.width * 3, self.height * 3))
-        self.punch_rect = pg.Rect((0, 0, self.width * 2, self.height * 3))
+        self.punch_rect = pg.Rect((0, 0, self.width * 3, self.height * 3))
         self.punch_damage = 10
 
         self.spawn_point = (0, 0)
@@ -62,8 +71,11 @@ class Player(Entity.PhiscalObject):
 
         self.inventory_size = 16
         self.inventory = [None] * self.inventory_size
+        # self.inventory[0] = ItemSword(self.game)
+        self.inventory[0] = ItemPickaxe(self.game)
+        self.inventory[0].set_owner(self)
         self.active_cell = 0
-        self.cell_size = 100
+        self.cell_size = 1000
 
         self.pickaxe = 1
         self.pickaxe_time = 0
@@ -71,7 +83,17 @@ class Player(Entity.PhiscalObject):
         self.set_time = 0
         # время последнего установки блока
         self.punch_time = 0
+        self.punching = False
         self.sword = 1
+        self.punch_animation_rot = 0
+        self.punch_animation = False
+        self.punch_animation_rot_speed = 0
+        self.punch_animation_flip = False
+        self.discard_dist = 5
+        self.flip = False
+        self.toolHand = ToolHand(self)
+        self.tool = None
+        self.vector = Vector2(0)
 
     def get_vars(self):
         d = self.__dict__.copy()
@@ -80,6 +102,10 @@ class Player(Entity.PhiscalObject):
         d.pop("ui")
         d.pop("hand_img")
         return d
+
+    def set_vars(self, vrs):
+        super().set_vars(vrs)
+        self.fall_speed = FALL_SPEED
 
     def pg_event(self, event):
         if event.type == KEYDOWN:
@@ -93,22 +119,16 @@ class Player(Entity.PhiscalObject):
                 # =========================================
             elif event.key == K_j and self.on_up:
                 self.pickaxe = 77 if self.pickaxe == 1 else 1
+                self.sword = 77 if self.sword == 1 else 1
             elif event.key == K_t:
                 self.rect.center = self.spawn_point
             elif event.key == K_h:
                 self.spawn_point = self.rect.center
                 print("Spawnpoint set:", self.spawn_point)
             elif event.key == K_q:  # удалить все предметы в текущей ячейке инвентаря
-                self.inventory[self.active_cell] = None
-                self.choose_active_cell()
+                self.discard_item(self.active_cell)
             elif event.key == K_e:
-                if self.get_from_inventory(11, 1):  # дерево
-                    self.put_to_inventory(123, 1)  # дверь
-            elif event.key == K_l:
-                if self.find_in_inventory(11, 1) and self.find_in_inventory(4, 1) and \
-                        self.find_in_inventory(51, 1):  # дерево and blore
-                    self.get_from_inventory(11, 1), self.get_from_inventory(4, 1), self.get_from_inventory(51, 1)
-                    self.put_to_inventory(9, 2)  # tnt
+                self.creating_item_of_i(self.active_cell)
             elif event.key in NUM_KEYS:
                 self.num_down = NUM_KEYS.index(event.key)
         elif event.type == KEYUP:
@@ -130,6 +150,7 @@ class Player(Entity.PhiscalObject):
                 self.dig = False
             if event.button == 3:
                 self.set = False
+                self.eat = True
         # ========================================
         elif event.type == MOUSEWHEEL:
             self.active_cell -= event.y
@@ -141,7 +162,164 @@ class Player(Entity.PhiscalObject):
 
     def update(self, tact):
         self.tact = tact
-        scroll = self.game.screen_map.scroll
+        if not self.alive:
+            return False
+
+        self.moving()
+
+        # SHOW PLAYER HAND ===============================================
+        if self.num_down != -1:
+            self.choose_active_cell(self.num_down)
+            self.num_down = -1
+        self.vector = Vector2(self.rect.center)
+        vector_player_display = self.vector - Vector2(self.game.screen_map.scroll)
+        vector_to_mouse = Vector2(pg.mouse.get_pos()) - vector_player_display
+
+        item = self.inventory[self.active_cell]
+        if item is None or item.class_item & CLS_TOOL == 0:
+            tool = self.toolHand
+        else:
+            tool = item.tool
+        tool.update(vector_to_mouse)
+        if self.dig:
+            tool.left_button(vector_to_mouse)
+        elif self.set:
+            tool.right_button(vector_to_mouse)
+        tool.draw(self.ui.display, vector_player_display.x, vector_player_display.y)
+        if self.eat and item and item.class_item == CLS_EAT:
+            self.lives = min(self.lives + item.recovery_lives, self.max_lives)
+            item.count -= 1
+            if item.count <= 0:
+                self.inventory[self.active_cell] = None
+            self.choose_active_cell()
+        self.eat = False
+        
+        # find and get ground items ==========================================
+        self.get_item_rect.center = self.rect.center
+        for tile in self.game.screen_map.dynamic_tiles:
+            if tile.class_obj & OBJ_ITEM != 0:
+                if self.get_item_rect.colliderect(tile):
+                    res, cnt = self.put_to_inventory(tile)
+                    if res:
+                        tile.alive = False
+                    else:
+                        tile.count = cnt
+
+        return True
+
+    def draw_lives(self, surface, pos_obj):
+        self.lives_surface.fill(f"#78716CAA")
+        w = int((self.rect.w - 2) * (self.lives / self.max_lives))
+        pg.draw.rect(self.lives_surface, "#A3E635AA", ((1, 1), (w, 4)))
+        surface.blit(self.lives_surface, (pos_obj[0], pos_obj[1] - 10))
+
+    def discard_item(self, num_cell=None, items=None):
+        if num_cell is not None:
+            items = self.inventory[num_cell]
+            self.inventory[num_cell] = None
+            self.choose_active_cell()
+        if items:
+            ix, iy = self.rect.centerx + TSIZE * 2, self.rect.centery
+            items.rect.x, items.rect.y = ix, iy
+            items.alive = True
+            print(ix, iy, *self.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
+            self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
+
+    def put_to_inventory(self, items):
+        i = 0
+        while i < self.inventory_size:
+            if self.inventory[i] and self.inventory[i].count < self.cell_size and \
+                    self.inventory[i].index == items.index:
+                free_place = self.cell_size - self.inventory[i].count
+                if items.count > free_place:
+                    self.inventory[i].count += free_place
+                    items.count -= free_place
+                else:
+                    self.inventory[i].count += items.count
+                    break
+            i += 1
+        else:
+            i = 0
+            while i < self.inventory_size:
+                if self.inventory[i] is None:
+
+                    if items.count < self.cell_size:
+                        self.inventory[i] = items
+                    else:
+                        self.inventory[i] = items.copy()
+                        self.inventory[i].count = self.cell_size
+                        items.count -= self.cell_size
+                        continue
+                    break
+                i += 1
+            else:
+                # print("Перепонен инвентарь", ttile)
+                self.choose_active_cell()
+                # self.ui.redraw_top()
+                return False, items.count
+        # self.ui.redraw_top()
+        self.choose_active_cell()
+        return True, None
+
+    def find_in_inventory(self, ttile, count=1):
+        all_cnt = 0
+        for i in filter(lambda x: x, self.inventory):
+            if i.index == ttile:
+                all_cnt += i.count
+                if all_cnt >= count:
+                    return True
+        return False
+
+    def get_from_inventory(self, ttile, count):
+        if not self.find_in_inventory(ttile, count):
+            return False
+            # мы знаем что ttile есть в инвенторе
+        for i in range(self.inventory_size):
+            if self.inventory[i]:
+                item = self.inventory[i]
+                if item.index == ttile:
+                    if item.count <= count:
+                        count -= item.count
+                        self.inventory[i] = None
+                    else:
+                        self.inventory[i].count -= count
+                        break
+        return True
+
+    def creating_item_of_i(self, rec_i):
+        if rec_i < len(RECIPES):
+            out, need = RECIPES[rec_i]
+            if all([self.find_in_inventory(t, c) for t, c in need]):
+                [self.get_from_inventory(t, c) for t, c in need]
+                if out[0] in TOOLS:
+                    item = TOOLS[out[0]](self.game)
+                    item.set_owner(self)
+                else:
+                    item = ItemsTile(self.game, out[0], count=out[1])
+                res, _ = self.put_to_inventory(item)  # дверь
+                if not res:
+                    self.discard_item(None, item)
+
+    def choose_active_cell(self, cell=-1):
+        if cell != -1:
+            self.active_cell = cell
+        self.hand_img = hand_pass_img
+        if self.inventory[self.active_cell]:
+            if self.inventory[self.active_cell] is not None:
+                self.hand_img = self.inventory[self.active_cell].sprite
+        self.ui.redraw_top()
+
+    def jump(self):
+        if self.on_wall:
+            self.vertical_momentum = -self.jump_speed
+        elif self.air_timer < 6:
+            self.jump_count += 1
+            self.vertical_momentum = -self.jump_speed
+        elif self.jump_count < self.max_jump_count:
+            self.jump_count += 1
+            self.vertical_momentum = -self.jump_speed * (self.jump_count * 0.25 + 1)
+
+    def moving(self):
         player_movement = pg.Vector2(0, 0)
         if self.moving_right:
             if self.speed < 0:
@@ -181,248 +359,26 @@ class Player(Entity.PhiscalObject):
                 self.vertical_momentum = 0
                 self.jump_count = min(self.max_jump_count, self.jump_count)
                 self.on_wall = True
+        scroll = self.game.screen_map.scroll
+        player_display_pos = (min(WSIZE[0], max(-TSIZE, self.rect.x - scroll[0])),
+                              min(WSIZE[0], max(-TSIZE, self.rect.y - scroll[1])))
+        self.ui.display.blit(self.player_img, player_display_pos)
+        # if self.lives != self.max_lives:
+        self.draw_lives(self.ui.display, player_display_pos)
 
-        self.ui.display.blit(self.player_img, (min(WSIZE[0], max(-TSIZE, self.rect.x - scroll[0])),
-                                               min(WSIZE[0], max(-TSIZE, self.rect.y - scroll[1]))))
-        # SHOW PLAYER HAND ===============================================
-
-        pVec = Vector2(self.rect.centerx - scroll[0], self.rect.centery - scroll[1])
-        mVec = Vector2(pygame.mouse.get_pos())
-        # вектор от плеера до мышки
-        hVec = mVec - pVec
-        # мышь в серединк игрока
-        hVec_len_sqr = hVec.length_squared()
-        if hVec_len_sqr == 0:
-            hVec = Vector2(1, 0)
-            hVec_len_sqr = 1
-        hVec_norm = hVec.normalize()
-
-        # координаты руки для отрисовки    
-        real_hVec = hVec_norm * self.hand_space + pVec - Vector2(HAND_SIZE // 2, HAND_SIZE // 2)
-
-        if self.num_down != -1:
-            self.choose_active_cell(self.num_down)
-            self.num_down = -1
-
-        self.ui.display.blit(self.hand_img, real_hVec)
-
-        # DIG TILE =======================================================
-        cursor = CURSOR_NORMAL
-        cursor_block_id = -1
-        dig_in_dist = set_in_dist = False
-        if self.inventory[self.active_cell] is None:
-            if hVec_len_sqr <= (TILE_SIZE * self.dig_dist) ** 2:
-                dig_in_dist = True  # можно копать на тек растянии
-                cursor = CURSOR_DIG
-        else:
-            if hVec_len_sqr <= (TILE_SIZE * self.set_dist) ** 2:
-                set_in_dist = True  # можно ставить на тек растянии
-                cursor_block_id = 1000 + self.inventory[self.active_cell][0]
-                cursor = None
-
-        new_punch = None
-        if self.set:
-            if set_in_dist:
-                #  or hVec_len_sqr <= (TILE_SIZE * self.set_dist) ** 2 убрано тк мы ставим только если в руке есть блок
-                # мышка в радиусе для копки
-                set_pos = Vector2(scroll) + mVec
-            elif self.auto_block_select:
-                # копаем самй ближ длок в сторону мышки
-                set_pos = hVec_norm * TILE_SIZE * 1.2 + Vector2(self.rect.center)
-            else:
-                set_pos = None
-
-            px, py = int(set_pos.x // TILE_SIZE), int(set_pos.y // TILE_SIZE)
-
-            new_punch = self.set_tile(px, py)
-        elif self.dig:
-            if dig_in_dist or hVec_len_sqr <= (TILE_SIZE * self.dig_dist) ** 2:
-                # мышка в радиусе для копки
-                dig_pos = Vector2(scroll) + mVec
-                cursor = CURSOR_DIG
-            elif self.auto_block_select:
-                # копаем самй ближ длок в сторону мышки
-                dig_pos = hVec_norm * TILE_SIZE * 1.2 + Vector2(self.rect.center)
-                cursor = CURSOR_DIG
-            else:
-                dig_pos = None
-            if dig_pos:
-                px, py = int(dig_pos.x // TILE_SIZE), int(dig_pos.y // TILE_SIZE)
-                new_punch = self.dig_tile(px, py)
-
-        if new_punch is not None:
-            self.ui.display.blit(self.dig_rect_img, (px * TILE_SIZE - scroll[0], py * TILE_SIZE - scroll[1]))
-
-        if new_punch:
-            self.punched = True
-            self.punch_tick = 0
-            self.hand_space = self.min_hand_space
-        if self.punched:
-            self.punch_tick += 1
-            if self.punch_tick < 10:
-                self.hand_space += self.punch_speed
-            elif self.punch_tick > 20:
-                self.punched = False
-                self.punch_tick = 0
-                self.hand_space = self.min_hand_space
-            else:
-                self.hand_space -= self.punch_speed
-        if cursor is not None:
-            set_cursor(cursor)
-        elif cursor_block_id != -1:
-            cursor_add_img(self.hand_img, cursor_block_id)
-
-        # punch creatures ===============================================
-        if self.dig:
-            self.punch()
-
-        # find and get ground items ==========================================
-        self.get_item_rect.center = self.rect.center
-        for tile in self.game.screen_map.dynamic_tiles:
-            if type(tile) in (Items, ItemsTile):
-                if self.get_item_rect.colliderect(tile):
-                    res, cnt = self.put_to_inventory(tile.type_obj, tile.count)
-                    if res:
-                        tile.alive = False
-                    else:
-                        tile.count = cnt
-
-    def punch(self):
-        if time() - self.punch_time < 1 / SWORD_SPEED[self.sword]:
-            # время нового удара ещё не подошло
+    def damage(self, lives):
+        if self.max_lives == -1:
+            return True
+        self.lives -= lives
+        if self.lives <= 0:
+            self.kill()
             return False
-        self.punch_time = time()
-
-        self.punch_rect.center = self.rect.center
-        for tile in self.game.screen_map.dynamic_tiles:
-            if type(tile) in (Slime, Creature):
-                if self.punch_rect.colliderect(tile):
-                    tile.damage(self.punch_damage)
-
-    def set_tile(self, x, y):
-        tile = self.game_map.get_static_tile(x, y)
-        if tile is None or tile[0] != 0:
-            return
-        cell = self.inventory[self.active_cell]
-        if time() - self.set_time < 0.3 or cell is None:
-            return False
-        ttile = self.inventory[self.active_cell][0]
-        if ttile in STANDING_TILES and self.game_map.get_static_tile_type(x, y + 1, 0) in STANDING_TILES:
-            return False
-        if ttile in ITEM_TILES:
-            return False
-        self.inventory[self.active_cell][1] -= 1
-        if ttile == 9:  # tnt
-            obj = Entities.Dynamite(self.game, x * TSIZE, y * TSIZE)
-            self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(x, y), obj)
-        else:
-            self.game_map.set_static_tile(x, y, self.game_map.get_tile_ttile(ttile))
-        if self.inventory[self.active_cell][1] == 0:
-            self.inventory[self.active_cell] = None
-        self.choose_active_cell()
-        self.ui.redraw_top()
-        self.set_time = time()
         return True
 
-    def dig_tile(self, x, y):
-        tile = self.game_map.get_static_tile(x, y)
-        if tile is None or tile[1] == -1:
-            return
-        d_ttile = self.game_map.get_static_tile_type(x, y - 1)
-        if d_ttile in {101, 102}:
-            return False
-        ttile = tile[0]
-        count_items = 1
-        if ttile == 0:
-            return  # self.set_tile(x, y)
-        sol = tile[1]  # прочность
-        if time() - self.pickaxe_time < 1 / PICKAXES_SPEED[self.pickaxe]:
-            # время нового удара ещё не подошло
-            return False
-        self.pickaxe_time = time()
-        if PICKAXES_CAPABILITY[self.pickaxe] is not None and ttile not in PICKAXES_CAPABILITY[self.pickaxe]:
-            # мы не можем выкопать этой киркой
-            return False
+    def kill(self):
+        self.alive = False
 
-        stg = PICKAXES_STRENGTH[self.pickaxe]
-        sol -= stg
-        if sol <= 0:
-            ttile, count_items = item_of_break_tile(ttile)
-            items = ItemsTile(self.game, ttile, count_items, (x * TSIZE + randint(0, TSIZE - HAND_SIZE), y * TSIZE))
-            self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(x, y), items)
-
-            # self.put_to_inventory(ttile, count_items)
-            self.game_map.set_static_tile(x, y, None)
-        else:
-            self.game_map.set_static_tile_solidity(x, y, sol)
-        self.choose_active_cell()
-        return True
-
-    def put_to_inventory(self, ttile, count=1):
-        i = 0
-        while i < self.inventory_size:
-            if self.inventory[i] is None:
-                self.inventory[i] = [ttile, min(count, self.cell_size)]
-                if count > self.cell_size:
-                    count -= self.cell_size
-                    continue
-                break
-            if self.inventory[i][1] < self.cell_size and self.inventory[i][0] == ttile:
-                free_place = self.cell_size - self.inventory[i][1]
-                if count > free_place:
-                    self.inventory[i][1] += free_place
-                    count -= free_place
-                else:
-                    self.inventory[i][1] += count
-                    break
-            i += 1
-        else:
-            print("Перепонен инвентарь", ttile)
-            self.ui.redraw_top()
-            return False, count
-        self.ui.redraw_top()
-        return True, count
-
-    def find_in_inventory(self, ttile, count=1):
-        all_cnt = 0
-        for i in filter(lambda x: x, self.inventory):
-            tt, ct = i[:2]
-            if tt == ttile:
-                all_cnt += ct
-                if all_cnt >= count:
-                    return True
-        return False
-
-    def get_from_inventory(self, ttile, count):
-        if not self.find_in_inventory(ttile, count):
-            return False
-            # мы знаем что ttile есть в инвенторе
-        for i in range(self.inventory_size):
-            if self.inventory[i]:
-                tt, ct = self.inventory[i][:2]
-                if tt == ttile:
-                    if ct <= count:
-                        count -= ct
-                        self.inventory[i] = None
-                    else:
-                        self.inventory[i][1] -= count
-                        break
-        return True
-
-    def choose_active_cell(self, cell=-1):
-        if cell != -1:
-            self.active_cell = cell
-        self.hand_img = hand_pass_img
-        if self.inventory[self.active_cell]:
-            self.hand_img = tile_hand_imgs[self.inventory[self.active_cell][0]]
-        self.ui.redraw_top()
-
-    def jump(self):
-        if self.on_wall:
-            self.vertical_momentum = -self.jump_speed
-        elif self.air_timer < 6:
-            self.jump_count += 1
-            self.vertical_momentum = -self.jump_speed
-        elif self.jump_count < self.max_jump_count:
-            self.jump_count += 1
-            self.vertical_momentum = -self.jump_speed * (self.jump_count * 0.25 + 1)
+    def discard(self, vector):
+        # self.physical_vector.x += vector[0]
+        # self.physical_vector.y += vector[1]
+        pass

@@ -1,13 +1,11 @@
 import subprocess
-from pygame.locals import *
-from units.common import *
-from units.App import *
 
+from units.App import *
+from units.Cursor import set_cursor, CURSOR_NORMAL
+from units.Player import Player
+from units.UI.UI import GameUI, SwitchMapUI
 from units.map.GameMap import GameMap
 from units.map.ScreenMap import ScreenMap
-from units.UI.UI import GameUI, SwitchMapUI
-from units.Player import Player
-from units.Cursor import set_cursor, CURSOR_NORMAL
 
 set_cursor(CURSOR_NORMAL)
 
@@ -39,6 +37,8 @@ class GameScene(Scene):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = EXIT
+            if self.ui.pg_event(event):
+                continue
             if event.type == KEYDOWN:
                 if event.key == K_u:
                     self.running = False
@@ -64,7 +64,8 @@ class GameScene(Scene):
         self.ui.draw_sky()
 
         self.screen_map.update(self.tact)
-        self.player.update(self.tact)
+        if not self.player.update(self.tact):
+            self.running = EXIT
 
         self.ui.draw()
         self.tact += 1

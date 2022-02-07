@@ -1,9 +1,8 @@
-from units.common import *
 from units.Tiles import PHYSBODY_TILES
+from units.common import *
 
 
 # from units.map.GameMap import GameMap
-
 
 def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic_tiles: list = [],
                    first_tile_pos=(0, 0), collide_all_tiles=False):
@@ -32,10 +31,11 @@ def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic
     return hit_static_lst, hit_dynamic_lst
 
 
-class PhiscalObject:
+class PhysicalObject:
+    class_obj = OBJ_NONE
     sprite = None
     max_lives = -1
-    type_obj = 0
+    index = 0
     count = 0
 
     def __init__(self, game, x=0, y=0, width=0, height=0, use_physics=False, sprite=None) -> None:
@@ -109,6 +109,8 @@ class PhiscalObject:
         return collision_types
 
     def update(self, tact):
+        if not self.alive:
+            return False
         if self.use_physics:
             self.update_physics()
         return True
@@ -126,11 +128,11 @@ class PhiscalObject:
         self.collisions = collisions
         if collisions['bottom']:
             self.vertical_momentum = 0
-            self.physical_vector.x -= self.physical_vector.x // 2
+            self.physical_vector.x = int(self.physical_vector.x / 2)
             self.physical_vector.y = 0
         if collisions['top']:
             self.physical_vector.y = 0
-            self.physical_vector.x -= self.physical_vector.x // 2
+            self.physical_vector.x = int(self.physical_vector.x / 2)
 
         if collisions["left"] or collisions["right"]:
             self.physical_vector.x = 0
@@ -158,5 +160,6 @@ class PhiscalObject:
     def kill(self):
         self.alive = False
 
-
-
+    def discard(self, vector):
+        self.physical_vector.x += vector[0]
+        self.physical_vector.y += vector[1]
