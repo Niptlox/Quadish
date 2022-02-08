@@ -14,7 +14,7 @@ class Items(PhysicalObject):
     sprite = pg.Surface((width, height))
     sprite.fill("#FF00FF")
 
-    def __init__(self, game, index, count=1, pos=(0, 0)):
+    def __init__(self, game, index=None, count=1, pos=(0, 0)):
         self.index = index
         if index in eats:
             self.class_item = CLS_EAT
@@ -46,7 +46,7 @@ class Items(PhysicalObject):
 class ItemsTile(Items):
     class_item = CLS_TILE
 
-    def __init__(self, game, index, count=1, pos=(0, 0)):
+    def __init__(self, game, index=None, count=1, pos=(0, 0)):
         super().__init__(game, index, count, pos)
         self.sprite = tile_hand_imgs.get(index, self.sprite)
 

@@ -43,7 +43,7 @@ def transform_hand(surf, size=HAND_RECT, colorkey=COLORKEY):
 
 sky = "#A5F3FC"
 
-player_img = create_tile_image("#E7E5E4", size=(TSIZE-2, TSIZE-2), bd=2)
+player_img = create_tile_image("#E7E5E4", size=(TSIZE - 2, TSIZE - 2), bd=2)
 
 # hand_pass_img = pygame.transform.smoothscale(player_img, HAND_RECT)
 hand_pass_img = None
@@ -87,6 +87,7 @@ smalltree_img = load_img("data/sprites/tiles/small_tree.png")
 door_img = load_img("data/sprites/tiles/door.png")
 table_img = load_img("data/sprites/tiles/table.png")
 chear_img = load_img("data/sprites/tiles/chear.png")
+cauldron_img = load_img("data/sprites/tiles/cauldron.png")
 water_img = load_img("data/sprites/tiles/water.png")
 
 cloud_img = create_tile_image("#CBD5E1")
@@ -148,6 +149,7 @@ tile_imgs = {0: none_img,
              121: table_img,
              122: chear_img,
              123: door_img,
+             125: cauldron_img,
              151: group_img,
              201: cloud_img,
              202: cloud_imgs,
@@ -191,6 +193,7 @@ tile_words = {0: "None",
               121: "Стол",
               122: "Стул",
               123: "Дверь",
+              125: "Котёл",
               151: "Группа обектов",
               201: "Облако",
               202: "Облака",
@@ -208,7 +211,7 @@ tile_words = {0: "None",
 # блоки через которые нельзя пройти
 PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 124}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
-STANDING_TILES = {0, 101, 102, 120, 121, 122, 123}
+STANDING_TILES = {0, 101, 102, 120, 121, 122, 123, 125}
 # предметы которые нельзя физически поставить
 ITEM_TILES = {51, 52, 53, 55, 61, 62, 63, 64, 65, 66}
 # Ппочность блоков
@@ -221,6 +224,7 @@ TILES_SOLIDITY = {
     9: 60,
     11: 45,
     123: 45,
+    125: 55,
     101: 25,
     102: 25,
     120: 100,

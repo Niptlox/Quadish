@@ -209,7 +209,7 @@ class ToolPickaxe(ToolSword):
     sprite = tile_imgs[index]
     dig_distance = 3 * TSIZE
     dig_distance2 = dig_distance ** 2
-    capability = [1, 2, 3, 4, 9, 11, 101, 102, 121, 122, 123]
+    capability = [1, 2, 3, 4, 9, 11, 101, 102, 121, 122, 123, 125]
 
     def __init__(self, owner):
         super().__init__(owner)
@@ -279,7 +279,7 @@ class ToolHand(ToolPickaxe):
     set_distance = 4 * TSIZE
     dig_distance2 = dig_distance ** 2
     set_distance2 = set_distance ** 2
-    capability = [1, 2, 101, 102, 121, 122, 123]
+    capability = [1, 2, 101, 102, 121, 122, 123, 125]
     Animation = AnimationHand
     discard_distance = 5
 
@@ -405,8 +405,10 @@ def set_tile(game_map, x, y, inventory_cell, check=True):
 
 class ItemTool(Items):
     class_item = CLS_TOOL
+    _Tool = Tool
 
-    def __init__(self, game, tool, pos=(0, 0)):
+    def __init__(self, game, pos=(0, 0)):
+        tool = self._Tool(None)
         super().__init__(game, tool.index, 1, pos)
         self.sprite = tool.sprite
         self.tool = tool
@@ -414,23 +416,21 @@ class ItemTool(Items):
     def set_owner(self, owner):
         self.tool.owner = owner
 
+    def get_vars(self):
+        d = super().get_vars()
+        d.pop("tool")
+        # d["_tool"] = d.pop("tool")
+        return d
+
 
 class ItemSword(ItemTool):
     class_item = CLS_TOOL + CLS_SWORD
     _Tool = ToolSword
 
-    def __init__(self, game, pos=(0, 0)):
-        tool = self._Tool(None)
-        super().__init__(game, tool, pos)
-
 
 class ItemPickaxe(ItemTool):
     class_item = CLS_TOOL + CLS_PICKAXE
     _Tool = ToolPickaxe
-
-    def __init__(self, game, pos=(0, 0)):
-        tool = self._Tool(None)
-        super().__init__(game, tool, pos)
 
 
 class ItemGoldSword(ItemSword):

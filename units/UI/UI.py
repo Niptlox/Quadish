@@ -287,8 +287,6 @@ class SwitchMapUI(UI):
 
     def open_map(self, but, num):
         res = self.app.open_map(num)
-        if not res:
-            print("Нету карты")
 
 
 class EndUI(UI):

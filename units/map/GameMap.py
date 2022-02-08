@@ -2,8 +2,11 @@ import glob
 import pickle
 import random
 
+import cloudpickle
 from noise import snoise2 as pnoise2
 
+from units import Items
+from units.Tools import ItemTool
 from units.biomes import biome_of_pos
 from units.Creatures import Slime, Cow
 from units.Entity import PhysicalObject
@@ -34,7 +37,7 @@ class GameMap:
         for pos, chunk in vrs["game_map"].items():
             for i in range(len(chunk[1])):
                 type_obj, vrs_obj = chunk[1][i]
-                obj: PhysicalObject = type_obj(self.game, 0, 0)
+                obj: PhysicalObject = type_obj(self.game)
                 obj.set_vars(vrs_obj)
                 chunk[1][i] = obj
         # set vars
@@ -69,7 +72,7 @@ class GameMap:
                         if not self.game.screen_map.display_rect.collidepoint(x - scroll[0], y - scroll[1]):
                             Crt = random_creature_selection()
                             if Crt is not None:
-                                dynamic_tiles.append(Crt(self.game, x, y))
+                                dynamic_tiles.append(Crt(self.game, (x, y)))
                                 crt_cash[1] += 1
                             if crt_cash[1] > 15:
                                 break
@@ -289,7 +292,7 @@ class GameMap:
                                     static_tiles[pl_i + 1] = TILES_SOLIDITY.get(plant_tile_type, -1)
                                     Crt = random_creature_selection()
                                     if Crt is not None:
-                                        dynamic_tiles.append(Crt(self.game, tile_x * TSIZE, tile_y * TSIZE))
+                                        dynamic_tiles.append(Crt(self.game, (tile_x * TSIZE, tile_y * TSIZE)))
                                         cnt_creatures += 1
                 else:
                     # пусто  
@@ -314,38 +317,36 @@ class GameMap:
         file_p = f'data/maps/game_map-{num}.pclv'
         print(f"GamaMap: '{file_p}' - SAVING...")
         try:
+            data = {"game_map_vars": self.get_vars(), "player_vars": game.player.get_vars(),
+                     "game_version": GAME_VERSION, "game_tact": game.tact}
+            t = pickle.dumps(data)
             with open(file_p, 'wb') as f:
-                print({"game_map_vars": self.get_vars(), "player_vars": game.player.get_vars(),
-                       "game_version": GAME_VERSION})
-                pickle.dump(
-                    {"game_map_vars": self.get_vars(), "player_vars": game.player.get_vars(),
-                     "game_version": GAME_VERSION, "game_tact": game.tact},
-                    f)
-            print("GamaMap - SAVE!")
+                f.write(t)
         except Exception as exc:
             print("Ошибка сохранения:", exc)
             return False
-        return True
+        finally:
+            print("GamaMap - SAVE!")
+            return True
 
     def open_game_map(self, game, num=0):
         file_p = f'data/maps/game_map-{num}.pclv'
         print(f"GamaMap: '{file_p}' - LOADING...")
-
         try:
             with open(file_p, 'rb') as f:
                 data = pickle.load(f)
-                version = data.get("game_version", "0.4")
-                if version != GAME_VERSION:
-                    return
-                game_map = data["game_map_vars"]
-                game.game_map.set_vars(game_map)
-                player = data["player_vars"]
-                game.player.set_vars(player)
-                game.tact = data.get("game_tact", 0)
-                print(game.player.rect.center)
-                if abs(game.player.rect.x) > 10000 or abs(game.player.rect.y) > 10000:
-                    game.screen_map.teleport_to_player()
-                game.ui.redraw_top()
+            version = data.get("game_version", "0.4")
+            if version != GAME_VERSION:
+                return
+            game_map = data["game_map_vars"]
+            game.game_map.set_vars(game_map)
+            player = data["player_vars"]
+            game.player.set_vars(player)
+            game.tact = data.get("game_tact", 0)
+            print(game.player.rect.center)
+            if abs(game.player.rect.x) > 10000 or abs(game.player.rect.y) > 10000:
+                game.screen_map.teleport_to_player()
+            game.ui.redraw_top()
         except Exception as exc:
             print("Ошибка загрузки:", exc)
             return False

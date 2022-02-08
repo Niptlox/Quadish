@@ -8,7 +8,7 @@ from units.Items import Items, ItemsTile
 from units.Texture import rot_center
 # from units.Tiles import PICKAXES_CAPABILITY, PICKAXES_SPEED, PICKAXES_STRENGTH, STANDING_TILES, ITEM_TILES
 from units.Tiles import hand_pass_img, player_img, dig_rect_img, tile_hand_imgs
-from units.Tools import ToolHand, ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe
+from units.Tools import ToolHand, ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe, ItemTool
 from units.common import *
 
 
@@ -89,12 +89,25 @@ class Player(Entity.PhysicalObject):
         d.pop("ui")
         d.pop("hand_img")
         d.pop("lives_surface")
-        d.pop("inventory")
+        # d.pop("inventory")
+        d["_inventory"] = [(type(i), i.get_vars()) if i else None for i in d.pop("inventory")]
         d.pop("toolHand")
         print(d)
         return d
 
     def set_vars(self, vrs):
+        vrs["inventory"] = []
+        for i in vrs.pop("_inventory"):
+            if i is None:
+                vrs["inventory"].append(None)
+            else:
+                type_obj, vrs_obj = i
+
+                obj = type_obj(self.game)
+                obj.set_vars(vrs_obj)
+                if obj.class_obj & OBJ_ITEM and obj.class_item & CLS_TOOL:
+                    obj.set_owner(self)
+                vrs["inventory"].append(obj)
         super().set_vars(vrs)
         self.fall_speed = FALL_SPEED
 
@@ -235,9 +248,10 @@ class Player(Entity.PhysicalObject):
             i = 0
             while i < self.inventory_size:
                 if self.inventory[i] is None:
-
                     if items.count < self.cell_size:
                         self.inventory[i] = items
+                        if items.class_item & CLS_TOOL:
+                            items.set_owner(self)
                     else:
                         self.inventory[i] = items.copy()
                         self.inventory[i].count = self.cell_size

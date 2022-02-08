@@ -15,7 +15,7 @@ WSIZE = WINDOW_SIZE
 FPS = 30
 
 pygame.init()  # initiate pygame
-pygame.display.set_caption('Cubeee')
+pygame.display.set_caption('Quadish')
 
 # screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SCALED, vsync=2)
 screen_ = pygame.display.set_mode(WINDOW_SIZE, vsync=2)
@@ -90,9 +90,10 @@ RECIPES = [
     [(121, 1), ((11, 2),)],  # стол
     [(122, 1), ((11, 2), (121, -1))],  # стул
     [(123, 1), ((11, 2), (121, -1))],  # дверь
+    [(125, 1), ((11, 1), (64, 8), (121, -1))],
     [(9, 1), ((64, 2), (11, 1), (51, 2), (61, 1), (121, -1))],  # Tnt
     # [(9, 1), ((3, 3),)],  # tnt
-    [(55, 1), ((66, 2), (53, 10))],
+    [(55, 1), ((66, 2), (53, 10), (125, -1))],
     [(501, 1), ((11, 2), (64, 3), (51, 1), (3, 1), (121, -1))],  # sword
     [(502, 1), ((11, 4), (64, 6), (51, 2), (3, 2), (501, 1), (63, 3), (66, 1), (121, -1))],  # gold sword
     [(531, 1), ((11, 4), (64, 5), (51, 1), (3, 1), (121, -1))],  # pickaxe

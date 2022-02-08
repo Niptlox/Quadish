@@ -18,8 +18,8 @@ class Creature(PhysicalObject):
     punch_speed = 1
     punch_discard = 0
 
-    def __init__(self, game, x, y):
-        super().__init__(game, x, y, self.width, self.height, use_physics=True, sprite=self.sprite)
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos[0], pos[1], self.width, self.height, use_physics=True, sprite=self.sprite)
         self.lives = self.max_lives
         self.lives_surface = pg.Surface((self.rect.w, 6)).convert_alpha()
         self.punch_reload_time = 1 / self.punch_speed
@@ -68,6 +68,8 @@ def slime_animation(color, size, reduction_step, count_sprites=3):
     sprites = [pg.Surface((size[0], size[1] + i)).convert_alpha() for i in
                range(0, reduction_step * count_sprites, reduction_step)]
     [spr.fill(color + "AA") for spr in sprites]
+    [pg.draw.rect(spr, color + "EE", ((0, 0), spr.get_size()), width=2) for spr in sprites]
+
     return sprites
 
 
@@ -91,8 +93,9 @@ class Slime(Creature):
     punch_speed = 1
     punch_discard = 0
 
-    def __init__(self, game, x, y):
-        super().__init__(game, x, y)
+    def __init__(self, game, pos=(0, 0)):
+        x, y = pos
+        super().__init__(game, pos)
         self.move_direction = 0
         self.move_tact = 0
         self.i_sprite = 0
@@ -108,7 +111,7 @@ class Slime(Creature):
             self.jump_speed = 12
             self.move_speed = 4
             self.drop_items = [(ItemsTile, (51, (10, 20))), (ItemsTile, (63, (0, 5))), (ItemsTile, (66, (1, 2)))]
-            super().__init__(game, x, y)
+            super().__init__(game, (x, y))
         elif random.randint(0, 100) < 2:
             self.color = "#ff9d00"
             self.max_lives = 250
@@ -120,7 +123,7 @@ class Slime(Creature):
             self.move_speed = 4
             self.drop_items = [(ItemsTile, (51, (20, 30))), (ItemsTile, (63, (3, 8))), (ItemsTile, (66, (4, 7))),
                                (ItemsTile, (55, (1, 2)))]
-            super().__init__(game, x, y)
+            super().__init__(game, (x, y))
 
         self.sprites = slime_animation(self.color, self.rect.size, self.reduction_step)
         self.sprite = self.sprites[0]
@@ -160,8 +163,8 @@ class Cow(Creature):
     max_lives = 20
     drop_items = [(ItemsTile, (52, (1, 2)))]
 
-    def __init__(self, game, x, y):
-        super().__init__(game, x, y)
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
         self.move_direction = 0
         self.move_tact = 0
         self.color = random.choice(self.colors)
