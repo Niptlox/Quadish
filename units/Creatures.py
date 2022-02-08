@@ -114,7 +114,7 @@ class Slime(Creature):
             self.max_lives = 250
             self.lives = 200
             self.punch_damage = 30
-            self.width, self.height = TSIZE * 3, TSIZE * 3 - 8
+            self.width, self.height = TSIZE * 3, TSIZE * 3 - 15
             self.reduction_step = 12
             self.jump_speed = 12
             self.move_speed = 4
