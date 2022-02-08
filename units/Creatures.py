@@ -109,6 +109,18 @@ class Slime(Creature):
             self.move_speed = 4
             self.drop_items = [(ItemsTile, (51, (10, 20))), (ItemsTile, (63, (0, 5))), (ItemsTile, (66, (1, 2)))]
             super().__init__(game, x, y)
+        elif random.randint(0, 100) < 2:
+            self.color = "ff9d00"
+            self.max_lives = 250
+            self.lives = 200
+            self.punch_damage = 30
+            self.width, self.height = TSIZE * 3, TSIZE * 3 - 8
+            self.reduction_step = 12
+            self.jump_speed = 12
+            self.move_speed = 4
+            self.drop_items = [(ItemsTile, (51, (20, 30))), (ItemsTile, (63, (3, 8))), (ItemsTile, (66, (4, 7))),
+                               (ItemsTile, (55, (1, 2)))]
+            super().__init__(game, x, y)
 
         self.sprites = slime_animation(self.color, self.rect.size, self.reduction_step)
         self.sprite = self.sprites[0]
