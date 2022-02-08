@@ -209,7 +209,7 @@ class ToolPickaxe(ToolSword):
     sprite = tile_imgs[index]
     dig_distance = 3 * TSIZE
     dig_distance2 = dig_distance ** 2
-    capability = [1, 2, 3, 4, 9, 11, 101, 102, 123]
+    capability = [1, 2, 3, 4, 9, 11, 101, 102, 121, 122, 123]
 
     def __init__(self, owner):
         super().__init__(owner)
@@ -279,7 +279,7 @@ class ToolHand(ToolPickaxe):
     set_distance = 4 * TSIZE
     dig_distance2 = dig_distance ** 2
     set_distance2 = set_distance ** 2
-    capability = [1, 2, 3, 4, 5, 9]
+    capability = [1, 2, 101, 102, 121, 122, 123]
     Animation = AnimationHand
     discard_distance = 5
 
@@ -308,7 +308,8 @@ class ToolHand(ToolPickaxe):
         if dist2 <= self.set_distance2:
             v_tile = (vtm + vp) // TSIZE
             x, y = int(v_tile.x), int(v_tile.y)
-            check = check_set_tile(self.owner.game_map, x, y, self.owner.inventory[self.owner.active_cell])
+            game_map = self.owner.game_map
+            check = check_set_tile(game_map, x, y, self.owner.inventory[self.owner.active_cell])
             if check:
                 if time() > self.reload_time_set + self.last_action_time_set:
                     self.last_action_time_set = time()
@@ -323,6 +324,11 @@ class ToolHand(ToolPickaxe):
                 self.stroke = True
             else:
                 self.stroke = False
+                ttile = game_map.get_static_tile_type(x, y)
+                if ttile == 9:
+                    obj = Entities.Dynamite(game_map.game, x * TSIZE, y * TSIZE)
+                    game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), obj)
+                    game_map.set_static_tile(x, y, None)
         return result
 
     def update(self, vector_to_mouse: Vector2):
@@ -387,11 +393,11 @@ def set_tile(game_map, x, y, inventory_cell, check=True):
         if tile:
             return
     inventory_cell.count -= 1
-    if inventory_cell.index == 9:  # tnt
-        obj = Entities.Dynamite(game_map.game, x * TSIZE, y * TSIZE)
-        game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), obj)
-    else:
-        game_map.set_static_tile(x, y, game_map.get_tile_ttile(inventory_cell.index))
+    # if inventory_cell.index == 9:  # tnt
+    #     obj = Entities.Dynamite(game_map.game, x * TSIZE, y * TSIZE)
+    #     game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), obj)
+    # else:
+    game_map.set_static_tile(x, y, game_map.get_tile_ttile(inventory_cell.index))
     if inventory_cell.count <= 0:
         return 0
     return inventory_cell.count

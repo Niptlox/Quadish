@@ -370,14 +370,14 @@ def random_plant_selection():
         plant_tile_type = 101
     elif random.randint(0, 10) == 0:
         plant_tile_type = 102
-    elif random.randint(0, 40) == 0:
-        plant_tile_type = 121
-    elif random.randint(0, 40) == 0:
-        plant_tile_type = 122
+    # elif random.randint(0, 40) == 0:
+    #     plant_tile_type = 121
+    # elif random.randint(0, 40) == 0:
+    #     plant_tile_type = 122
     elif random.randint(0, 40) == 0:
         plant_tile_type = 120
-    elif random.randint(0, 40) == 0:
-        plant_tile_type = 9
+    # elif random.randint(0, 40) == 0:
+    #     plant_tile_type = 9
     return plant_tile_type
 
 

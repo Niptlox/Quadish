@@ -121,7 +121,8 @@ class ScreenMap:
                             #     img = biome_tiles[chunk[4][i][0]]
                             #     self.display.blit(img, b_pos)
                             # if tile_type in PHYSBODY_TILES:
-                            static_tiles[(tile_x, tile_y)] = tile_type
+                            if tile_type != 0:
+                                static_tiles[(tile_x, tile_y)] = tile_type
                             index += self.game_map.tile_data_size
                             tile_x += 1
                             i += 1

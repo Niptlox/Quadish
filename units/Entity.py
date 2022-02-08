@@ -18,8 +18,21 @@ def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic
     # static_tiles = []
     if static_tiles:
         rect = rect.move(-first_tile_pos[0], -first_tile_pos[1])
-        vertexes = rect.topleft, (rect.left, rect.bottom - 1), (rect.right - 1, rect.top), (
-            rect.right - 1, rect.bottom - 1)
+
+        if rect.w > TSIZE or rect.h > TSIZE:
+            vertexes = [(rect.right - 1, rect.top), (
+                rect.right - 1, rect.bottom - 1)]
+            x, y = rect.topleft
+            for i in range(0, rect.w-1, TSIZE-1):
+                for j in range(0, rect.h-1, TSIZE-1):
+                    vertexes.append((x + i, y + j))
+            for i in range(0, rect.w - 1, TSIZE - 1):
+                vertexes.append((x + i, rect.bottom - 1))
+            for j in range(0, rect.h - 1, TSIZE - 1):
+                vertexes.append((rect.right - 1, y + j))
+        else:
+            vertexes = [rect.topleft, (rect.left, rect.bottom - 1), (rect.right - 1, rect.top), (
+                rect.right - 1, rect.bottom - 1)]
 
         for vertex in vertexes:
             # координаты угла в перещёте на блоки

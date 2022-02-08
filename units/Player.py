@@ -8,7 +8,7 @@ from units.Items import Items, ItemsTile
 from units.Texture import rot_center
 # from units.Tiles import PICKAXES_CAPABILITY, PICKAXES_SPEED, PICKAXES_STRENGTH, STANDING_TILES, ITEM_TILES
 from units.Tiles import hand_pass_img, player_img, dig_rect_img, tile_hand_imgs
-from units.Tools import ToolHand, ToolSword, ItemSword, ItemPickaxe, TOOLS
+from units.Tools import ToolHand, ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe
 from units.common import *
 
 
@@ -77,19 +77,6 @@ class Player(Entity.PhysicalObject):
         self.active_cell = 0
         self.cell_size = 1000
 
-        self.pickaxe = 1
-        self.pickaxe_time = 0
-        # время последнего удара
-        self.set_time = 0
-        # время последнего установки блока
-        self.punch_time = 0
-        self.punching = False
-        self.sword = 1
-        self.punch_animation_rot = 0
-        self.punch_animation = False
-        self.punch_animation_rot_speed = 0
-        self.punch_animation_flip = False
-        self.discard_dist = 5
         self.flip = False
         self.toolHand = ToolHand(self)
         self.tool = None
@@ -101,6 +88,10 @@ class Player(Entity.PhysicalObject):
         d.pop("game")
         d.pop("ui")
         d.pop("hand_img")
+        d.pop("lives_surface")
+        d.pop("inventory")
+        d.pop("toolHand")
+        print(d)
         return d
 
     def set_vars(self, vrs):
@@ -118,8 +109,9 @@ class Player(Entity.PhysicalObject):
                 self.jump()
                 # =========================================
             elif event.key == K_j and self.on_up:
-                self.pickaxe = 77 if self.pickaxe == 1 else 1
-                self.sword = 77 if self.sword == 1 else 1
+                item = ItemGoldPickaxe(self.game)
+                item.set_owner(self)
+                self.put_to_inventory(item)
             elif event.key == K_t:
                 self.rect.center = self.spawn_point
             elif event.key == K_h:
@@ -186,13 +178,15 @@ class Player(Entity.PhysicalObject):
             tool.right_button(vector_to_mouse)
         tool.draw(self.ui.display, vector_player_display.x, vector_player_display.y)
         if self.eat and item and item.class_item == CLS_EAT:
+            if item.index == 55:
+                self.max_lives += 20
             self.lives = min(self.lives + item.recovery_lives, self.max_lives)
             item.count -= 1
             if item.count <= 0:
                 self.inventory[self.active_cell] = None
             self.choose_active_cell()
         self.eat = False
-        
+
         # find and get ground items ==========================================
         self.get_item_rect.center = self.rect.center
         for tile in self.game.screen_map.dynamic_tiles:
@@ -285,19 +279,34 @@ class Player(Entity.PhysicalObject):
                         break
         return True
 
-    def creating_item_of_i(self, rec_i):
+    def check_creating_item_of_i(self, rec_i):
         if rec_i < len(RECIPES):
             out, need = RECIPES[rec_i]
-            if all([self.find_in_inventory(t, c) for t, c in need]):
-                [self.get_from_inventory(t, c) for t, c in need]
-                if out[0] in TOOLS:
-                    item = TOOLS[out[0]](self.game)
-                    item.set_owner(self)
-                else:
-                    item = ItemsTile(self.game, out[0], count=out[1])
-                res, _ = self.put_to_inventory(item)  # дверь
-                if not res:
-                    self.discard_item(None, item)
+            for t, c in need:
+                if c == -1:
+                    # косаемся ли мы нужного блока
+                    hit_static_lst, _ = Entity.collision_test(self.game_map, self.rect,
+                                                              self.game.screen_map.static_tiles, collide_all_tiles=True)
+                    if any([e[1] == t for e in hit_static_lst]):
+                        continue
+                elif self.find_in_inventory(t, c):
+                    continue
+                return False
+            return True
+        return False
+
+    def creating_item_of_i(self, rec_i):
+        if self.check_creating_item_of_i(rec_i):
+            out, need = RECIPES[rec_i]
+            [self.get_from_inventory(t, c) for t, c in need]
+            if out[0] in TOOLS:
+                item = TOOLS[out[0]](self.game)
+                item.set_owner(self)
+            else:
+                item = ItemsTile(self.game, out[0], count=out[1])
+            res, _ = self.put_to_inventory(item)  # дверь
+            if not res:
+                self.discard_item(None, item)
 
     def choose_active_cell(self, cell=-1):
         if cell != -1:

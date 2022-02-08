@@ -43,7 +43,7 @@ def transform_hand(surf, size=HAND_RECT, colorkey=COLORKEY):
 
 sky = "#A5F3FC"
 
-player_img = create_tile_image("#E7E5E4", bd=2)
+player_img = create_tile_image("#E7E5E4", size=(TSIZE-2, TSIZE-2), bd=2)
 
 # hand_pass_img = pygame.transform.smoothscale(player_img, HAND_RECT)
 hand_pass_img = None
@@ -110,6 +110,7 @@ rain_img = load_img("data/sprites/tiles/rain.png")
 wildberry_item_img = load_img("data/sprites/tiles/wildberry_item.png", None)
 slime_item_img = load_img("data/sprites/tiles/slime_item.png", None)
 meet_cow_item_img = load_img("data/sprites/tiles/meet_cow_item.png", None)
+potion_life_item_item = load_img("data/sprites/tiles/potion_life_item.png", None)
 
 blore_ore_img = load_img(r"data\sprites\items\blore_ore.png", None)  # blue ore
 copper_ore_img = load_img(r"data\sprites\items\copper_ore.png", None)
@@ -134,6 +135,7 @@ tile_imgs = {0: none_img,
              51: slime_item_img,
              52: meet_cow_item_img,
              53: wildberry_item_img,
+             55: potion_life_item_item,
              61: blore_ore_img,
              62: copper_ore_img,
              63: gold_ore_img,
@@ -176,6 +178,7 @@ tile_words = {0: "None",
               51: "Слизь",
               52: "Мясо коровы",
               53: "Лесные ягоды",
+              55: "Зелье жизни",
               61: "Блоровая руда",
               62: "Медная руда",
               63: "Золотая руда",
@@ -207,7 +210,7 @@ PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 124}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
 STANDING_TILES = {0, 101, 102, 120, 121, 122, 123}
 # предметы которые нельзя физически поставить
-ITEM_TILES = {51, 52, 53, 61, 62, 63, 64, 65, 66}
+ITEM_TILES = {51, 52, 53, 55, 61, 62, 63, 64, 65, 66}
 # Ппочность блоков
 TILES_SOLIDITY = {
     1: 15,

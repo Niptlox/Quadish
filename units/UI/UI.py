@@ -147,15 +147,23 @@ class GameUI(UI):
             x += cell_size
 
     def redraw_recipes_info(self):
-        self.recipes_info_index_surface.fill(self.top_bg_color)
-        recipe = RECIPES[self.recipes_info_index][1]
+        out, recipe = RECIPES[self.recipes_info_index]
         tx = 3
         ty = 3
+        span = textfont.get_height() + 3
+        self.recipes_info_index_surface = pygame.Surface((self.cell_size * 3.5, span * (len(recipe)+3)), pygame.SRCALPHA,
+                                                         32)
+        self.recipes_info_index_surface.fill(self.top_bg_color)
+        name = tile_words[out[0]]
+        self.recipes_info_index_surface.blit(textfont.render(name, True, text_color_light), (tx, ty))
+        ty += span
+        self.recipes_info_index_surface.blit(textfont.render("-"*50, True, text_color_light), (0, ty))
+        ty += span
         for index, cnt in recipe:
-            res = f"{tile_words[index]}: {cnt}"
+            res = f"{tile_words[index]}: {cnt if cnt > 0 else ''}"
             text = textfont.render(res, 1, text_color_light)
             self.recipes_info_index_surface.blit(text, (tx, ty))
-            ty += self.cell_size // 3
+            ty += span
 
     def pg_event(self, event: pg.event.Event):
         if event.type == pg.MOUSEBUTTONDOWN:
