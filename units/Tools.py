@@ -188,7 +188,7 @@ class ToolSword(Tool):
 
 
 class ToolGoldSword(ToolSword):
-    damage = 77
+    damage = 7*7
     speed = 7
     distance = 3 * TSIZE
     Animation = AnimationSword
