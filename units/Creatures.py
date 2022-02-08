@@ -110,7 +110,7 @@ class Slime(Creature):
             self.drop_items = [(ItemsTile, (51, (10, 20))), (ItemsTile, (63, (0, 5))), (ItemsTile, (66, (1, 2)))]
             super().__init__(game, x, y)
         elif random.randint(0, 100) < 2:
-            self.color = "ff9d00"
+            self.color = "#ff9d00"
             self.max_lives = 250
             self.lives = 200
             self.punch_damage = 30
