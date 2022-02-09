@@ -115,8 +115,8 @@ class Slime(Creature):
         elif random.randint(0, 100) < 2:
             self.color = "#ff9d00"
             self.max_lives = 250
-            self.lives = 200
-            self.punch_damage = 30
+            self.lives = 250
+            self.punch_damage = 35
             self.width, self.height = TSIZE * 3, TSIZE * 3 - 15
             self.reduction_step = 12
             self.jump_speed = 12

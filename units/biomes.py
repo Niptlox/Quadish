@@ -44,9 +44,12 @@ def biome_of_pos(x, y):
     """биом, Температура, влажность"""
     cof = 240
     i = snoise2(x / cof, y / cof, 2, persistence=0.75, base=123, lacunarity=1)
-    j = snoise2(x / cof, y / cof, 2, persistence=0.75, base=123, lacunarity=1)
+    j = snoise2(x / cof, y / cof, 2, persistence=0.75, base=13, lacunarity=1)
+    k = snoise2(x / 100, y / 100, 2, persistence=0.75, base=113, lacunarity=2)
+    j -= (j - i) * k
+    i -= (i - j) * k
     t = int(i * 25) + 10
-    p = int(i * 50) + 50
-    noise_val_t = int(i * 128 + 128)
-    noise_val_p = int(j * 128 + 128)
+    p = int(j * 50) + 50
+    noise_val_t = max(0, min(255, int(i * 128 + 128)))
+    noise_val_p = max(0, min(255, int(j * 128 + 128)))
     return int(biomes[noise_val_t, noise_val_p]), t, p

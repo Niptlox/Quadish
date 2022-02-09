@@ -49,6 +49,7 @@ class ItemsTile(Items):
     def __init__(self, game, index=None, count=1, pos=(0, 0)):
         super().__init__(game, index, count, pos)
         self.sprite = tile_hand_imgs.get(index, self.sprite)
+        self.rect.size = self.sprite.get_size()
 
     def set_vars(self, vrs):
         super().set_vars(vrs)

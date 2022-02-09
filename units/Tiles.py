@@ -51,13 +51,12 @@ player_hand_img = hand_pass_img
 
 none_img = create_tile_image("#FFAAFF")
 
-dirt_img = create_tile_image("#694837")
-
+dirt_img = create_border(load_img("data/sprites/tiles/dirt.png"))
 grass_img = create_border(load_img("data/sprites/tiles/grass/grass.png"))
 grass_L_img = create_border(load_img("data/sprites/tiles/grass/grass_L.png"))
 grass_R_img = create_border(load_img("data/sprites/tiles/grass/grass_R.png"))
 grass_LR_img = create_border(load_img("data/sprites/tiles/grass/grass_LR.png"))
-bioms = (3, 0, 1)
+bioms = (0, 1, 2, 3)
 grass_imgs = {i: (create_border(load_img(f"data/sprites/tiles/grass/grass_{i}.png")),
                   create_border(load_img(f"data/sprites/tiles/grass/grass_L_{i}.png")),
                   create_border(load_img(f"data/sprites/tiles/grass/grass_R_{i}.png")),
@@ -163,7 +162,9 @@ tile_imgs = {0: none_img,
              }
 count_tiles = len(tile_imgs)
 
-tile_hand_imgs = {k: transform_hand(i) for k, i in tile_imgs.items()}
+ITEM_TILES = {51, 52, 53, 55, 61, 62, 63, 64, 65, 66}
+
+tile_hand_imgs = {k: tile_imgs[k] if k in ITEM_TILES else transform_hand(i) for k, i in tile_imgs.items()}
 tile_hand_imgs[102] = load_img("data/sprites/tiles/small_tree_item.png",
                                HAND_RECT)  # тк есть прозрачность создана собственная картинка
 tile_hand_imgs[121] = load_img("data/sprites/tiles/table_item.png", HAND_RECT)  # тк есть прозрачность
