@@ -33,6 +33,7 @@ class GameScene(Scene):
         self.screen_map = ScreenMap(self.display, self.game_map, self.player)
         self.ui.init_ui()
         self.tact = 0
+        self.ctrl_on = False
 
     def pg_events(self):
         for event in pygame.event.get():
@@ -56,6 +57,13 @@ class GameScene(Scene):
                     open_help()
                     self.running = False
                     self.new_scene = self.app.savem_scene
+                elif event.key == K_LCTRL:
+                    self.ctrl_on = True
+                elif event.key == K_s and self.ctrl_on:
+                    self.game_map.save_game_map(self, self.game_map.num_save_map)
+            elif event.type == KEYUP:
+                if event.key == KMOD_CTRL:
+                    self.ctrl_on = False
             elif event.type == EVENT_100_MSEC:
                 if show_info_menu:
                     self.ui.redraw_info()

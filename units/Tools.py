@@ -6,8 +6,7 @@ from pygame import Vector2
 from units import Entities
 from units.Items import ItemsTile, Items
 from units.Texture import rot_center
-from units.Tiles import item_of_break_tile, STANDING_TILES, ITEM_TILES, sword_1_img, pickaxe_1_img, tile_imgs, \
-    sword_77_img
+from units.Tiles import item_of_break_tile, item_of_right_click_tile, STANDING_TILES, ITEM_TILES, tile_imgs
 from units.common import *
 
 
@@ -81,10 +80,10 @@ class AnimationSword(AnimationTool):
 
     def set_sprite(self, sprite: pg.Surface):
         w, h = sprite.get_size()
-        surf = pg.Surface((w*2, h * 2)).convert_alpha()
+        surf = pg.Surface((w * 2, h * 2)).convert_alpha()
         surf.fill((0, 0, 0, 0))
         surf.blit(sprite, (w, 0))
-        self.sprite = pygame.transform.scale(surf, (w*3, h*3))
+        self.sprite = pygame.transform.scale(surf, (w * 3, h * 3))
 
     def draw(self, surface, x, y):
         if self.animation:
@@ -119,6 +118,7 @@ class Tool:
         self.flip = False
         self.action = False
         self.reload_time = 1 / self.speed
+        self.tile_click = False
 
     def draw(self, surface, x, y):
         self.animation.draw(surface, x, y)
@@ -133,7 +133,13 @@ class Tool:
         pass
 
     def right_button(self, vector_to_mouse):
-        pass
+        vtm = vector_to_mouse
+        vp: Vector2 = self.owner.vector  # player
+        v_tile = (vtm + vp) // TSIZE
+        x, y = int(v_tile.x), int(v_tile.y)
+        if self.tile_click:
+            tile_click(self.owner.game_map, None, x, y)
+            self.tile_click = False
 
 
 class ToolSword(Tool):
@@ -188,7 +194,7 @@ class ToolSword(Tool):
 
 
 class ToolGoldSword(ToolSword):
-    damage = 7*7
+    damage = 7 * 7
     speed = 7
     distance = 3 * TSIZE
     Animation = AnimationSword
@@ -291,6 +297,7 @@ class ToolHand(ToolPickaxe):
         self.stroke_rect = pg.Rect((0, 0, TSIZE, TSIZE))
         self.stroke = False
         self.vector_to_mouse = Vector2(0)
+        self.tile_click = False
 
     def draw(self, surface, x, y):
         self.animation.sprite = self.owner.hand_img
@@ -324,16 +331,35 @@ class ToolHand(ToolPickaxe):
                 self.stroke = True
             else:
                 self.stroke = False
-                ttile = game_map.get_static_tile_type(x, y)
-                if ttile == 9:
-                    obj = Entities.Dynamite(game_map.game, x * TSIZE, y * TSIZE)
-                    game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), obj)
-                    game_map.set_static_tile(x, y, None)
+                if self.tile_click:
+                    tile_click(game_map, None, x, y)
+                    self.tile_click = False
+
         return result
 
     def update(self, vector_to_mouse: Vector2):
         self.vector_to_mouse = vector_to_mouse
         super().update(vector_to_mouse)
+
+
+def tile_click(game_map, tile, x, y):
+    if tile is None:
+        tile = game_map.get_static_tile(x, y)
+    ttile = tile[0]
+    if ttile == 9:
+        obj = Entities.Dynamite(game_map.game, x * TSIZE, y * TSIZE)
+        game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), obj)
+        game_map.set_static_tile(x, y, None)
+    elif ttile == 123:
+        game_map.set_static_tile(x, y, game_map.get_tile_ttile(124))
+    elif ttile == 124:
+        game_map.set_static_tile(x, y, game_map.get_tile_ttile(123))
+    elif ttile == 101:
+        if tile[2] > 0:
+            item = item_of_right_click_tile(tile)[0]
+            game_map.add_item_of_index(*item, x, y)
+            tile[2], tile[3] = 0, 0
+            game_map.set_static_tile(x, y, tile)
 
 
 def check_dig_tile(game_map, x, y, tool: ToolHand):
@@ -363,11 +389,9 @@ def dig_tile(game_map, x, y, tool, check=True):
     sol = tile[1]  # прочность
     sol -= tool.strength
     if sol <= 0:
-        res = item_of_break_tile(tile[0])
+        res = item_of_break_tile(tile)
         for ttile, count_items in res:
-            items = ItemsTile(game_map.game, ttile, count_items, (x * TSIZE + randint(0, TSIZE - HAND_SIZE), y * TSIZE))
-            game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), items)
-            # self.put_to_inventory(ttile, count_items)
+            game_map.add_item_of_index(ttile, count_items, x, y)
         game_map.set_static_tile(x, y, None)
     else:
         game_map.set_static_tile_solidity(x, y, sol)
@@ -377,10 +401,12 @@ def dig_tile(game_map, x, y, tool, check=True):
 def check_set_tile(game_map, x, y, inventory_cell):
     if inventory_cell is None:
         return
-    tile = game_map.get_static_tile(x, y)
+    tile = game_map.get_static_tile(x, y)  # ground
     if tile is None or tile[0] != 0:
         return
     if inventory_cell.index in STANDING_TILES and game_map.get_static_tile_type(x, y + 1, 0) in STANDING_TILES:
+        return False
+    if inventory_cell.index == 101 and not game_map.get_static_tile_type(x, y + 1, 0) == 1:
         return False
     if inventory_cell.index in ITEM_TILES:
         return False

@@ -88,8 +88,8 @@ class ScreenMap:
                                 b_pos = (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1])
                                 if srect_d.collidepoint(*b_pos):
                                     # print(tile_xy)
-                                    if tile_type == 203:
-                                        img = tile_imgs[tile_type + 1][tile[2] - 1]
+                                    if tile_type in tile_many_imgs:
+                                        img = tile_many_imgs[tile_type][tile[2]]
                                     else:
                                         img = tile_imgs[tile_type]
                                     if tile_type == 1:
@@ -109,13 +109,22 @@ class ScreenMap:
                                                     img = grass_LR_img
                                             elif self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
                                                 img = grass_R_img
-                                    # elif tile_type == 3:
-                                    #     img = biome_tiles[chunk[4][i][0]]
+                                    elif tile_type == 101:
+                                        if tile[2] < 3:
+                                            if tile[3] < tact:
+                                                if tile[3] != 0:
+                                                    chunk[0][index + 2] += 1
+                                                else:
+                                                    chunk[0][index + 3] = tact
+                                                # tile[3] = tact --> тк срез
+                                                chunk[0][index + 3] += random.randint(FPS * 60, FPS * 120)
                                     self.display.blit(img, b_pos)
                                     sol = tile[1]
                                     if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
                                         br_i = 2 - int(sol / (TILES_SOLIDITY[tile_type] / 3))
                                         self.display.blit(break_imgs[br_i], b_pos)
+
+
                             # else:
                             #     b_pos = (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1])
                             #     img = biome_tiles[chunk[4][i][0]]

@@ -79,11 +79,13 @@ tnt_imgs = [tnt_1_img, create_tile_image("#FECACA")]  # tnt activ
 
 wood_img = load_img("data/sprites/tiles/wood.png")
 
-bush_img = load_img("data/sprites/tiles/bush.png")  # куст
+bush_img = load_img("data/sprites/tiles/bush/bush.png")  # куст
+bush_imgs = [load_img(f"data/sprites/tiles/bush/bush_{i}.png") for i in range(4)]  # кустs
 
 smalltree_img = load_img("data/sprites/tiles/small_tree.png")
 
 door_img = load_img("data/sprites/tiles/door.png")
+close_door_img = load_img("data/sprites/tiles/close_door.png")
 table_img = load_img("data/sprites/tiles/table.png")
 chear_img = load_img("data/sprites/tiles/chear.png")
 cauldron_img = load_img("data/sprites/tiles/cauldron.png")
@@ -110,7 +112,7 @@ rain_img = load_img("data/sprites/tiles/rain.png")
 wildberry_item_img = load_img("data/sprites/tiles/wildberry_item.png", None)
 slime_item_img = load_img("data/sprites/tiles/slime_item.png", None)
 meet_cow_item_img = load_img("data/sprites/tiles/meet_cow_item.png", None)
-potion_life_item_item = load_img("data/sprites/tiles/potion_life_item.png", None)
+potion_life_item_img = load_img("data/sprites/tiles/potion_life_item.png", None)
 
 blore_ore_img = load_img(r"data\sprites\items\blore_ore.png", None)  # blue ore
 copper_ore_img = load_img(r"data\sprites\items\copper_ore.png", None)
@@ -135,7 +137,7 @@ tile_imgs = {0: none_img,
              51: slime_item_img,
              52: meet_cow_item_img,
              53: wildberry_item_img,
-             55: potion_life_item_item,
+             55: potion_life_item_img,
              61: blore_ore_img,
              62: copper_ore_img,
              63: gold_ore_img,
@@ -148,12 +150,11 @@ tile_imgs = {0: none_img,
              121: table_img,
              122: chear_img,
              123: door_img,
+             124: close_door_img,
              125: cauldron_img,
              151: group_img,
              201: cloud_img,
-             202: cloud_imgs,
              203: tnt_1_img,
-             204: tnt_imgs,
 
              501: sword_1_img,
              502: sword_77_img,
@@ -162,6 +163,10 @@ tile_imgs = {0: none_img,
              }
 count_tiles = len(tile_imgs)
 
+tile_many_imgs = {101: bush_imgs,
+                  201: cloud_imgs,
+                  203: tnt_imgs,
+                  }
 ITEM_TILES = {51, 52, 53, 55, 61, 62, 63, 64, 65, 66}
 
 tile_hand_imgs = {k: tile_imgs[k] if k in ITEM_TILES else transform_hand(i) for k, i in tile_imgs.items()}
@@ -235,7 +240,6 @@ TILES_SOLIDITY = {
 
 DYNAMITE_NOT_BREAK = {5, 120}  # granite water
 
-
 # INIT PICKAXE ==================================================
 # 61: "Блоровая руда",
 # 62: "Медная руда",
@@ -244,27 +248,45 @@ DYNAMITE_NOT_BREAK = {5, 120}  # granite water
 # 65: "Серебряная руда",
 # 66: "Рубин",
 
-def item_of_break_tile(ttile):
+tile_drops = {
+    102: [(11, 5, 1)],  # smalltree_img
+    4: ((3, 1, 1),  # ore
+        (64, (1, 2), 0.35),
+        (61, (1, 2), 0.35),
+        (62, (1, 2), 0.2),
+        (65, 1, 0.1),
+        (63, 1, 0.03)),
+    3: ((3, 1, 1),  # stone
+        (61, 1, 0.005),
+        (62, 1, 0.01),
+        (64, 1, 0.01),
+        (65, 1, 0.001),
+        (63, 1, 0.0005),
+        (66, 1, 0.0001)),
+    124: [(123, 1, 1)]  # close door
+}
+
+
+def item_of_break_tile(tile):
     # (index, count, chance)
+    ttile = tile[0]
     items = [(ttile, 1, 1)]
-    if ttile == 102:  # smalltree_img
-        items = [(11, 5, 1)]  # wood_img
-    elif ttile == 4:  # ore
-        items = ((3, 1, 1),  # stone
-                 (64, (1, 2), 0.35),
-                 (61, (1, 2), 0.35),
-                 (62, (1, 2), 0.2),
-                 (65, 1, 0.1),
-                 (63, 1, 0.03))
-    elif ttile == 3:  # stone
-        items = ((3, 1, 1),  # stone
-                 (61, 1, 0.005),
-                 (62, 1, 0.01),
-                 (64, 1, 0.01),
-                 (65, 1, 0.001),
-                 (63, 1, 0.0005),
-                 (66, 1, 0.0001))
-    elif ttile == 101:  # куст с ягодами
-        items = [(53, (1, 3), 1)]
+    if ttile in tile_drops:
+        items = tile_drops[ttile]
+    if ttile == 101:  # куст с ягодами
+        items += item_of_right_click_tile(tile, res=False)
     res = [(i, cnt) for i, cnt, ch in items if ch == 1 or random.randint(0, 100 * 100) <= ch * 100 * 100]
     return res
+
+
+def item_of_right_click_tile(tile, res=True):
+    items = []
+    ttile = tile[0]
+    if ttile == 101:  # куст с ягодами
+        if tile[2] > 0:  # степень выроста куста
+            items = [(53, (tile[2] + 1, tile[2] + 2), 1)]  # ягоды
+    if res:
+        res = [(i, cnt) for i, cnt, ch in items if ch == 1 or random.randint(0, 100 * 100) <= ch * 100 * 100]
+        return res
+    return items
+

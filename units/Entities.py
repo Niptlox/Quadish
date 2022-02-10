@@ -16,7 +16,7 @@ def create_circle_pattern(radius):
     for ri in range(r + 1):
         i = 0
         while i < pi * 2:
-            x, y = int(cos(i) * ri) + r, int(sin(i) * ri * 0.70) + r
+            x, y = int(cos(i) * ri) + r, int(sin(i) * ri * 0.95) + r
             # print(x, y)
             a[y][x] = 1
             i += pi / (r * 10)
@@ -26,7 +26,7 @@ def create_circle_pattern(radius):
 
 class Dynamite(PhysicalObject):
     class_obj = OBJ_TILE
-    boom_radius = 8
+    boom_radius = 5
     pattern = create_circle_pattern(boom_radius)
 
     def __init__(self, game, x, y):
@@ -97,7 +97,7 @@ class Dynamite(PhysicalObject):
                 self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix, iy), obj)
                 continue
 
-            res = item_of_break_tile(ttile)
+            res = item_of_break_tile(self.game_map.get_static_tile(ix, iy))
             for ttile, count_items in res:
                 items = ItemsTile(self.game, ttile, count_items, (ix * TSIZE + randint(0, TSIZE - HAND_SIZE), iy * TSIZE))
                 self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix, iy), items)

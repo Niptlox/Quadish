@@ -149,6 +149,10 @@ class Player(Entity.PhysicalObject):
                 self.dig = True
             if event.button == 3:
                 self.set = True
+                if self.tool is None:
+                    self.toolHand.tile_click = True
+                else:
+                    self.tool.tile_click = True
         elif event.type == MOUSEBUTTONUP:
             if event.button == 1:
                 self.dig = False
@@ -181,15 +185,15 @@ class Player(Entity.PhysicalObject):
 
         item = self.inventory[self.active_cell]
         if item is None or item.class_item & CLS_TOOL == 0:
-            tool = self.toolHand
+            self.tool = self.toolHand
         else:
-            tool = item.tool
-        tool.update(vector_to_mouse)
+            self.tool = item.tool
+        self.tool.update(vector_to_mouse)
         if self.dig:
-            tool.left_button(vector_to_mouse)
+            self.tool.left_button(vector_to_mouse)
         elif self.set:
-            tool.right_button(vector_to_mouse)
-        tool.draw(self.ui.display, vector_player_display.x, vector_player_display.y)
+            self.tool.right_button(vector_to_mouse)
+        self.tool.draw(self.ui.display, vector_player_display.x, vector_player_display.y)
         if self.eat and item and item.class_item == CLS_EAT:
             if item.index == 55:
                 self.max_lives += 20
