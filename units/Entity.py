@@ -92,7 +92,7 @@ class PhysicalObject:
             for block in collision_lsts[type_coll]:
                 if mx > 0:
                     if type_coll == 0:
-                        self.rect.right = block[0][0] * TILE_SIZE + first_tile_pos[0]
+                        self.rect.right = block[0][0] * TILE_SIZE + first_tile_pos[0]                        
                     elif type_coll == 1:
                         self.rect.right = block.left
                     collision_types['right'] = True
@@ -102,6 +102,8 @@ class PhysicalObject:
                     elif type_coll == 1:
                         self.rect.left = block.right
                     collision_types['left'] = True
+                if type_coll == 0 and block[1] == 103:
+                    self.damage(1)
         self.rect.y += my
         # блоки с которыми стлкунулись после премещения по оси y (hit_static_lst, hit_dynamic_lst )
         collision_lsts = collision_test(self.game_map, self.rect, static_tiles, dynamic_tiles, first_tile_pos)
@@ -119,6 +121,8 @@ class PhysicalObject:
                     elif type_coll == 1:
                         self.rect.top = block.bottom
                     collision_types['top'] = True
+                if type_coll == 0 and block[1] == 103:
+                    self.damage(1)
         return collision_types
 
     def update(self, tact):

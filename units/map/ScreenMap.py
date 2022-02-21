@@ -121,7 +121,7 @@ class ScreenMap:
                                     self.display.blit(img, b_pos)
                                     sol = tile[1]
                                     if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
-                                        br_i = 2 - int(sol / (TILES_SOLIDITY[tile_type] / 3))
+                                        br_i = 2 - int(sol * break_imgs_cnt / TILES_SOLIDITY[tile_type])
                                         self.display.blit(break_imgs[br_i], b_pos)
 
 

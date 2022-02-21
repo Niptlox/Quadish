@@ -2,7 +2,6 @@ import glob
 import pickle
 import random
 
-import cloudpickle
 from noise import snoise2 as pnoise2
 
 from units import Items
@@ -292,7 +291,7 @@ class GameMap:
                             tile_type = 1  # grass
                             if y_pos > 0:
                                 on_ground_tiles.add((tile_x, tile_y))
-                                plant_tile_type_state = random_plant_selection()  # plant
+                                plant_tile_type_state = random_plant_selection(biome_info[i][0])  # plant
                                 if plant_tile_type_state is not None:
                                     plant_tile_type, state = plant_tile_type_state
                                     pl_i = tile_index - self.chunk_arr_width
@@ -309,7 +308,7 @@ class GameMap:
                     if y_pos == CHUNK_SIZE - 1 and \
                             self.get_static_tile(tile_x, tile_y + 1, default=0) == 1:
                         on_ground_tiles.add((tile_x, tile_y))
-                        tile_type_state = random_plant_selection()
+                        tile_type_state = random_plant_selection(biome_info[i][0])
                         if tile_type_state:
                             tile_type = tile_type_state[0]
                             static_tiles[tile_index+2] = tile_type_state[1]
@@ -378,10 +377,13 @@ class GameMap:
         return ar
 
 
-def random_plant_selection():
+def random_plant_selection(biome = None):
     if random.randint(0, 5) == 0:
         plants = {101: 0.1, 102: 0.1, 120: 0.05}
+        if biome == 0:
+            plants = {101: 0.1, 103: 0.1}
         plant_tile_type = random.choices(list(plants.keys()), list(plants.values()), k=1)[0]
+            
         if plant_tile_type == 101:
             return plant_tile_type, random.randint(0, 3)
         return plant_tile_type, 0

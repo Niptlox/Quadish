@@ -22,21 +22,24 @@ def create_border(surface, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
 COLORKEY = (0, 255, 0)
 
 
-def load_img(path, size=TILE_RECT, colorkey=COLORKEY):
-    img = pygame.image.load(path).convert()
+def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None):
+    img = pygame.image.load(path)
     if size:
         img = pygame.transform.scale(img, size)
     if colorkey:
         img.set_colorkey(colorkey)
+    if alpha:
+        img.convert_alpha()
+        img.set_alpha(alpha)
     return img
 
 
 def transform_hand(surf, size=HAND_RECT, colorkey=COLORKEY):
     if type(surf) is list:
-        surf = [pygame.transform.scale(s, size).convert() for s in surf]
+        surf = [pygame.transform.scale(s, size) for s in surf]
         [s.set_colorkey(colorkey) for s in surf]
     else:
-        surf = pygame.transform.scale(surf, size).convert()
+        surf = pygame.transform.scale(surf, size)
         surf.set_colorkey(colorkey)
     return surf
 
@@ -49,23 +52,30 @@ player_img = create_tile_image("#E7E5E4", size=(TSIZE - 2, TSIZE - 2), bd=2)
 hand_pass_img = None
 player_hand_img = hand_pass_img
 
+break_imgs_cnt = 4
+break_imgs = [load_img(f"data/sprites/tiles/break/break_{i}.png", alpha=180) for i in range(1, break_imgs_cnt + 1)]
+
+dig_rect_img = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA, 32)
+pygame.draw.rect(dig_rect_img, "#FDE047", ((0, 0), (TILE_SIZE - 1, TILE_SIZE - 1)), width=2, border_radius=-2)
+
 none_img = create_tile_image("#FFAAFF")
 
-dirt_img = create_border(load_img("data/sprites/tiles/dirt.png"))
-grass_img = create_border(load_img("data/sprites/tiles/grass/grass.png"))
-grass_L_img = create_border(load_img("data/sprites/tiles/grass/grass_L.png"))
-grass_R_img = create_border(load_img("data/sprites/tiles/grass/grass_R.png"))
-grass_LR_img = create_border(load_img("data/sprites/tiles/grass/grass_LR.png"))
+dirt_img = load_img("data/sprites/tiles/dirt.png")
+grass_img = (load_img("data/sprites/tiles/grass/grass.png"))
+grass_L_img = (load_img("data/sprites/tiles/grass/grass_L.png"))
+grass_R_img = (load_img("data/sprites/tiles/grass/grass_R.png"))
+grass_LR_img = (load_img("data/sprites/tiles/grass/grass_LR.png"))
 bioms = (0, 1, 2, 3)
-grass_imgs = {i: (create_border(load_img(f"data/sprites/tiles/grass/grass_{i}.png")),
-                  create_border(load_img(f"data/sprites/tiles/grass/grass_L_{i}.png")),
-                  create_border(load_img(f"data/sprites/tiles/grass/grass_R_{i}.png")),
-                  create_border(load_img(f"data/sprites/tiles/grass/grass_LR_{i}.png")),
+grass_imgs = {i: ((load_img(f"data/sprites/tiles/grass/grass_{i}.png")),
+                  (load_img(f"data/sprites/tiles/grass/grass_L_{i}.png")),
+                  (load_img(f"data/sprites/tiles/grass/grass_R_{i}.png")),
+                  (load_img(f"data/sprites/tiles/grass/grass_LR_{i}.png")),
                   ) for i in bioms}
 
-stone_img = create_tile_image("#57534E")
+stone_img = load_img("data/sprites/tiles/stone.png")
+# create_tile_image("#57534E")
 
-ore_img = create_border(load_img("data/sprites/tiles/ore.png"))
+ore_img = (load_img("data/sprites/tiles/ore.png"))
 
 purore_img = create_tile_image("#9333EA")  # purple ore
 
@@ -77,7 +87,10 @@ granite_img = create_border(load_img("data/sprites/tiles/granite.png"))
 tnt_1_img = create_tile_image("#F87171")  # tnt activ
 tnt_imgs = [tnt_1_img, create_tile_image("#FECACA")]  # tnt activ
 
-wood_img = load_img("data/sprites/tiles/wood.png")
+wood_img = load_img("data/sprites/tiles/wood.png", colorkey=None)
+plank_img = load_img("data/sprites/tiles/plank.png", colorkey=None)
+
+cactus_img = load_img("data/sprites/tiles/cactus.png")
 
 bush_img = load_img("data/sprites/tiles/bush/bush.png")  # куст
 bush_imgs = [load_img(f"data/sprites/tiles/bush/bush_{i}.png") for i in range(4)]  # кустs
@@ -93,17 +106,6 @@ water_img = load_img("data/sprites/tiles/water.png")
 
 cloud_img = create_tile_image("#CBD5E1")
 cloud_imgs = [create_tile_image((203 - i, 213 - i, 230 - i)) for i in range(0, 130, 30)]
-
-break_1_img = load_img("data/sprites/tiles/break_1.png")
-break_1_img.set_alpha(100)  # прозрачность 100 из 255
-break_2_img = load_img("data/sprites/tiles/break_2.png")
-break_2_img.set_alpha(100)
-break_3_img = load_img("data/sprites/tiles/break_3.png")
-break_3_img.set_alpha(100)
-break_imgs = [break_1_img, break_2_img, break_3_img]
-
-dig_rect_img = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA, 32)
-pygame.draw.rect(dig_rect_img, "#FDE047", ((0, 0), (TILE_SIZE - 1, TILE_SIZE - 1)), width=2, border_radius=-2)
 
 group_img = load_img("data/sprites/tiles/group.png")
 
@@ -125,6 +127,9 @@ ruby_item_img = load_img(r"data\sprites\items\ruby.png", None)
 sword_1_img = load_img("data/sprites/tools/sword_1.png", None)
 sword_77_img = load_img("data/sprites/tools/sword_77.png", None)
 pickaxe_1_img = load_img("data/sprites/tools/pickaxe_1.png", None)
+pickaxe_1_imgs = [load_img(f"data/sprites/tools/pickaxe_1/pickaxe_{i}.png", None, colorkey=(255, 255, 255)) for i in
+                  range(1, 17)]
+
 pickaxe_77_img = load_img("data/sprites/tools/pickaxe_77.png", None)
 tile_imgs = {0: none_img,
              1: grass_img,
@@ -133,7 +138,8 @@ tile_imgs = {0: none_img,
              4: ore_img,
              5: granite_img,
              9: tnt_img,
-             11: wood_img,
+             11: plank_img,
+             12: wood_img,
              51: slime_item_img,
              52: meet_cow_item_img,
              53: wildberry_item_img,
@@ -146,6 +152,7 @@ tile_imgs = {0: none_img,
              66: ruby_item_img,
              101: bush_img,
              102: smalltree_img,
+             103: cactus_img,
              120: water_img,
              121: table_img,
              122: chear_img,
@@ -166,6 +173,8 @@ count_tiles = len(tile_imgs)
 tile_many_imgs = {101: bush_imgs,
                   201: cloud_imgs,
                   203: tnt_imgs,
+
+                  531: pickaxe_1_imgs,
                   }
 ITEM_TILES = {51, 52, 53, 55, 61, 62, 63, 64, 65, 66}
 
@@ -183,6 +192,7 @@ tile_words = {0: "None",
               5: "Гранит",
               9: "Динамит",
               11: "Доски",
+              12: "Древесина",
               51: "Слизь",
               52: "Мясо коровы",
               53: "Лесные ягоды",
@@ -195,6 +205,7 @@ tile_words = {0: "None",
               66: "Рубин",
               101: "Куст",
               102: "Маленькое дерево",
+              103: "Кактус",
               120: "Вода",
               121: "Стол",
               122: "Стул",
@@ -215,9 +226,9 @@ tile_words = {0: "None",
 # INIT_TILES ====================================================
 
 # блоки через которые нельзя пройти
-PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 124}
+PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 103, 124}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
-STANDING_TILES = {0, 101, 102, 120, 121, 122, 123, 125}
+STANDING_TILES = {0, 101, 102, 103, 120, 121, 122, 123, 125}
 # предметы которые нельзя физически поставить
 ITEM_TILES = {51, 52, 53, 55, 61, 62, 63, 64, 65, 66}
 # Ппочность блоков
@@ -229,10 +240,12 @@ TILES_SOLIDITY = {
     5: 80,
     9: 60,
     11: 45,
+    12: 45,
     123: 45,
     125: 55,
     101: 25,
     102: 25,
+    103: 25,
     120: 100,
     121: 100,
     122: 100,
@@ -249,7 +262,7 @@ DYNAMITE_NOT_BREAK = {5, 120}  # granite water
 # 66: "Рубин",
 
 tile_drops = {
-    102: [(11, 5, 1)],  # smalltree_img
+    102: [(12, 5, 1)],  # smalltree_img
     4: ((3, 1, 1),  # ore
         (64, (1, 2), 0.35),
         (61, (1, 2), 0.35),
@@ -289,4 +302,3 @@ def item_of_right_click_tile(tile, res=True):
         res = [(i, cnt) for i, cnt, ch in items if ch == 1 or random.randint(0, 100 * 100) <= ch * 100 * 100]
         return res
     return items
-

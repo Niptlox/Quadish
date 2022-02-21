@@ -1,4 +1,6 @@
 import units.Game
+import os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
 def main():

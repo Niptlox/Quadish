@@ -92,6 +92,7 @@ class Player(Entity.PhysicalObject):
         # d.pop("inventory")
         d["_inventory"] = [(type(i), i.get_vars()) if i else None for i in d.pop("inventory")]
         d.pop("toolHand")
+        d.pop("tool")
         print(d)
         return d
 
