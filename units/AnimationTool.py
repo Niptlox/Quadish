@@ -64,13 +64,13 @@ class AnimationSword(AnimationTool):
     def __init__(self, tool):
         super().__init__(tool)
         self.rotate = 0
-        self.rotate_speed = 5 * tool.speed
-        self.rotate_end = 160
+        self.rotate_speed = 6 * tool.speed
+        self.rotate_end = 180
         self.set_sprite(tool.sprite)
 
     def start(self):
         super().start()
-        self.rotate = 25
+        self.rotate = -50
 
     def set_sprite(self, sprite: pg.Surface):
         w, h = sprite.get_size()
@@ -82,7 +82,8 @@ class AnimationSword(AnimationTool):
 
     def draw(self, surface, x, y):
         if self.animation:
-            img = tile_many_imgs[self.tool.index][int(self.rotate / 22.5)]
+            imgs = tile_many_imgs[self.tool.index]
+            img = imgs[int(self.rotate / len(imgs)*360)]
             new_xy = x - img.get_width() // 2, y - img.get_height() // 2
             img = pygame.transform.flip(img, self.tool.flip, False)
             surface.blit(img, new_xy)

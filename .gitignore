@@ -1,3 +1,4 @@
 data/maps/*.pclv
 .vscode
 .idea
+*.aseprite

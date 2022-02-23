@@ -2,6 +2,8 @@ import random
 
 from units.common import *
 
+DEBUG_DRAW_TILES = True
+
 # CREATING TILE IMAGES ========================================
 
 BORDER_COLOR = "#1C1917"
@@ -23,6 +25,7 @@ COLORKEY = (0, 255, 0)
 
 
 def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None):
+    print(path)
     img = pygame.image.load(path)
     if size:
         img = pygame.transform.scale(img, size)
@@ -32,6 +35,18 @@ def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None):
         img.convert_alpha()
         img.set_alpha(alpha)
     return img
+
+
+def load_imgs(path, count, size=TILE_RECT, colorkey=COLORKEY, alpha=None):
+    return [load_img(path.format(i), size, colorkey, alpha) for i in range(count)]
+
+
+def load_round_tool_imgs(path, count=4, colorkey=COLORKEY, alpha=None, rotate_imgs=True):
+    cell_img = load_img(path.format(""), None, colorkey=colorkey)
+    imgs = load_imgs(path, count, None, colorkey, alpha)
+    if rotate_imgs:
+        imgs = imgs + [pg.transform.rotate(im, -90 * i) for i in range(1, 4) for im in imgs]
+    return cell_img, imgs
 
 
 def transform_hand(surf, size=HAND_RECT, colorkey=COLORKEY):
@@ -53,7 +68,7 @@ hand_pass_img = None
 player_hand_img = hand_pass_img
 
 break_imgs_cnt = 4
-break_imgs = [load_img(f"data/sprites/tiles/break/break_{i}.png", alpha=180) for i in range(1, break_imgs_cnt + 1)]
+break_imgs = load_imgs("data/sprites/tiles/break/break_{}.png", 4, alpha=180)
 
 dig_rect_img = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA, 32)
 pygame.draw.rect(dig_rect_img, "#FDE047", ((0, 0), (TILE_SIZE - 1, TILE_SIZE - 1)), width=2, border_radius=-2)
@@ -124,13 +139,16 @@ silver_ore_img = load_img(r"data\sprites\items\silver_ore.png", None)
 
 ruby_item_img = load_img(r"data\sprites\items\ruby.png", None)
 
-sword_1_img = load_img("data/sprites/tools/sword_1.png", None)
-sword_77_img = load_img("data/sprites/tools/sword_77.png", None)
-pickaxe_1_img = load_img("data/sprites/tools/pickaxe_1.png", None)
-pickaxe_1_imgs = [load_img(f"data/sprites/tools/pickaxe_1/pickaxe_{i}.png", None, colorkey=(255, 255, 255)) for i in
-                  range(1, 17)]
+sword_77_img, sword_77_imgs = load_round_tool_imgs("data/sprites/tools/sword_77/sword_77_{}.png", 4)
 
-pickaxe_77_img = load_img("data/sprites/tools/pickaxe_77.png", None)
+sword_1_img, sword_1_imgs = load_round_tool_imgs("data/sprites/tools/sword_1/sword_1_{}.png", 4)
+pickaxe_1_img, pickaxe_1_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_1/pickaxe_1_{}.png", 4)
+# load_img("data/sprites/tools/pickaxe_1.png", None)
+# pickaxe_1_imgs = [load_img(f"data/sprites/tools/pickaxe_1/pickaxe_{i}.png", None, colorkey=(255, 255, 255)) for i in
+#                   range(16)]
+
+pickaxe_77_img, pickaxe_77_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_77/pickaxe_77_{}.png", 4)
+
 tile_imgs = {0: none_img,
              1: grass_img,
              2: dirt_img,
@@ -174,7 +192,10 @@ tile_many_imgs = {101: bush_imgs,
                   201: cloud_imgs,
                   203: tnt_imgs,
 
+                  501: sword_1_imgs,
+                  502: sword_77_imgs,
                   531: pickaxe_1_imgs,
+                  532: pickaxe_77_imgs,
                   }
 ITEM_TILES = {51, 52, 53, 55, 61, 62, 63, 64, 65, 66}
 
@@ -302,3 +323,18 @@ def item_of_right_click_tile(tile, res=True):
         res = [(i, cnt) for i, cnt, ch in items if ch == 1 or random.randint(0, 100 * 100) <= ch * 100 * 100]
         return res
     return items
+
+
+if DEBUG_DRAW_TILES:
+    clock = pg.time.Clock()
+    screen_.fill("black")
+    x, y = 5, 5
+    for im in pickaxe_1_imgs:
+        screen_.blit(im, (x, y))
+        x += im.get_width() + 5
+    pg.display.flip()
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
