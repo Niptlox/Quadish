@@ -2,7 +2,7 @@ import random
 
 from units.common import *
 
-DEBUG_DRAW_TILES = True
+DEBUG_DRAW_TILES = False
 
 # CREATING TILE IMAGES ========================================
 
@@ -127,9 +127,12 @@ group_img = load_img("data/sprites/tiles/group.png")
 rain_img = load_img("data/sprites/tiles/rain.png")
 
 wildberry_item_img = load_img("data/sprites/tiles/wildberry_item.png", None)
-slime_item_img = load_img("data/sprites/tiles/slime_item.png", None)
 meet_cow_item_img = load_img("data/sprites/tiles/meet_cow_item.png", None)
+meet_wolf_item_img = load_img("data/sprites/tiles/meet_wolf_item.png", None)
 potion_life_item_img = load_img("data/sprites/tiles/potion_life_item.png", None)
+
+slime_item_img = load_img("data/sprites/tiles/slime_item.png", None)
+pelt_wolf_item_img = load_img("data/sprites/tiles/pelt_wolf_item.png", None)
 
 blore_ore_img = load_img(r"data\sprites\items\blore_ore.png", None)  # blue ore
 copper_ore_img = load_img(r"data\sprites\items\copper_ore.png", None)
@@ -162,6 +165,8 @@ tile_imgs = {0: none_img,
              52: meet_cow_item_img,
              53: wildberry_item_img,
              55: potion_life_item_img,
+             56: meet_wolf_item_img,
+             58: pelt_wolf_item_img,
              61: blore_ore_img,
              62: copper_ore_img,
              63: gold_ore_img,
@@ -197,7 +202,15 @@ tile_many_imgs = {101: bush_imgs,
                   531: pickaxe_1_imgs,
                   532: pickaxe_77_imgs,
                   }
-ITEM_TILES = {51, 52, 53, 55, 61, 62, 63, 64, 65, 66}
+
+
+# блоки через которые нельзя пройти
+PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 103, 124}
+# блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
+STANDING_TILES = {0, 101, 102, 103, 120, 121, 122, 123, 125}
+# предметы которые нельзя физически поставить
+ITEM_TILES = {51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66}
+
 
 tile_hand_imgs = {k: tile_imgs[k] if k in ITEM_TILES else transform_hand(i) for k, i in tile_imgs.items()}
 tile_hand_imgs[102] = load_img("data/sprites/tiles/small_tree_item.png",
@@ -218,6 +231,8 @@ tile_words = {0: "None",
               52: "Мясо коровы",
               53: "Лесные ягоды",
               55: "Зелье жизни",
+              56: "Мясо волка",
+              58: "Шкура волка",
               61: "Блоровая руда",
               62: "Медная руда",
               63: "Золотая руда",
@@ -246,12 +261,6 @@ tile_words = {0: "None",
 
 # INIT_TILES ====================================================
 
-# блоки через которые нельзя пройти
-PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 103, 124}
-# блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
-STANDING_TILES = {0, 101, 102, 103, 120, 121, 122, 123, 125}
-# предметы которые нельзя физически поставить
-ITEM_TILES = {51, 52, 53, 55, 61, 62, 63, 64, 65, 66}
 # Ппочность блоков
 TILES_SOLIDITY = {
     1: 15,

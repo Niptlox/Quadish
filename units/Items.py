@@ -4,7 +4,7 @@ from units.Entity import PhysicalObject, collision_test
 from units.Tiles import tile_hand_imgs
 from units.common import *
 
-eats = {52: 5, 53: 2, 55: 100}
+eats = {52: 10, 53: 2, 56: 8, 55: 100}
 
 
 class Items(PhysicalObject):

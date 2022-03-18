@@ -83,7 +83,7 @@ class AnimationSword(AnimationTool):
     def draw(self, surface, x, y):
         if self.animation:
             imgs = tile_many_imgs[self.tool.index]
-            img = imgs[int(self.rotate / len(imgs)*360)]
+            img = imgs[int(self.rotate/360 * len(imgs))]
             new_xy = x - img.get_width() // 2, y - img.get_height() // 2
             img = pygame.transform.flip(img, self.tool.flip, False)
             surface.blit(img, new_xy)

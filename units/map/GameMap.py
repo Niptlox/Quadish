@@ -8,7 +8,7 @@ from units import Items
 from units.Items import ItemsTile
 from units.Tools import ItemTool
 from units.biomes import biome_of_pos
-from units.Creatures import Slime, Cow
+from units.Creatures import Slime, Cow, Wolf
 from units.Entity import PhysicalObject
 from ..Tiles import *
 
@@ -391,7 +391,7 @@ def random_plant_selection(biome = None):
 
 
 def random_creature_selection():
-    crt = random.choices([None, Slime, Cow], [90, 10, 5], k=1)
+    crt = random.choices([None, Slime, Cow, Wolf], [90, 10, 5, 5], k=1)
     return crt[0]
 
 

@@ -162,6 +162,8 @@ class Cow(Creature):
     colors = ["#FFFAFA", "#FAEBD7", "#FDF4E3", "#FAF0E6"]
     max_lives = 20
     drop_items = [(ItemsTile, (52, (1, 2)))]
+    move_speed = 2
+    
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
@@ -175,7 +177,7 @@ class Cow(Creature):
     def update(self, tact):
         self.update_physics()
         # if self.collisions["bottom"]:
-        self.movement_vector.x += self.move_direction * 2
+        self.movement_vector.x += self.move_direction * self.move_speed
         if self.collisions["bottom"] and (self.collisions["left"] or self.collisions["right"]):
             self.jump(self.jump_speed)
         self.move_tact -= 1
@@ -184,5 +186,70 @@ class Cow(Creature):
             self.move_direction = random.randint(-1, 1)
         return True
 
+class Wolf(Creature):
+    width, height = int(TSIZE * 1), int(TSIZE * 0.9)
+    
+    color = "#708090"
+    max_lives = 35                              
+    drop_items = [(ItemsTile, (56, (1, 3))), (ItemsTile, (58, (1)))]
+    
+    move_speed = 3.5
+    jump_speed = 8
+    
+    enemy = True
+    punch_damage = 8
+    punch_speed = 3
+    punch_discard = 8
+    
+    # агриться ли сейчас на игрока
+    angry = False
+    angry_rect_size = (int(TSIZE * 19), int(TSIZE * 19))
+    move_speed_angry = 6
+    angry_player = None
+    
 
-CREATURES = [Creature, Slime, Cow]
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.move_direction = 0
+        self.move_tact = 0
+        self.sprite = pg.Surface((self.rect.w, self.rect.h))
+        self.sprite.fill(self.color)
+        self.angry_rect = pg.Rect(((0, 0), self.angry_rect_size))
+
+    def update(self, tact):
+        super().update(tact)
+        if self.angry:
+            self.movement_vector.x += self.move_direction * self.move_speed_angry
+        else:
+            self.movement_vector.x += self.move_direction * self.move_speed
+        if self.collisions["bottom"] and (self.collisions["left"] or self.collisions["right"]):
+            self.jump(self.jump_speed)
+                
+        if self.angry:            
+            if self.angry_player.rect.x > self.rect.x:
+                self.move_direction = 1
+            else: 
+                self.move_direction = -1
+            
+            self.angry_rect.center = self.rect.center
+            if not self.angry_rect.colliderect(self.angry_player):
+                self.angry = False
+                self.angry_player = None                  
+        else:
+            self.move_tact -= 1
+            if self.move_tact <= 0:
+                self.move_tact = random.randint(30, 205)
+                self.move_direction = random.randint(-1, 1)
+            
+            self.angry_rect.center = self.rect.center
+            if self.angry_rect.colliderect(self.game.player.rect):
+                self.angry = True
+                self.angry_player = self.game.player
+                self.move_tact = 0
+                    
+        
+        
+        return True
+
+
+CREATURES = [Creature, Slime, Cow, Wolf]
