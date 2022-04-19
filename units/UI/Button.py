@@ -30,13 +30,13 @@ def createImagesButton(size, text="", color_schema=DEF_COLOR_SCHEME_BUT, font=TE
     return imgs_but
 
 
-def createVSteckButtons(size, center_x, start_y, step, images_buttons, funcs, screenOffset=(0,0)):
+def createVSteckButtons(size, center_x, start_y, step, images_buttons, funcs, screen_position=(0, 0)):
     y = start_y
     x = center_x - size[0] // 2
     step += size[1]
     buts = []
     for images_button, func in zip(images_buttons, funcs):
-        but = Button(func, ((x, y), size), *images_button, screenXY=(screenOffset[0]+x, screenOffset[1]+y))
+        but = Button(func, ((x, y), size), *images_button, screenXY=(screen_position[0] + x, screen_position[1] + y))
         y += step
         buts.append(but)
     return buts

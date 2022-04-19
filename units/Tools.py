@@ -42,9 +42,10 @@ class Tool:
         vtm = vector_to_mouse
         vp: Vector2 = self.owner.vector  # player
         v_tile = (vtm + vp) // TSIZE
+        v_local_pos_tile = (vtm + vp) - v_tile * TSIZE
         x, y = int(v_tile.x), int(v_tile.y)
         if self.tile_click:
-            tile_click(self.owner.game_map, None, x, y)
+            tile_click(self.owner.game_map, None, x, y, v_local_pos_tile, self.owner)
             self.tile_click = False
 
 
@@ -116,12 +117,12 @@ class ToolPickaxe(ToolSword):
     speed = 2
     distance = 1.5 * TSIZE  # punch
     Animation = AnimationSword
-    discard_distance = 10  # отбрасывание
+    discard_distance = 6  # отбрасывание
     index = 531
     sprite = tile_imgs[index]
     dig_distance = 3 * TSIZE
     dig_distance2 = dig_distance ** 2
-    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 121, 122, 123, 125]
+    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 121, 122, 123, 124, 125, 127, 128, 130]
 
     def __init__(self, owner):
         super().__init__(owner)
@@ -180,6 +181,16 @@ class ToolGoldPickaxe(ToolPickaxe):
     capability = None
 
 
+class ToolWoodPickaxe(ToolPickaxe):
+    strength = 10  # dig
+    damage = 6  # punch
+    speed = 1.5
+    distance = 1.5 * TSIZE  # punch
+    discard_distance = 4  # отбрасывание
+    index = 530
+    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 121, 122, 123, 124, 125, 127, 128, 130]
+
+
 class ToolHand(ToolPickaxe):
     tool_cls = CLS_WEAPON + CLS_PICKAXE + CLS_SWORD
     damage = 4  # punch
@@ -191,7 +202,7 @@ class ToolHand(ToolPickaxe):
     set_distance = 4 * TSIZE
     dig_distance2 = dig_distance ** 2
     set_distance2 = set_distance ** 2
-    capability = [1, 2, 11, 12, 101, 102, 103, 121, 122, 123, 125]
+    capability = [1, 2, 11, 12, 101, 102, 103, 121, 122, 123, 124, 125, 127, 128, 130]
     Animation = AnimationHand
     discard_distance = 5
 
@@ -238,7 +249,8 @@ class ToolHand(ToolPickaxe):
             else:
                 self.stroke = False
                 if self.tile_click:
-                    tile_click(game_map, None, x, y)
+                    v_local_pos_tile = (vtm + vp) - v_tile * TSIZE
+                    tile_click(game_map, None, x, y, v_local_pos_tile, self.owner)
                     self.tile_click = False
 
         return result
@@ -248,7 +260,7 @@ class ToolHand(ToolPickaxe):
         super().update(vector_to_mouse)
 
 
-def tile_click(game_map, tile, x, y):
+def tile_click(game_map, tile, x, y, local_pos_tile, player):
     if tile is None:
         tile = game_map.get_static_tile(x, y)
     ttile = tile[0]
@@ -256,16 +268,37 @@ def tile_click(game_map, tile, x, y):
         obj = Entities.Dynamite(game_map.game, x * TSIZE, y * TSIZE)
         game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), obj)
         game_map.set_static_tile(x, y, None)
+    elif ttile == 126:
+        tile = game_map.get_static_tile(x, y)
+        if tile[3] == 0:
+            tile[3] = [None] * 4
+        items = tile[3]
+        i = int((local_pos_tile[0] // 16) + (local_pos_tile[1] // 16) * 2)
+        if items[i] is None:
+            item = player.get_cell_from_inventory(player.active_cell)
+            if item:
+                items[i] = (item.index, item.count)
+        else:
+            game_map.add_item_of_index(items[i][0], items[i][1], x, y)
+            items[i] = None
+        game_map.set_static_tile(x, y, tile)
     elif ttile == 123:
         game_map.set_static_tile(x, y, game_map.get_tile_ttile(124))
     elif ttile == 124:
         game_map.set_static_tile(x, y, game_map.get_tile_ttile(123))
+    elif ttile == 127:
+        game_map.set_static_tile(x, y, game_map.get_tile_ttile(128))
+    elif ttile == 128:
+        game_map.set_static_tile(x, y, game_map.get_tile_ttile(127))
     elif ttile == 101:
         if tile[2] > 0:
             item = item_of_right_click_tile(tile)[0]
             game_map.add_item_of_index(*item, x, y)
             tile[2], tile[3] = 0, 0
             game_map.set_static_tile(x, y, tile)
+    elif ttile == 130:
+        point = (x + 0.5) * TSIZE, (y + 0.5) * TSIZE
+        game_map.game.player.set_spawn_point(point)
 
 
 def check_dig_tile(game_map, x, y, tool: ToolHand):
@@ -310,11 +343,17 @@ def check_set_tile(game_map, x, y, inventory_cell):
     tile = game_map.get_static_tile(x, y)  # ground
     if tile is None or tile[0] != 0:
         return
-    if inventory_cell.index in STANDING_TILES and game_map.get_static_tile_type(x, y + 1, 0) in STANDING_TILES:
+    # id предмета в руке
+    cell_ttile = inventory_cell.index
+    # id блока под местом куда ставим
+    bottom_ttile = game_map.get_static_tile_type(x, y + 1, 0)
+    if cell_ttile == 126 and bottom_ttile == 126:
+        return tile
+    if cell_ttile in STANDING_TILES and bottom_ttile in STANDING_TILES:
         return False
-    if inventory_cell.index == 101 and not game_map.get_static_tile_type(x, y + 1, 0) == 1:
+    if cell_ttile == 101 and not bottom_ttile == 1:
         return False
-    if inventory_cell.index in ITEM_TILES:
+    if cell_ttile in ITEM_TILES:
         return False
     return tile
 
@@ -373,9 +412,16 @@ class ItemGoldPickaxe(ItemPickaxe):
     _Tool = ToolGoldPickaxe
 
 
-TOOLS = {
-    501: ItemSword,
-    502: ItemGoldSword,
-    531: ItemPickaxe,
-    532: ItemGoldPickaxe,
-}
+class ItemWoodPickaxe(ItemPickaxe):
+    _Tool = ToolWoodPickaxe
+
+
+TOOLS = {cls._Tool.index: cls for cls in
+         {
+             ItemSword,
+             ItemGoldSword,
+             ItemPickaxe,
+             ItemGoldPickaxe,
+             ItemWoodPickaxe,
+         }
+         }

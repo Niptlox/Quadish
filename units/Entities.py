@@ -91,14 +91,16 @@ class Dynamite(PhysicalObject):
                 continue
             elif ttile in DYNAMITE_NOT_BREAK:
                 continue
-            self.game_map.set_static_tile(ix, iy, None)
-            if ttile == 9:  # tnt
-                obj = Dynamite(self.game, ix * TSIZE, iy * TSIZE)
-                self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix, iy), obj)
-                continue
+
 
             res = item_of_break_tile(self.game_map.get_static_tile(ix, iy))
             for ttile, count_items in res:
                 # items = ItemsTile(self.game, ttile, count_items, (ix * TSIZE + randint(0, TSIZE - HAND_SIZE), iy * TSIZE))
                 # self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix, iy), items)
                 self.game_map.add_item_of_index(ttile, count_items, ix, iy)
+
+            self.game_map.set_static_tile(ix, iy, None)
+            if ttile == 9:  # tnt
+                obj = Dynamite(self.game, ix * TSIZE, iy * TSIZE)
+                self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix, iy), obj)
+                continue

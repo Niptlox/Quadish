@@ -16,7 +16,7 @@ from units.common import *
 
 
 class Player(Entity.PhysicalObject):
-    width, height = TSIZE - 2, TSIZE - 2
+    width, height = TSIZE - 10, TSIZE - 2
     player_img = player_img
     dig_rect_img = dig_rect_img
     hand_img = hand_pass_img
@@ -98,6 +98,7 @@ class Player(Entity.PhysicalObject):
 
     def set_vars(self, vrs):
         vrs["inventory"] = []
+        vrs["rect"].size  = self.rect.size
         for i in vrs.pop("_inventory"):
             if i is None:
                 vrs["inventory"].append(None)
@@ -111,6 +112,7 @@ class Player(Entity.PhysicalObject):
                 vrs["inventory"].append(obj)
         super().set_vars(vrs)
         self.fall_speed = FALL_SPEED
+        self.redraw_inventory()
 
     def pg_event(self, event):
         if event.type == KEYDOWN:
@@ -127,13 +129,10 @@ class Player(Entity.PhysicalObject):
                 item.set_owner(self)
                 self.put_to_inventory(item)
             elif event.key == K_t:
-                self.rect.center = self.spawn_point
-            elif event.key == K_h:
-                self.spawn_point = self.rect.center
-                print("Spawnpoint set:", self.spawn_point)
-            elif event.key == K_q:  # удалить все предметы в текущей ячейке инвентаря
+                self.tp_to_home()
+            elif event.key == K_q:  # выкинуть все предметы в текущей ячейке инвентаря
                 self.discard_item(self.active_cell)
-            elif event.key == K_e:
+            elif event.key == K_f:
                 self.creating_item_of_i(self.active_cell)
             elif event.key in NUM_KEYS:
                 self.num_down = NUM_KEYS.index(event.key)
@@ -167,7 +166,24 @@ class Player(Entity.PhysicalObject):
                 self.active_cell = self.inventory_size - 1
             elif self.active_cell >= self.inventory_size:
                 self.active_cell = 0
-            self.choose_active_cell()
+            self.redraw_inventory()
+
+    def set_spawn_point(self, point):
+        self.spawn_point = point
+        self.ui.new_sys_message("Точка дома установлена")
+
+    def tp_to_home(self):
+        self.rect.center = self.spawn_point
+
+    def relive(self):
+        self.alive = True
+        self.discard_all_items()
+        self.lives = self.max_lives
+        self.rect.center = self.spawn_point
+        self.jump_count = 0
+        self.vertical_momentum = 0
+        self.physical_vector = pg.Vector2(0, 0)
+        print("relive", self.lives)
 
     def update(self, tact):
         self.tact = tact
@@ -202,7 +218,7 @@ class Player(Entity.PhysicalObject):
             item.count -= 1
             if item.count <= 0:
                 self.inventory[self.active_cell] = None
-            self.choose_active_cell()
+            self.redraw_inventory()
         self.eat = False
 
         # find and get ground items ==========================================
@@ -224,17 +240,21 @@ class Player(Entity.PhysicalObject):
         pg.draw.rect(self.lives_surface, "#A3E635AA", ((1, 1), (w, 4)))
         surface.blit(self.lives_surface, (pos_obj[0], pos_obj[1] - 10))
 
-    def discard_item(self, num_cell=None, items=None):
+    def discard_item(self, num_cell=None, items=None, discard_vector=(TSIZE*2, 0)):
         if num_cell is not None:
             items = self.inventory[num_cell]
             self.inventory[num_cell] = None
-            self.choose_active_cell()
+            self.redraw_inventory()
         if items:
-            ix, iy = self.rect.centerx + TSIZE * 2, self.rect.centery
+            ix, iy = self.rect.centerx + discard_vector[0], self.rect.centery+discard_vector[1]
             items.rect.x, items.rect.y = ix, iy
             items.alive = True
             print(ix, iy, *self.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
             self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
+
+    def discard_all_items(self):
+        for i in range(len(self.inventory)):
+            self.discard_item(i, None, discard_vector=(0, 0))
 
     def put_to_inventory(self, items):
         i = 0
@@ -266,11 +286,11 @@ class Player(Entity.PhysicalObject):
                 i += 1
             else:
                 # print("Перепонен инвентарь", ttile)
-                self.choose_active_cell()
+                self.redraw_inventory()
                 # self.ui.redraw_top()
                 return False, items.count
         # self.ui.redraw_top()
-        self.choose_active_cell()
+        self.redraw_inventory()
         return True, None
 
     def find_in_inventory(self, ttile, count=1):
@@ -297,6 +317,12 @@ class Player(Entity.PhysicalObject):
                         self.inventory[i].count -= count
                         break
         return True
+
+    def get_cell_from_inventory(self, num_cell):
+        item = self.inventory[num_cell]
+        self.inventory[num_cell] = None
+        self.redraw_inventory()
+        return item
 
     def check_creating_item_of_i(self, rec_i):
         if rec_i < len(RECIPES):
@@ -326,6 +352,9 @@ class Player(Entity.PhysicalObject):
             res, _ = self.put_to_inventory(item)  # дверь
             if not res:
                 self.discard_item(None, item)
+
+    def redraw_inventory(self):
+        self.choose_active_cell()
 
     def choose_active_cell(self, cell=-1):
         if cell != -1:

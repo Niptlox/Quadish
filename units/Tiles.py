@@ -1,52 +1,10 @@
 import random
 
-from units.common import *
+from units.Image import *
 
 DEBUG_DRAW_TILES = False
 
 # CREATING TILE IMAGES ========================================
-
-BORDER_COLOR = "#1C1917"
-
-
-def create_tile_image(color, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
-    img = pygame.Surface(size)
-    img.fill(bd_color)
-    pygame.draw.rect(img, color, ((bd, bd), (size[0] - bd * 2, size[0] - bd * 2)), border_radius=bd * 2)
-    return img
-
-
-def create_border(surface, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
-    pygame.draw.rect(surface, bd_color, ((0, 0), (size[0], size[1])), width=bd)
-    return surface
-
-
-COLORKEY = (0, 255, 0)
-
-
-def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None):
-    print(path)
-    img = pygame.image.load(path)
-    if size:
-        img = pygame.transform.scale(img, size)
-    if colorkey:
-        img.set_colorkey(colorkey)
-    if alpha:
-        img.convert_alpha()
-        img.set_alpha(alpha)
-    return img
-
-
-def load_imgs(path, count, size=TILE_RECT, colorkey=COLORKEY, alpha=None):
-    return [load_img(path.format(i), size, colorkey, alpha) for i in range(count)]
-
-
-def load_round_tool_imgs(path, count=4, colorkey=COLORKEY, alpha=None, rotate_imgs=True):
-    cell_img = load_img(path.format(""), None, colorkey=colorkey)
-    imgs = load_imgs(path, count, None, colorkey, alpha)
-    if rotate_imgs:
-        imgs = imgs + [pg.transform.rotate(im, -90 * i) for i in range(1, 4) for im in imgs]
-    return cell_img, imgs
 
 
 def transform_hand(surf, size=HAND_RECT, colorkey=COLORKEY):
@@ -61,7 +19,7 @@ def transform_hand(surf, size=HAND_RECT, colorkey=COLORKEY):
 
 sky = "#A5F3FC"
 
-player_img = create_tile_image("#E7E5E4", size=(TSIZE - 2, TSIZE - 2), bd=2)
+player_img = create_tile_image("#E7E5E4", size=(TSIZE - 10, TSIZE - 2), bd=2)
 
 # hand_pass_img = pygame.transform.smoothscale(player_img, HAND_RECT)
 hand_pass_img = None
@@ -114,13 +72,20 @@ smalltree_img = load_img("data/sprites/tiles/small_tree.png")
 
 door_img = load_img("data/sprites/tiles/door.png")
 close_door_img = load_img("data/sprites/tiles/close_door.png")
+trapdoor_img = load_img("data/sprites/tiles/trapdoor.png")
+close_trapdoor_img = load_img("data/sprites/tiles/close_trapdoor.png")
+
 table_img = load_img("data/sprites/tiles/table.png")
-chear_img = load_img("data/sprites/tiles/chear.png")
+chear_img = load_img("data/sprites/tiles/chear.png")  # стул
+rack_img = load_img("data/sprites/tiles/rack.png")  # шкаф
 cauldron_img = load_img("data/sprites/tiles/cauldron.png")
 water_img = load_img("data/sprites/tiles/water.png")
 
 cloud_img = create_tile_image("#CBD5E1")
 cloud_imgs = [create_tile_image((203 - i, 213 - i, 230 - i)) for i in range(0, 130, 30)]
+
+bedroll_of_pelts_img = load_img("data/sprites/tiles/bedroll_of_pelts.png")
+bedroll_of_pelts_item_img = load_img("data/sprites/tiles/bedroll_of_pelts_item.png", None)
 
 group_img = load_img("data/sprites/tiles/group.png")
 
@@ -145,11 +110,8 @@ ruby_item_img = load_img(r"data\sprites\items\ruby.png", None)
 sword_77_img, sword_77_imgs = load_round_tool_imgs("data/sprites/tools/sword_77/sword_77_{}.png", 4)
 
 sword_1_img, sword_1_imgs = load_round_tool_imgs("data/sprites/tools/sword_1/sword_1_{}.png", 4)
+pickaxe_0_img, pickaxe_0_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_0/pickaxe_0_{}.png", 4)
 pickaxe_1_img, pickaxe_1_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_1/pickaxe_1_{}.png", 4)
-# load_img("data/sprites/tools/pickaxe_1.png", None)
-# pickaxe_1_imgs = [load_img(f"data/sprites/tools/pickaxe_1/pickaxe_{i}.png", None, colorkey=(255, 255, 255)) for i in
-#                   range(16)]
-
 pickaxe_77_img, pickaxe_77_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_77/pickaxe_77_{}.png", 4)
 
 tile_imgs = {0: none_img,
@@ -181,13 +143,18 @@ tile_imgs = {0: none_img,
              122: chear_img,
              123: door_img,
              124: close_door_img,
-             125: cauldron_img,
+             125: cauldron_img,  # котёл
+             126: rack_img,
+             127: trapdoor_img,
+             128: close_trapdoor_img,
+             130: bedroll_of_pelts_img,
              151: group_img,
              201: cloud_img,
              203: tnt_1_img,
 
              501: sword_1_img,
              502: sword_77_img,
+             530: pickaxe_0_img,
              531: pickaxe_1_img,
              532: pickaxe_77_img,
              }
@@ -199,24 +166,27 @@ tile_many_imgs = {101: bush_imgs,
 
                   501: sword_1_imgs,
                   502: sword_77_imgs,
+                  530: pickaxe_0_imgs,
                   531: pickaxe_1_imgs,
                   532: pickaxe_77_imgs,
                   }
 
+IDX_TOOLS = {501, 502, 530, 531, 532}
 
 # блоки через которые нельзя пройти
-PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 103, 124}
+PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 103, 124, 128}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
-STANDING_TILES = {0, 101, 102, 103, 120, 121, 122, 123, 125}
+STANDING_TILES = {0, 101, 102, 103, 120, 121, 122, 123, 125, 126, 130}
 # предметы которые нельзя физически поставить
 ITEM_TILES = {51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66}
 
-
+# специальные каринки предметов для инвентаря
 tile_hand_imgs = {k: tile_imgs[k] if k in ITEM_TILES else transform_hand(i) for k, i in tile_imgs.items()}
 tile_hand_imgs[102] = load_img("data/sprites/tiles/small_tree_item.png",
                                HAND_RECT)  # тк есть прозрачность создана собственная картинка
 tile_hand_imgs[121] = load_img("data/sprites/tiles/table_item.png", HAND_RECT)  # тк есть прозрачность
 tile_hand_imgs[122] = load_img("data/sprites/tiles/chear_item.png", HAND_RECT)  # тк есть прозрачность
+tile_hand_imgs[130] = bedroll_of_pelts_item_img
 
 tile_words = {0: "None",
               1: "Трава",
@@ -246,22 +216,28 @@ tile_words = {0: "None",
               121: "Стол",
               122: "Стул",
               123: "Дверь",
+              124: "Закрытая дверь",
               125: "Котёл",
+              126: "Шкаф",
+              127: "Люк",
+              128: "Закрытый люк",
+              130: "Спальный мешок из шкур",
               151: "Группа обектов",
               201: "Облако",
               202: "Облака",
               203: "Активный динамит",
               204: "Активные динамиты",
 
-              501: "Простой меч",
+              501: "Железный меч",
               502: "Золотой меч",
-              531: "Простая кирка",
+              530: "Деревянная кирка",
+              531: "Железная кирка",
               532: "Золотая кирка",
               }
 
 # INIT_TILES ====================================================
 
-# Ппочность блоков
+# Прочность блоков
 TILES_SOLIDITY = {
     1: 15,
     2: 20,
@@ -271,14 +247,18 @@ TILES_SOLIDITY = {
     9: 60,
     11: 45,
     12: 45,
-    123: 45,
-    125: 55,
     101: 25,
     102: 25,
     103: 25,
     120: 100,
     121: 100,
     122: 100,
+    123: 45,
+    125: 55,
+    126: 45,
+    127: 45,
+    128: 45,
+    130: 80,
 }
 
 DYNAMITE_NOT_BREAK = {5, 120}  # granite water
@@ -291,6 +271,7 @@ DYNAMITE_NOT_BREAK = {5, 120}  # granite water
 # 65: "Серебряная руда",
 # 66: "Рубин",
 
+# специальные шансы выпадения предметов
 tile_drops = {
     102: [(12, 5, 1)],  # smalltree_img
     4: ((3, 1, 1),  # ore
@@ -306,7 +287,8 @@ tile_drops = {
         (65, 1, 0.001),
         (63, 1, 0.0005),
         (66, 1, 0.0001)),
-    124: [(123, 1, 1)]  # close door
+    124: [(123, 1, 1)],  # close door
+    128: [(127, 1, 1)],  # close door
 }
 
 

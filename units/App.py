@@ -55,12 +55,17 @@ class Scene(App):
             return EXIT
         return self.new_scene
 
+    def set_scene(self, scene):
+        self.running = False
+        self.new_scene = scene
+
 
 class SceneUI(Scene):
     def __init__(self, app, UI) -> None:
         super().__init__(app=app)
         self.ui = UI(self)
         self.ui.init_ui()
+        self.back_scene = None
 
     def pg_events(self):
         for event in pygame.event.get():
@@ -69,7 +74,7 @@ class SceneUI(Scene):
             if event.type == KEYDOWN:
                 if event.key == K_ESCAPE:
                     self.running = False
-                    self.new_scene = None
+                    self.new_scene = self.back_scene
             self.ui.pg_event(event)
 
     def update(self):

@@ -2,16 +2,18 @@ from pygame import Surface
 
 from units.Texture import BLACK, WHITE
 from units.Tiles import tile_imgs, sky, tile_words
-from units.UI.Button import createImagesButton, createVSteckButtons
+from units.UI.Button import createImagesButton, createVSteckButtons, Button
 from units.common import *
+from units.UI.ClassUI import UI
 
 # INIT TEXT ==================================================
 
 pygame.font.init()
 # textfont = pygame.font.SysFont('Jokerman', 19)
-textfont = pygame.font.SysFont("Fenix", 19, )
+textfont = pygame.font.SysFont("Fenix", 19, )  # yes rus
+textfont_sys_msg = pygame.font.SysFont("Fenix", 30, )  # yes rus
 # textfont = pygame.font.Font('data/fonts/Teletactile.ttf', 10, bold=True)
-textfont_info = pygame.font.Font('data/fonts/Teletactile.ttf', 10, )
+textfont_info = pygame.font.Font('data/fonts/Teletactile.ttf', 10, )  # no rus
 textfont_btn = pygame.font.SysFont("Fenix", 35, )
 
 # texframe = font.render(text, False, text_color)
@@ -19,25 +21,11 @@ text_color = "#1C1917"
 text_color_dark = "#1C1917"
 text_color_light = "#F5F5F4"
 
+sys_message_bg = (68, 64, 60, 150)
+
 
 # =============================================================
 
-
-class UI:
-    def __init__(self, app) -> None:
-        self.app = app
-        self.screen = app.screen
-        self.display = self.app.display
-
-    def init_ui(self):
-        pass
-
-    def draw(self):
-        self.screen.blit(self.display, (0, 0))
-        pg.display.flip()
-
-    def pg_event(self, event: pg.event.Event):
-        pass
 
 
 class GameUI(UI):
@@ -64,6 +52,14 @@ class GameUI(UI):
         self.redraw_recipes()
         self.app.player.choose_active_cell()
 
+        self.sys_message_rect = pg.Rect(((WSIZE[0] - 330, WSIZE[1] - 45), (300, 32)))
+        self.sys_message_text = ""
+        self.sys_message_left_tact = 0
+        self.sys_message_count_tact = 0
+        self.sys_message_surface = pg.Surface(self.sys_message_rect.size).convert_alpha()
+
+        self.new_sys_message("Привет игрок")
+
     def draw_sky(self):
         # self.display.blit(self.sky_surface, (0, 0))
         self.display.fill(sky)
@@ -79,13 +75,31 @@ class GameUI(UI):
                                   self.recipes_rect.x + self.recipes_info_index * self.cell_size,
                                   self.recipes_rect.bottom))
         if self.inventory_info_index is not None:
-            self.display.blit(self.inventory_info_index_surface, (self.inventory_info_index * self.cell_size, self.cell_size))
+            self.display.blit(self.inventory_info_index_surface,
+                              (self.inventory_info_index * self.cell_size, self.cell_size))
         if show_info_menu:
             self.display.blit(self.info_surface, (WINDOW_SIZE[0] - 200, 0))
+        if self.sys_message_left_tact > 0:
+            self.sys_message_left_tact -= 1
+            if self.sys_message_left_tact < 32:
+                self.sys_message_surface.set_alpha(self.sys_message_left_tact * 8)
+            elif (self.sys_message_count_tact - self.sys_message_left_tact) < 8:
+                self.sys_message_surface.set_alpha((self.sys_message_count_tact - self.sys_message_left_tact) * 32)
 
+            self.display.blit(self.sys_message_surface, self.sys_message_rect)
         # pygame.transform.scale(display,(WINDOW_SIZE[0]//1.8, WINDOW_SIZE[1]//1.8)), (100, 100)
         self.screen.blit(self.display, (0, 0))
         pygame.display.flip()
+
+    def new_sys_message(self, text, count_tact=FPS * 3):
+        self.sys_message_text = text
+        self.sys_message_left_tact = count_tact
+        self.sys_message_count_tact = count_tact
+        self.sys_message_surface.set_alpha(255)
+        self.sys_message_surface.fill(sys_message_bg)
+        text_msg = textfont_sys_msg.render(text, 1, "#FDE047")
+
+        self.sys_message_surface.blit(text_msg, (5, 5))
 
     def redraw_info(self):
         true_fps = self.app.clock.get_fps()
@@ -205,12 +219,11 @@ class GameUI(UI):
                 self.recipes_info_index = None
                 self.inventory_info_index = None
 
-
         return False
 
 
 class SwitchMapUI(UI):
-    bg = BLACK
+    bg = (82, 82, 91, 150)
 
     def __init__(self, app, title) -> None:
         self.title = title
@@ -220,13 +233,14 @@ class SwitchMapUI(UI):
         w, h = 300, 500
         self.rect = pg.Rect(0, 0, w, h)
         self.rect.center = WSIZE[0] // 2, WSIZE[1] // 2
-        self.surface = pg.Surface(self.rect.size)
+        self.surface = pg.Surface(self.rect.size).convert_alpha()
 
-        self.title_surf = pg.Surface((w, 40))
+        self.title_surf = pg.Surface((w, 40)).convert_alpha()
+        self.title_surf.fill((82, 82, 91))
         self.title_surf.blit(textfont_btn.render(self.title, True, WHITE), (10, 10))
 
-        btn_rect = pg.Rect(0, 20 + 35, 200, 35)
-        self.btns_scroll = [(w - btn_rect.w) // 2, btn_rect.y]
+        btn_rect = pg.Rect(0, 20 + 40, 200, 35)
+        self.btns_scroll = [(w - btn_rect.w) // 2-15, btn_rect.y]
         self.btns_scroll_step = 20 + btn_rect.height
 
         n = self.app.game.game_map.save_slots
@@ -234,11 +248,13 @@ class SwitchMapUI(UI):
                 for i in range(n)]
         self.img_btns = imgs
         funcs = [lambda b, i=i: self.open_map(b, i) for i in range(n)]
-        btns = createVSteckButtons(btn_rect.size, btn_rect.centerx, 0, 15, imgs, funcs,
-                                   screenOffset=(self.rect.x + self.btns_scroll[0],
-                                                 self.rect.y + self.btns_scroll[1]))  # кнопки открывающие карты
-        self.btns_rect = pg.Rect(btns[0].rect.x, btns[0].rect.y, btns[-1].rect.right, btns[-1].rect.bottom)
-        self.btns_surf = pg.Surface(self.btns_rect.size)
+        btns = createVSteckButtons(btn_rect.size, btn_rect.centerx+15, 10, 15, imgs, funcs,
+                                   screen_position=(self.rect.x + self.btns_scroll[0],
+                                                    self.rect.y + self.btns_scroll[1]))  # кнопки открывающие карты
+        self.btns_rect = pg.Rect(btns[0].rect.x, btns[0].rect.y, btns[-1].rect.right+15, btns[-1].rect.bottom+15)
+        self.btns_surf = pg.Surface(self.btns_rect.size).convert_alpha()
+        self.btns_surf.fill(self.bg)
+
         self.btns = btns
 
     def pg_event(self, event: pg.event.Event):
@@ -259,15 +275,17 @@ class SwitchMapUI(UI):
             btn.pg_event(event)
 
     def draw(self):
+        self.screen.blit(self.display, (0, 0))
+
         self.surface.fill(self.bg)
 
         for btn in self.btns:
             btn.draw(self.btns_surf)
         self.surface.blit(self.btns_surf, self.btns_scroll)
         self.surface.blit(self.title_surf, (0, 0))
-        self.display.blit(self.surface, self.rect)
 
-        self.screen.blit(self.display, (0, 0))
+        self.screen.blit(self.surface, self.rect)
+
         pygame.display.flip()
 
     def set_disabled_btns(self, ar):
@@ -300,8 +318,68 @@ class EndUI(UI):
             f"Вы погибли...", True, "red")
         w, h = text.get_size()
         self.surface.blit(text, (self.rect_surface.w // 2 - w // 2, self.rect_surface.h // 2 - h // 2))
+        rect_btn = pg.Rect((self.rect_surface.x + 10, self.rect_surface.bottom + 15,
+                            self.rect_surface.w - 20, 35))
+        self.btn_relive = Button(lambda _: self.app.relive(), rect_btn,
+                                 *createImagesButton(rect_btn.size, "Возродиться"))
 
     def draw(self):
         self.screen.blit(self.display, (0, 0))
         self.screen.blit(self.surface, self.rect_surface)
+        self.btn_relive.draw(self.screen)
         pg.display.flip()
+
+    def pg_event(self, event: pg.event.Event):
+        self.btn_relive.pg_event(event)
+
+
+# находит позицию xy чтобы один стоял в центре другого
+def center_pos_2rects(len1, big_len):
+    return big_len // 2 - len1 // 2
+
+
+class PauseUI(UI):
+    def init_ui(self):
+        self.rect = pg.Rect((0, 0, 320, 260))
+        w, h = self.screen.get_size()
+        self.rect.center = w // 2, h // 2
+        self.surface = pg.Surface(self.rect.size).convert_alpha()
+        self.surface.fill((82, 82, 91, 150))
+
+        text = textfont_btn.render(
+            f"Пауза", True, "white")
+        t_w, t_h = text.get_size()
+        self.surface.blit(text, (10, 10))
+        # end surf
+        # init btns
+        btn_size = 250, 35
+        btn_pos = center_pos_2rects(btn_size[0], self.rect.w), t_h+10+10
+        btn_rect = pg.Rect(btn_pos, btn_size)
+
+        btns = [
+            ("Сохранить карту", lambda _: self.app.set_scene(self.app.app.savem_scene)),
+            ("Открыть карту", lambda _: self.app.set_scene(self.app.app.openm_scene)),
+            ("Справка по игре", lambda _: self.app.app.open_help()),
+            ("Телепорт домой", lambda _: self.app.tp_to_home()),
+        ]
+
+        self.img_btns = [createImagesButton(btn_rect.size, t, font=textfont_btn)
+                         for t, f in btns]
+        funcs = [f for t, f in btns]
+
+        self.btns = createVSteckButtons(btn_rect.size, btn_rect.centerx, btn_rect.top, 15, self.img_btns, funcs,
+                                        screen_position=(self.rect.x,
+                                                         self.rect.y))  # кнопки открывающие карты
+
+    def draw(self):
+        self.screen.blit(self.display, (0, 0))
+        surface = self.surface.copy()
+        for btn in self.btns:
+            btn.draw(surface)
+
+        self.screen.blit(surface, self.rect)
+        pg.display.flip()
+
+    def pg_event(self, event: pg.event.Event):
+        for btn in self.btns:
+            btn.pg_event(event)

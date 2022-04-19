@@ -209,7 +209,10 @@ class GameMap:
         if chunk:
             if creature:
                 chunk[3][1] -= 1
-            chunk[1].remove(obj)
+            if obj in chunk[1]:
+                chunk[1].remove(obj)
+            else:
+                print("Error !!! del_dinamic_obj", (chunk_x, chunk_y), obj)
             return True
         return False
 
@@ -334,11 +337,15 @@ class GameMap:
             t = pickle.dumps(data)
             with open(file_p, 'wb') as f:
                 f.write(t)
+            print("GamaMap - SAVE!")
+            self.game.ui.new_sys_message(f"Карта сохранена #{num}")
         except Exception as exc:
             print("Ошибка сохранения:", exc)
+            self.game.ui.new_sys_message(f"Ошибка {exc}")
             return False
         finally:
-            print("GamaMap - SAVE!")
+
+
             return True
 
     def open_game_map(self, game, num=0):
@@ -373,7 +380,7 @@ class GameMap:
 
     def get_list_num_maps(self):
         files = self.get_list_maps()
-        ar = [int(f.split("-")[1].split(".")[0]) for f in files]
+        ar = [int(f.split("-")[1].split(".")[0]) for f in files if "None" not in f]
         return ar
 
 

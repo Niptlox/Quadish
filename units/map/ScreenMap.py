@@ -118,6 +118,15 @@ class ScreenMap:
                                                     chunk[0][index + 3] = tact
                                                 # tile[3] = tact --> тк срез
                                                 chunk[0][index + 3] += random.randint(FPS * 60, FPS * 120)
+                                    elif tile_type == 126:  # шкаф
+                                        img = tile_imgs[tile_type].copy()
+                                        step = TSIZE // 2
+                                        for ity in range(2):
+                                            for itx in range(2):
+                                                if tile[3]:
+                                                    item = tile[3][ity*2+itx]
+                                                    if item:
+                                                        img.blit(tile_hand_imgs[item[0]], (itx * step+2, ity * step+2))
                                     self.display.blit(img, b_pos)
                                     sol = tile[1]
                                     if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
