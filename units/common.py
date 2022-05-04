@@ -19,6 +19,8 @@ pygame.display.set_caption('Quadish')
 
 # screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SCALED, vsync=2)
 screen_ = pygame.display.set_mode(WINDOW_SIZE, vsync=2)
+screen_.blit(pygame.font.SysFont(None, 40, ).render("Загрузка...", True, "white"), (35, WSIZE[1] - 50))
+pygame.display.flip()
 display_ = pygame.Surface(WINDOW_SIZE)
 
 # TILE ==================================================
@@ -44,7 +46,7 @@ WCSIZE = WINDOW_CHUNK_SIZE
 # DEBUG ====================================================
 DEBUG = True
 # DEBUG = False
-show_chunk_grid = True
+show_chunk_grid = False
 show_entity_border = False
 show_group_obj = True
 show_info_menu = True

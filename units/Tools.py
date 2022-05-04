@@ -122,7 +122,7 @@ class ToolPickaxe(ToolSword):
     sprite = tile_imgs[index]
     dig_distance = 3 * TSIZE
     dig_distance2 = dig_distance ** 2
-    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 121, 122, 123, 124, 125, 127, 128, 130]
+    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 121, 122, 123, 124, 125, 126, 127, 128, 130]
 
     def __init__(self, owner):
         super().__init__(owner)
@@ -188,7 +188,7 @@ class ToolWoodPickaxe(ToolPickaxe):
     distance = 1.5 * TSIZE  # punch
     discard_distance = 4  # отбрасывание
     index = 530
-    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 121, 122, 123, 124, 125, 127, 128, 130]
+    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 121, 122, 123, 124, 125, 126, 127, 128, 130]
 
 
 class ToolHand(ToolPickaxe):
@@ -202,7 +202,7 @@ class ToolHand(ToolPickaxe):
     set_distance = 4 * TSIZE
     dig_distance2 = dig_distance ** 2
     set_distance2 = set_distance ** 2
-    capability = [1, 2, 11, 12, 101, 102, 103, 121, 122, 123, 124, 125, 127, 128, 130]
+    capability = [1, 2, 11, 12, 101, 102, 103, 121, 122, 123, 124, 125, 126, 127, 128, 130]
     Animation = AnimationHand
     discard_distance = 5
 
