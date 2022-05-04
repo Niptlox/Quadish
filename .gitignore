@@ -2,3 +2,4 @@ data/maps/*.pclv
 .vscode
 .idea
 *.aseprite
+__pycache__
