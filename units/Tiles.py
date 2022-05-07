@@ -20,6 +20,8 @@ def transform_hand(surf, size=HAND_RECT, colorkey=COLORKEY):
 sky = "#A5F3FC"
 
 player_img = create_tile_image("#E7E5E4", size=(TSIZE - 10, TSIZE - 2), bd=2)
+live_imgs = load_imgs("data/sprites/player/lives_{}.png", 5, size=(20, 20))
+bg_live_img = load_img("data/sprites/player/bg_live.png", size=(20, 20))
 
 # hand_pass_img = pygame.transform.smoothscale(player_img, HAND_RECT)
 hand_pass_img = None
@@ -69,6 +71,7 @@ bush_img = load_img("data/sprites/tiles/bush/bush.png")  # куст
 bush_imgs = [load_img(f"data/sprites/tiles/bush/bush_{i}.png") for i in range(4)]  # кустs
 
 smalltree_img = load_img("data/sprites/tiles/small_tree.png")
+leave_img = load_img(f"data/sprites/tiles/bush/bush_0.png")
 
 door_img = load_img("data/sprites/tiles/door.png")
 close_door_img = load_img("data/sprites/tiles/close_door.png")
@@ -138,6 +141,8 @@ tile_imgs = {0: none_img,
              101: bush_img,
              102: smalltree_img,
              103: cactus_img,
+             105: leave_img,
+             110: wood_img,
              120: water_img,
              121: table_img,
              122: chear_img,
@@ -176,9 +181,9 @@ IDX_TOOLS = {501, 502, 530, 531, 532}
 # блоки через которые нельзя пройти
 PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 103, 124, 128}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
-STANDING_TILES = {0, 101, 102, 103, 120, 121, 122, 123, 125, 126, 130}
+STANDING_TILES = {0, 101, 102, 103, 110, 120, 121, 122, 123, 125, 126, 130}
 # предметы которые нельзя физически поставить
-ITEM_TILES = {51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66}
+ITEM_TILES = {51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66} | IDX_TOOLS
 
 # специальные каринки предметов для инвентаря
 tile_hand_imgs = {k: tile_imgs[k] if k in ITEM_TILES else transform_hand(i) for k, i in tile_imgs.items()}
@@ -212,6 +217,8 @@ tile_words = {0: "None",
               101: "Куст",
               102: "Маленькое дерево",
               103: "Кактус",
+              105: "Листва",
+              110: "Живое дерево",
               120: "Вода",
               121: "Стол",
               122: "Стул",
@@ -239,7 +246,7 @@ tile_words = {0: "None",
 
 # Прочность блоков
 TILES_SOLIDITY = {
-    1: 15,
+    1: 20,
     2: 20,
     3: 35,
     4: 60,
@@ -250,6 +257,8 @@ TILES_SOLIDITY = {
     101: 25,
     102: 25,
     103: 25,
+    105: 15,
+    110: 45,
     120: 100,
     121: 100,
     122: 100,
@@ -273,7 +282,7 @@ DYNAMITE_NOT_BREAK = {5, 120}  # granite water
 
 # специальные шансы выпадения предметов
 tile_drops = {
-    102: [(12, 5, 1)],  # smalltree_img
+    # 102: [(12, 5, 1)],  # smalltree_img
     4: ((3, 1, 1),  # ore
         (64, (1, 2), 0.35),
         (61, (1, 2), 0.35),
@@ -289,6 +298,7 @@ tile_drops = {
         (66, 1, 0.0001)),
     124: [(123, 1, 1)],  # close door
     128: [(127, 1, 1)],  # close door
+    110: [(12, 1, 1)],  # из дерева древесина
 }
 
 

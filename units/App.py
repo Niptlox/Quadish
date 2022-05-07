@@ -8,6 +8,7 @@ EXIT = 0
 
 class App:
     screen = screen_
+    rect = pg.Rect((0, 0), WSIZE)
 
     def __init__(self, scene=None):
         self.clock = pg.time.Clock()
@@ -37,6 +38,11 @@ class App:
             self.last_scene = self.scene
             self.scene = scene
 
+    def exit(self):
+        self.running = False
+        if self.scene:
+            self.scene.running = False
+
 
 class Scene(App):
     def __init__(self, app) -> None:
@@ -58,6 +64,9 @@ class Scene(App):
     def set_scene(self, scene):
         self.running = False
         self.new_scene = scene
+
+    def exit(self):
+        self.app.exit()
 
 
 class SceneUI(Scene):

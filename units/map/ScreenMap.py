@@ -3,7 +3,7 @@ from time import time
 from units.biomes import biome_tiles, biome_colors
 from units.Tiles import *
 # rect для отрисовки
-from units.map.GameMap import GameMap
+from units.map.GameMap import GameMap, grow_tree
 
 srect_d = pg.Rect(-TSIZE, -TSIZE, WSIZE[0] + TSIZE, WSIZE[1] + TSIZE)
 
@@ -31,6 +31,7 @@ class ScreenMap:
         self.tact = tact
         tt = time()
         p = self.player
+        self.game_map.saved = False
         # climate = self.game_map.get_tile_climate(p.rect.x // TSIZE, p.rect.y // TSIZE)
         # if climate:
         #     biome_color = biome_colors[climate[0]]
@@ -118,21 +119,30 @@ class ScreenMap:
                                                     chunk[0][index + 3] = tact
                                                 # tile[3] = tact --> тк срез
                                                 chunk[0][index + 3] += random.randint(FPS * 60, FPS * 120)
+                                    elif tile_type == 102:
+                                        if tile[2] == -1:
+                                            if tile[3] <= tact:
+                                                if tile[3] != 0:
+                                                    # проращиваем дерево
+                                                    grow_tree((tile_x, tile_y), game_map=self.game_map)
+                                        else:
+                                            chunk[0][index + 3] = tact + tile[2]
+                                            chunk[0][index + 2] = -1
                                     elif tile_type == 126:  # шкаф
                                         img = tile_imgs[tile_type].copy()
                                         step = TSIZE // 2
                                         for ity in range(2):
                                             for itx in range(2):
                                                 if tile[3]:
-                                                    item = tile[3][ity*2+itx]
+                                                    item = tile[3][ity * 2 + itx]
                                                     if item:
-                                                        img.blit(tile_hand_imgs[item[0]], (itx * step+2, ity * step+2))
+                                                        img.blit(tile_hand_imgs[item[0]],
+                                                                 (itx * step + 2, ity * step + 2))
                                     self.display.blit(img, b_pos)
                                     sol = tile[1]
                                     if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
                                         br_i = 2 - int(sol * break_imgs_cnt / TILES_SOLIDITY[tile_type])
                                         self.display.blit(break_imgs[br_i], b_pos)
-
 
                             # else:
                             #     b_pos = (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1])

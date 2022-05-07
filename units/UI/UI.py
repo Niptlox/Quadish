@@ -1,10 +1,10 @@
 from pygame import Surface
 
 from units.Texture import BLACK, WHITE
-from units.Tiles import tile_imgs, sky, tile_words
+from units.Tiles import tile_imgs, sky, tile_words, live_imgs, bg_live_img
 from units.UI.Button import createImagesButton, createVSteckButtons, Button
 from units.common import *
-from units.UI.ClassUI import UI
+from units.UI.ClassUI import SurfaceUI, UI, SurfaceAlphaUI
 
 # INIT TEXT ==================================================
 
@@ -23,9 +23,10 @@ text_color_light = "#F5F5F4"
 
 sys_message_bg = (68, 64, 60, 150)
 
+color_none = (0, 0, 0, 0)
+
 
 # =============================================================
-
 
 
 class GameUI(UI):
@@ -58,6 +59,9 @@ class GameUI(UI):
         self.sys_message_count_tact = 0
         self.sys_message_surface = pg.Surface(self.sys_message_rect.size).convert_alpha()
 
+        # self.playerui = SurfaceAlphaUI((0, 0, 280, 120))
+        self.playerui = SurfaceAlphaUI((0, 0, 450, 420))
+        self.playerui.rect.bottom = self.rect.bottom
         self.new_sys_message("Привет игрок")
 
     def draw_sky(self):
@@ -87,6 +91,9 @@ class GameUI(UI):
                 self.sys_message_surface.set_alpha((self.sys_message_count_tact - self.sys_message_left_tact) * 32)
 
             self.display.blit(self.sys_message_surface, self.sys_message_rect)
+
+        self.redraw_playerui()
+        self.playerui.draw(self.display)
         # pygame.transform.scale(display,(WINDOW_SIZE[0]//1.8, WINDOW_SIZE[1]//1.8)), (100, 100)
         self.screen.blit(self.display, (0, 0))
         pygame.display.flip()
@@ -195,6 +202,25 @@ class GameUI(UI):
         self.inventory_info_index_surface.fill(self.top_bg_color)
         self.inventory_info_index_surface.blit(text, (3, 2))
 
+    def redraw_playerui(self):
+        self.playerui.fill(color_none)
+        cnt_in_row = 15
+        step = live_imgs[0].get_width() + 5
+        x, y = 10, self.playerui.rect.h - step - 5
+        for i in range(self.app.player.max_lives // 10):
+            if i * 10 < self.app.player.lives:
+                self.playerui.blit(live_imgs[0], (x, y))
+            else:
+                if (i - 1) * 10 < self.app.player.lives and self.app.player.lives % 10 > 0:
+                    self.playerui.blit(live_imgs[4 - self.app.player.lives % 10 // 2], (x, y))
+                else:
+                    self.playerui.blit(bg_live_img, (x, y))
+
+            x += step
+            if (i + 1) % cnt_in_row == 0:
+                y -= step
+                x = 10
+
     def pg_event(self, event: pg.event.Event):
         if event.type == pg.MOUSEBUTTONDOWN:
             if event.button == pg.BUTTON_LEFT:
@@ -240,7 +266,7 @@ class SwitchMapUI(UI):
         self.title_surf.blit(textfont_btn.render(self.title, True, WHITE), (10, 10))
 
         btn_rect = pg.Rect(0, 20 + 40, 200, 35)
-        self.btns_scroll = [(w - btn_rect.w) // 2-15, btn_rect.y]
+        self.btns_scroll = [(w - btn_rect.w) // 2 - 15, btn_rect.y]
         self.btns_scroll_step = 20 + btn_rect.height
 
         n = self.app.game.game_map.save_slots
@@ -248,10 +274,10 @@ class SwitchMapUI(UI):
                 for i in range(n)]
         self.img_btns = imgs
         funcs = [lambda b, i=i: self.open_map(b, i) for i in range(n)]
-        btns = createVSteckButtons(btn_rect.size, btn_rect.centerx+15, 10, 15, imgs, funcs,
+        btns = createVSteckButtons(btn_rect.size, btn_rect.centerx + 15, 10, 15, imgs, funcs,
                                    screen_position=(self.rect.x + self.btns_scroll[0],
                                                     self.rect.y + self.btns_scroll[1]))  # кнопки открывающие карты
-        self.btns_rect = pg.Rect(btns[0].rect.x, btns[0].rect.y, btns[-1].rect.right+15, btns[-1].rect.bottom+15)
+        self.btns_rect = pg.Rect(btns[0].rect.x, btns[0].rect.y, btns[-1].rect.right + 15, btns[-1].rect.bottom + 15)
         self.btns_surf = pg.Surface(self.btns_rect.size).convert_alpha()
         self.btns_surf.fill(self.bg)
 
@@ -340,7 +366,7 @@ def center_pos_2rects(len1, big_len):
 
 class PauseUI(UI):
     def init_ui(self):
-        self.rect = pg.Rect((0, 0, 320, 260))
+        self.rect = pg.Rect((0, 0, 320, 320))
         w, h = self.screen.get_size()
         self.rect.center = w // 2, h // 2
         self.surface = pg.Surface(self.rect.size).convert_alpha()
@@ -353,7 +379,7 @@ class PauseUI(UI):
         # end surf
         # init btns
         btn_size = 250, 35
-        btn_pos = center_pos_2rects(btn_size[0], self.rect.w), t_h+10+10
+        btn_pos = center_pos_2rects(btn_size[0], self.rect.w), t_h + 10 + 10
         btn_rect = pg.Rect(btn_pos, btn_size)
 
         btns = [
@@ -361,6 +387,7 @@ class PauseUI(UI):
             ("Открыть карту", lambda _: self.app.set_scene(self.app.app.openm_scene)),
             ("Справка по игре", lambda _: self.app.app.open_help()),
             ("Телепорт домой", lambda _: self.app.tp_to_home()),
+            ("Сохранить и выйти", lambda _: self.app.save_and_exit()),
         ]
 
         self.img_btns = [createImagesButton(btn_rect.size, t, font=textfont_btn)

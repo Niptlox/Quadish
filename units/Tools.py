@@ -122,7 +122,7 @@ class ToolPickaxe(ToolSword):
     sprite = tile_imgs[index]
     dig_distance = 3 * TSIZE
     dig_distance2 = dig_distance ** 2
-    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 121, 122, 123, 124, 125, 126, 127, 128, 130]
+    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 105, 110, 121, 122, 123, 124, 125, 126, 127, 128, 130]
 
     def __init__(self, owner):
         super().__init__(owner)
@@ -188,7 +188,7 @@ class ToolWoodPickaxe(ToolPickaxe):
     distance = 1.5 * TSIZE  # punch
     discard_distance = 4  # отбрасывание
     index = 530
-    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 121, 122, 123, 124, 125, 126, 127, 128, 130]
+    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 105, 110, 121, 122, 123, 124, 125, 126, 127, 128, 130]
 
 
 class ToolHand(ToolPickaxe):
@@ -202,7 +202,7 @@ class ToolHand(ToolPickaxe):
     set_distance = 4 * TSIZE
     dig_distance2 = dig_distance ** 2
     set_distance2 = set_distance ** 2
-    capability = [1, 2, 11, 12, 101, 102, 103, 121, 122, 123, 124, 125, 126, 127, 128, 130]
+    capability = [1, 2, 11, 12, 101, 102, 103, 105, 110, 121, 122, 123, 124, 125, 126, 127, 128, 130]
     Animation = AnimationHand
     discard_distance = 5
 
@@ -303,7 +303,7 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
 
 def check_dig_tile(game_map, x, y, tool: ToolHand):
     tile = game_map.get_static_tile(x, y)
-    if tile is None or tile[1] == -1:
+    if tile is None:# or tile[1] == -1:
         return
     d_ttile = game_map.get_static_tile_type(x, y - 1)
     if d_ttile in {101, 102, 103}:

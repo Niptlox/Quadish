@@ -4,17 +4,22 @@ import pygame
 import pygame as pg
 
 # INIT GAME ==============================================
+pygame.init()  # initiate pygame
+
+desktop_size = pygame.display.get_desktop_sizes()[0]
 
 print("INIT GAME VARS")
 GAME_VERSION = "0.7"
 WINDOW_SIZE = (2200, 1100)
 WINDOW_SIZE = (700 * 2, 400 * 2)
-# WINDOW_SIZE = (1920, 1080)
+
+if WINDOW_SIZE[0] > desktop_size[0]:
+    WINDOW_SIZE = desktop_size
 WSIZE = WINDOW_SIZE
+# WINDOW_SIZE = (1920, 1080)
 
 FPS = 30
 
-pygame.init()  # initiate pygame
 pygame.display.set_caption('Quadish')
 
 # screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SCALED, vsync=2)

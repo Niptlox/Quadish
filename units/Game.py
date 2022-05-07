@@ -52,7 +52,7 @@ class GameScene(Scene):
                 elif event.key == K_LCTRL:
                     self.ctrl_on = True
                 if event.key == K_s and self.ctrl_on:
-                    self.game_map.save_game_map(self, self.game_map.num_save_map)
+                    self.game_map.save_current_game_map()
             elif event.type == KEYUP:
                 if event.key == K_LCTRL:
                     self.ctrl_on = False
@@ -139,3 +139,7 @@ class PauseSceneUI(SceneUI):
     def tp_to_home(self):
         self.app.game_scene.player.tp_to_home()
         self.set_scene(self.app.game_scene)
+
+    def save_and_exit(self):
+        self.app.game_scene.game_map.save_current_game_map()
+        self.exit()

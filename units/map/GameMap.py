@@ -25,7 +25,8 @@ class GameMap:
         self.chunk_arr_size = self.tile_data_size * CHUNK_SIZE ** 2
         self.game_map = {}
         self.base_generation = base_generation
-        self.num_save_map = None
+        self.num_save_map = 0
+        self.saved = False
         if self.base_generation is None:
             self.new_base_generation()
 
@@ -234,7 +235,8 @@ class GameMap:
         # i = (cy * CHUNK_SIZE + cx) * self.tile_data_size
         return ((y % CHUNK_SIZE) * CHUNK_SIZE + (x % CHUNK_SIZE)) * self.tile_data_size
 
-    def get_tile_ttile(self, ttile):
+    @staticmethod
+    def get_tile_ttile(ttile):
         """тип, прочность, состояние, переменная"""
         return [ttile, TILES_SOLIDITY.get(ttile, -1), 0, 0]
 
@@ -314,7 +316,7 @@ class GameMap:
                         tile_type_state = random_plant_selection(biome_info[i][0])
                         if tile_type_state:
                             tile_type = tile_type_state[0]
-                            static_tiles[tile_index+2] = tile_type_state[1]
+                            static_tiles[tile_index + 2] = tile_type_state[1]
                 if tile_index >= self.chunk_arr_size:
                     break
                 if tile_type is not None:
@@ -327,13 +329,17 @@ class GameMap:
         creature_cash[1] = cnt_creatures
         return res
 
+    def save_current_game_map(self):
+        self.save_game_map(self.game, self.num_save_map)
+
     def save_game_map(self, game, num=0):
+        self.saved = True
         file_p = f'data/maps/game_map-{num}.pclv'
         print(f"GamaMap: '{file_p}' - SAVING...")
         self.num_save_map = num
         try:
             data = {"game_map_vars": self.get_vars(), "player_vars": game.player.get_vars(),
-                     "game_version": GAME_VERSION, "game_tact": game.tact}
+                    "game_version": GAME_VERSION, "game_tact": game.tact}
             t = pickle.dumps(data)
             with open(file_p, 'wb') as f:
                 f.write(t)
@@ -344,7 +350,6 @@ class GameMap:
             self.game.ui.new_sys_message(f"Ошибка {exc}")
             return False
         finally:
-
 
             return True
 
@@ -384,21 +389,35 @@ class GameMap:
         return ar
 
 
-def random_plant_selection(biome = None):
+def random_plant_selection(biome=None):
     if random.randint(0, 5) == 0:
         plants = {101: 0.1, 102: 0.1, 120: 0.05}
         if biome == 0:
             plants = {101: 0.1, 103: 0.1}
         plant_tile_type = random.choices(list(plants.keys()), list(plants.values()), k=1)[0]
-            
+
         if plant_tile_type == 101:
             return plant_tile_type, random.randint(0, 3)
+        if plant_tile_type == 102:
+            if random.randint(0, 10) > 8:
+                return plant_tile_type, random.randint(0, FPS * 430)
+            else:
+                return plant_tile_type, 0
         return plant_tile_type, 0
     return None
+
+
+def grow_tree(pos, game_map: GameMap):
+    woods = ((0, 0), (0, -1), (0, -2), (0, -3))
+    leaves = ((-1, -1), (1, -1), (1, -2), (-1, -2), (1, -3), (-1, -3), (0, -4))
+    x, y = pos
+    for ax, ay in woods:
+        game_map.set_static_tile(x + ax, y + ay, GameMap.get_tile_ttile(110))
+    for ax, ay in leaves:
+        if game_map.get_static_tile_type(x + ax, y + ay, default=0) == 0:
+            game_map.set_static_tile(x + ax, y + ay, GameMap.get_tile_ttile(105))
 
 
 def random_creature_selection():
     crt = random.choices([None, Slime, Cow, Wolf], [90, 10, 5, 5], k=1)
     return crt[0]
-
-
