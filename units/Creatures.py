@@ -102,6 +102,7 @@ class Slime(Creature):
         self.jump_state = -1
         self.color = random.choice(self.colors)
         if random.randint(0, 100) < 5:
+            # SLIME BOSS
             self.color = self.color_hard
             self.max_lives = self.max_lives_hard
             self.lives = self.max_lives_hard
@@ -111,18 +112,6 @@ class Slime(Creature):
             self.jump_speed = 12
             self.move_speed = 4
             self.drop_items = [(ItemsTile, (51, (10, 20))), (ItemsTile, (63, (0, 5))), (ItemsTile, (66, (1, 2)))]
-            super().__init__(game, (x, y))
-        elif random.randint(0, 100) < 2:
-            self.color = "#ff9d00"
-            self.max_lives = 250
-            self.lives = 250
-            self.punch_damage = 35
-            self.width, self.height = TSIZE * 3, TSIZE * 3 - 15
-            self.reduction_step = 12
-            self.jump_speed = 12
-            self.move_speed = 4
-            self.drop_items = [(ItemsTile, (51, (20, 30))), (ItemsTile, (63, (3, 8))), (ItemsTile, (66, (4, 7))),
-                               (ItemsTile, (55, (1, 2)))]
             super().__init__(game, (x, y))
 
         self.sprites = slime_animation(self.color, self.rect.size, self.reduction_step)
@@ -163,7 +152,6 @@ class Cow(Creature):
     max_lives = 20
     drop_items = [(ItemsTile, (52, (1, 2)))]
     move_speed = 2
-    
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
@@ -186,27 +174,27 @@ class Cow(Creature):
             self.move_direction = random.randint(-1, 1)
         return True
 
+
 class Wolf(Creature):
     width, height = int(TSIZE * 1), int(TSIZE * 0.9)
-    
+
     color = "#708090"
-    max_lives = 35                              
+    max_lives = 35
     drop_items = [(ItemsTile, (56, (1, 3))), (ItemsTile, (58, (1)))]
-    
+
     move_speed = 3.5
     jump_speed = 8
-    
+
     enemy = True
     punch_damage = 8
     punch_speed = 3
     punch_discard = 8
-    
+
     # агриться ли сейчас на игрока
     angry = False
     angry_rect_size = (int(TSIZE * 19), int(TSIZE * 19))
     move_speed_angry = 6
     angry_player = None
-    
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
@@ -224,32 +212,43 @@ class Wolf(Creature):
             self.movement_vector.x += self.move_direction * self.move_speed
         if self.collisions["bottom"] and (self.collisions["left"] or self.collisions["right"]):
             self.jump(self.jump_speed)
-                
-        if self.angry:            
+
+        if self.angry:
             if self.angry_player.rect.x > self.rect.x:
                 self.move_direction = 1
-            else: 
+            else:
                 self.move_direction = -1
-            
+
             self.angry_rect.center = self.rect.center
             if not self.angry_rect.colliderect(self.angry_player):
                 self.angry = False
-                self.angry_player = None                  
+                self.angry_player = None
         else:
             self.move_tact -= 1
             if self.move_tact <= 0:
                 self.move_tact = random.randint(30, 205)
                 self.move_direction = random.randint(-1, 1)
-            
+
             self.angry_rect.center = self.rect.center
             if self.angry_rect.colliderect(self.game.player.rect):
                 self.angry = True
                 self.angry_player = self.game.player
                 self.move_tact = 0
-                    
-        
-        
+
         return True
 
 
-CREATURES = [Creature, Slime, Cow, Wolf]
+class SlimeBigBoss(Slime):
+    colors = ["#ff9d00"]
+    max_lives = 250
+    lives = 250
+    punch_damage = 35
+    width, height = TSIZE * 3, TSIZE * 3 - 15
+    reduction_step = 12
+    jump_speed = 12
+    move_speed = 4
+    drop_items = [(ItemsTile, (51, (20, 30))), (ItemsTile, (63, (3, 8))), (ItemsTile, (66, (4, 7))),
+                  (ItemsTile, (55, (1, 2)))]
+
+
+CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss]

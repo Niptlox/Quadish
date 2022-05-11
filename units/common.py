@@ -2,6 +2,8 @@ import math
 
 import pygame
 import pygame as pg
+# используетсЯ ы других модулях
+from units.creating_items import RECIPES
 
 # INIT GAME ==============================================
 pygame.init()  # initiate pygame
@@ -12,6 +14,7 @@ print("INIT GAME VARS")
 GAME_VERSION = "0.7"
 WINDOW_SIZE = (2200, 1100)
 WINDOW_SIZE = (700 * 2, 400 * 2)
+WINDOW_SIZE = (1000, 650)
 
 if WINDOW_SIZE[0] > desktop_size[0]:
     WINDOW_SIZE = desktop_size
@@ -31,7 +34,7 @@ display_ = pygame.Surface(WINDOW_SIZE)
 # TILE ==================================================
 
 TILE_SIZE = 32
-# TILE_SIZE = 8
+# TILE_SIZE = 10
 TSIZE = TILE_SIZE
 
 # TILE_SIZE = 16
@@ -51,8 +54,8 @@ WCSIZE = WINDOW_CHUNK_SIZE
 # DEBUG ====================================================
 DEBUG = True
 # DEBUG = False
-show_chunk_grid = False
-show_entity_border = False
+show_chunk_grid = True
+show_entity_border = True
 show_group_obj = True
 show_info_menu = True
 
@@ -74,6 +77,7 @@ CLS_WEAPON = 8
 CLS_SWORD = 16
 CLS_PICKAXE = 32
 CLS_EAT = 64
+CLS_COMMON = 128
 
 # GENERATING MAP OR CHANK ========================================
 
@@ -90,30 +94,9 @@ HAND_SIZE = int(TILE_SIZE // 1.5)
 HAND_RECT = (HAND_SIZE, HAND_SIZE)
 
 FALL_SPEED = 0.7
-MAX_FALL_SPEED = 100
+MAX_FALL_SPEED = 10000
 AUTO_BUILD = True  # копать ближайший если мышка далеко
 
-# РЕЦЕПТЫ ПРЕДМЕТОВ ================================================
-
-# count == -1 : должен косаться предмета
-RECIPES = [
-    [(11, 2), ((12, 1),)],  # доски
-    [(121, 1), ((11, 2),)],  # стол
-    [(122, 1), ((11, 2), (121, -1))],  # стул
-    [(123, 1), ((11, 2), (121, -1))],  # дверь
-    [(126, 1), ((11, 4), (51, 2), (121, -1))],  # шкаф
-    [(127, 1), ((11, 2), (121, -1))],  # люк
-    [(130, 1), ((58, 2), (101, 1), (121, -1))],  # сп мешок из шкур
-    [(125, 1), ((11, 1), (64, 8), (121, -1))],  # котёл
-    [(9, 1), ((64, 2), (11, 1), (51, 2), (61, 1), (121, -1))],  # Tnt
-    # [(9, 1), ((3, 3),)],  # tnt
-    [(55, 1), ((66, 2), (53, 10), (125, -1))],
-    [(501, 1), ((11, 2), (64, 3), (51, 1), (3, 1), (121, -1))],  # sword
-    [(502, 1), ((11, 4), (64, 6), (51, 2), (3, 2), (501, 1), (63, 3), (66, 1), (121, -1))],  # gold sword
-    [(530, 1), ((11, 10), (51, 2), (121, -1))],  # pickaxe
-    [(531, 1), ((11, 4), (64, 5), (51, 1), (3, 1), (121, -1))],  # pickaxe
-    [(532, 1), ((11, 7), (64, 7), (51, 7), (3, 7), (531, 1), (502, 1), (63, 5), (66, 1), (121, -1))],  # gold pickaxe
-]
 
 # INIT TIME ================================================================
 

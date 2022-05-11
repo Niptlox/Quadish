@@ -38,7 +38,7 @@ class GameUI(UI):
         # self.sky_surface = pg.Surface(self.display.get_size()).convert_alpha()
         # self.sky_surface.fill(sky)
 
-        self.info_surface = pygame.Surface((200, 80), pygame.SRCALPHA, 32)
+        self.info_surface = pygame.Surface((250, 80), pygame.SRCALPHA, 32)
 
         self.cell_size = TSIZE + 7
         self.inventory_rect = pg.Rect((0, 0, self.cell_size * self.app.player.inventory_size, self.cell_size))
@@ -82,7 +82,7 @@ class GameUI(UI):
             self.display.blit(self.inventory_info_index_surface,
                               (self.inventory_info_index * self.cell_size, self.cell_size))
         if show_info_menu:
-            self.display.blit(self.info_surface, (WINDOW_SIZE[0] - 200, 0))
+            self.display.blit(self.info_surface, (WINDOW_SIZE[0] - 250, 0))
         if self.sys_message_left_tact > 0:
             self.sys_message_left_tact -= 1
             if self.sys_message_left_tact < 32:
@@ -207,19 +207,21 @@ class GameUI(UI):
         cnt_in_row = 15
         step = live_imgs[0].get_width() + 5
         x, y = 10, self.playerui.rect.h - step - 5
+        iy = 0
         for i in range(self.app.player.max_lives // 10):
-            if i * 10 < self.app.player.lives:
+            if i < self.app.player.lives // 10:
                 self.playerui.blit(live_imgs[0], (x, y))
             else:
-                if (i - 1) * 10 < self.app.player.lives and self.app.player.lives % 10 > 0:
+                if (i - 1) < self.app.player.lives // 10 and self.app.player.lives % 10 > 0:
                     self.playerui.blit(live_imgs[4 - self.app.player.lives % 10 // 2], (x, y))
                 else:
                     self.playerui.blit(bg_live_img, (x, y))
 
             x += step
             if (i + 1) % cnt_in_row == 0:
-                y -= step
-                x = 10
+                y -= 15
+                x = 10 + iy
+                iy += 2
 
     def pg_event(self, event: pg.event.Event):
         if event.type == pg.MOUSEBUTTONDOWN:

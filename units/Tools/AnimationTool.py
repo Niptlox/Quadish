@@ -104,3 +104,39 @@ class AnimationSword(AnimationTool):
             if self.rotate > self.rotate_end:
                 self.end()
 
+
+class AnimationHand(AnimationTool):
+    distance_norm = TSIZE * 0.7
+    distance_start = TSIZE * 0.6
+    max_distance = TSIZE * 1
+    speed = 1
+
+    def __init__(self, tool):
+        super().__init__(tool)
+        self.dist = self.distance_norm
+        self.direction = 1
+
+    def start(self):
+        super().start()
+        self.dist = self.distance_start
+        self.direction = 1
+
+    def draw(self, surface, x, y):
+        if self.sprite:
+            vec: Vector2 = Vector2(self.tool.vector_to_mouse)
+            if vec.x == vec.y == 0:
+                vec = Vector2(self.dist, 0)
+            else:
+                vec.scale_to_length(self.dist)
+            vec -= Vector2(HAND_SIZE // 2, HAND_SIZE // 2)
+            surface.blit(self.sprite, (x + int(vec.x), y + int(vec.y)))
+
+    def update(self):
+        if self.animation:
+            self.dist += self.speed * self.direction
+            if self.dist >= self.max_distance:
+                self.direction *= -1
+            elif self.dist <= self.distance_norm:
+                self.animation = False
+                self.dist = self.distance_norm
+

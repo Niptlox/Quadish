@@ -1,3 +1,4 @@
+import random
 from time import time
 
 from pygame import Vector2
@@ -20,7 +21,7 @@ class Player(Entity.PhysicalObject):
     player_img = player_img
     dig_rect_img = dig_rect_img
     hand_img = hand_pass_img
-    max_lives = 20
+    start_max_lives = 20
 
     def __init__(self, game, x, y) -> None:
         super().__init__(game, x, y, self.width, self.height, use_physics=True)
@@ -28,6 +29,7 @@ class Player(Entity.PhysicalObject):
         self.ui = game.ui
 
         self.alive = True
+        self.max_lives = self.start_max_lives
         self.lives = self.max_lives
         self.lives_surface = pg.Surface((self.rect.w, 6)).convert_alpha()
         self.eat = False
@@ -66,6 +68,7 @@ class Player(Entity.PhysicalObject):
         self.max_speed = 11
         self.running = True
         self.air_timer = 0
+        self.first_fall = True
 
         # INVENTORY ============================        
 
@@ -98,7 +101,7 @@ class Player(Entity.PhysicalObject):
 
     def set_vars(self, vrs):
         vrs["inventory"] = []
-        vrs["rect"].size  = self.rect.size
+        vrs["rect"].size = self.rect.size
         for i in vrs.pop("_inventory"):
             if i is None:
                 vrs["inventory"].append(None)
@@ -130,6 +133,8 @@ class Player(Entity.PhysicalObject):
                 self.put_to_inventory(item)
             elif event.key == K_t:
                 self.tp_to_home()
+            elif event.key == K_r:
+                self.tp_random()
             elif event.key == K_q:  # выкинуть все предметы в текущей ячейке инвентаря
                 self.discard_item(self.active_cell)
             elif event.key == K_f:
@@ -149,10 +154,11 @@ class Player(Entity.PhysicalObject):
                 self.dig = True
             if event.button == 3:
                 self.set = True
-                if self.tool is None:
-                    self.toolHand.tile_click = True
-                else:
-                    self.tool.tile_click = True
+                self.vector = Vector2(self.rect.center)
+                vector_player_display = self.vector - Vector2(self.game.screen_map.scroll)
+                vector_to_mouse = Vector2(event.pos) - vector_player_display
+                self.tool.right_button_click(vector_to_mouse)
+
         elif event.type == MOUSEBUTTONUP:
             if event.button == 1:
                 self.dig = False
@@ -173,7 +179,15 @@ class Player(Entity.PhysicalObject):
         self.ui.new_sys_message("Точка дома установлена")
 
     def tp_to_home(self):
-        self.rect.center = self.spawn_point
+        self.tp_to(self.spawn_point)
+
+    def tp_random(self):
+        # self.tp_to((random.randint(-1e9, 1e9), random.randint(-1e9, 1e9)))
+        self.tp_to((2**31-1500, 2**31-1500))
+
+    def tp_to(self, pos):
+        self.rect.center = pos
+        self.game.screen_map.teleport_to_player()
 
     def relive(self):
         self.alive = True
@@ -183,6 +197,7 @@ class Player(Entity.PhysicalObject):
         self.jump_count = 0
         self.vertical_momentum = 0
         self.physical_vector = pg.Vector2(0, 0)
+        self.first_fall = True
         print("relive", self.lives)
 
     def update(self, tact):
@@ -240,13 +255,13 @@ class Player(Entity.PhysicalObject):
         pg.draw.rect(self.lives_surface, "#A3E635AA", ((1, 1), (w, 4)))
         surface.blit(self.lives_surface, (pos_obj[0], pos_obj[1] - 10))
 
-    def discard_item(self, num_cell=None, items=None, discard_vector=(TSIZE*2, 0)):
+    def discard_item(self, num_cell=None, items=None, discard_vector=(TSIZE * 2, 0)):
         if num_cell is not None:
             items = self.inventory[num_cell]
             self.inventory[num_cell] = None
             self.redraw_inventory()
         if items:
-            ix, iy = self.rect.centerx + discard_vector[0], self.rect.centery+discard_vector[1]
+            ix, iy = self.rect.centerx + discard_vector[0], self.rect.centery + discard_vector[1]
             items.rect.x, items.rect.y = ix, iy
             items.alive = True
             print(ix, iy, *self.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
@@ -316,6 +331,7 @@ class Player(Entity.PhysicalObject):
                     else:
                         self.inventory[i].count -= count
                         break
+        self.redraw_inventory()
         return True
 
     def get_cell_from_inventory(self, num_cell):
@@ -396,15 +412,20 @@ class Player(Entity.PhysicalObject):
         player_movement[0] += self.speed
         player_movement[1] += self.vertical_momentum
         self.vertical_momentum += self.fall_speed
+        # print(self.vertical_momentum)
+
         if self.vertical_momentum > self.max_fall_speed:
             self.vertical_momentum = self.max_fall_speed
 
         collisions = self.move(player_movement, self.game.screen_map.static_tiles)
 
         if collisions['bottom']:
+            if not self.first_fall and self.vertical_momentum > 25:
+                self.damage(int(self.vertical_momentum // 5))
             self.air_timer = 0
             self.jump_count = 0
             self.vertical_momentum = 0
+            self.first_fall = False
         else:
             self.air_timer += 1
         if collisions['top']:

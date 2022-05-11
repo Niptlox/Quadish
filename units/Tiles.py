@@ -4,6 +4,7 @@ from units.Image import *
 
 DEBUG_DRAW_TILES = False
 
+
 # CREATING TILE IMAGES ========================================
 
 
@@ -102,6 +103,7 @@ potion_life_item_img = load_img("data/sprites/tiles/potion_life_item.png", None)
 slime_item_img = load_img("data/sprites/tiles/slime_item.png", None)
 pelt_wolf_item_img = load_img("data/sprites/tiles/pelt_wolf_item.png", None)
 
+stick_img = load_img("data/sprites/items/stick.png", None)
 blore_ore_img = load_img(r"data\sprites\items\blore_ore.png", None)  # blue ore
 copper_ore_img = load_img(r"data\sprites\items\copper_ore.png", None)
 gold_ore_img = load_img(r"data\sprites\items\gold_ore.png", None)
@@ -110,14 +112,18 @@ silver_ore_img = load_img(r"data\sprites\items\silver_ore.png", None)
 
 ruby_item_img = load_img(r"data\sprites\items\ruby.png", None)
 
+summonerSlimeBoss_img = load_img(r"data/sprites/tools/SummonerSlimeBoss/SummonerSlimeBoss.png", None)
+
 sword_77_img, sword_77_imgs = load_round_tool_imgs("data/sprites/tools/sword_77/sword_77_{}.png", 4)
 
 sword_1_img, sword_1_imgs = load_round_tool_imgs("data/sprites/tools/sword_1/sword_1_{}.png", 4)
 pickaxe_0_img, pickaxe_0_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_0/pickaxe_0_{}.png", 4)
 pickaxe_1_img, pickaxe_1_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_1/pickaxe_1_{}.png", 4)
+pickaxe_3_img, pickaxe_3_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_3/pickaxe_3_{}.png", 4)
 pickaxe_77_img, pickaxe_77_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_77/pickaxe_77_{}.png", 4)
 
-tile_imgs = {0: none_img,
+tile_imgs = {None: none_img,
+             0: none_img,
              1: grass_img,
              2: dirt_img,
              3: stone_img,
@@ -162,6 +168,10 @@ tile_imgs = {0: none_img,
              530: pickaxe_0_img,
              531: pickaxe_1_img,
              532: pickaxe_77_img,
+             533: pickaxe_3_img,
+             610: summonerSlimeBoss_img,
+
+             801: stick_img,
              }
 count_tiles = len(tile_imgs)
 
@@ -174,16 +184,17 @@ tile_many_imgs = {101: bush_imgs,
                   530: pickaxe_0_imgs,
                   531: pickaxe_1_imgs,
                   532: pickaxe_77_imgs,
+                  533: pickaxe_3_imgs,
                   }
 
-IDX_TOOLS = {501, 502, 530, 531, 532}
+IDX_TOOLS = {501, 502, 530, 531, 532, 533, 610}
 
 # блоки через которые нельзя пройти
 PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 103, 124, 128}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
 STANDING_TILES = {0, 101, 102, 103, 110, 120, 121, 122, 123, 125, 126, 130}
 # предметы которые нельзя физически поставить
-ITEM_TILES = {51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66} | IDX_TOOLS
+ITEM_TILES = {51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 801}
 
 # специальные каринки предметов для инвентаря
 tile_hand_imgs = {k: tile_imgs[k] if k in ITEM_TILES else transform_hand(i) for k, i in tile_imgs.items()}
@@ -193,7 +204,8 @@ tile_hand_imgs[121] = load_img("data/sprites/tiles/table_item.png", HAND_RECT)  
 tile_hand_imgs[122] = load_img("data/sprites/tiles/chear_item.png", HAND_RECT)  # тк есть прозрачность
 tile_hand_imgs[130] = bedroll_of_pelts_item_img
 
-tile_words = {0: "None",
+tile_words = {None: "None",
+              0: "None",
               1: "Трава",
               2: "Земля",
               3: "Камень",
@@ -240,13 +252,18 @@ tile_words = {0: "None",
               530: "Деревянная кирка",
               531: "Железная кирка",
               532: "Золотая кирка",
+              533: "Медная кирка",
+
+              610: "Призыатель босса слизней",
+
+              801: "Палка"
               }
 
 # INIT_TILES ====================================================
 
 # Прочность блоков
 TILES_SOLIDITY = {
-    1: 20,
+    1: 15,
     2: 20,
     3: 35,
     4: 60,
@@ -299,6 +316,7 @@ tile_drops = {
     124: [(123, 1, 1)],  # close door
     128: [(127, 1, 1)],  # close door
     110: [(12, 1, 1)],  # из дерева древесина
+    105: [(105, 1, 1), (102, 1, 0.13), (801, (1, 2), 0.25)]
 }
 
 

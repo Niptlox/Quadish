@@ -6,9 +6,9 @@ from noise import snoise2 as pnoise2
 
 from units import Items
 from units.Items import ItemsTile
-from units.Tools import ItemTool
+from units.Tools import ItemTool, TOOLS
 from units.biomes import biome_of_pos
-from units.Creatures import Slime, Cow, Wolf
+from units.Creatures import Slime, Cow, Wolf, SlimeBigBoss
 from units.Entity import PhysicalObject
 from ..Tiles import *
 
@@ -48,12 +48,13 @@ class GameMap:
 
     def get_vars(self):
         d = self.__dict__.copy()
-        print("==", d["game_map"][0, 0])
+        ch = d["game_map"][-1, -1]
+        print("==", d["game_map"][-1, -1])
         # === convert dynamic_objs ===
         game_map = {}
         for pos, chunk in d["game_map"].items():
             game_map[pos] = chunk.copy()
-            game_map[pos][1] = [(type(obj), obj.get_vars()) for obj in chunk[1]]
+            game_map[pos][1] = []  # [(type(obj), obj.get_vars()) for obj in chunk[1]]
         d["game_map"] = game_map
         d.pop("game")
         return d
@@ -170,8 +171,9 @@ class GameMap:
             ochunk[1].remove(obj)
             chunk[1].append(obj)
             return True
-        # else:
-        #     raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
+        else:
+            print(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
+            # raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
 
         return
 
@@ -227,8 +229,14 @@ class GameMap:
         return False
 
     def add_item_of_index(self, index, count_items, x, y):
-        items = ItemsTile(self.game, index, count_items, (x * TSIZE + random.randint(0, TSIZE - HAND_SIZE), y * TSIZE))
-        self.add_dinamic_obj(*self.to_chunk_xy(x, y), items)
+        npos = (x * TSIZE + random.randint(0, TSIZE - HAND_SIZE), y * TSIZE)
+        if index in TOOLS:
+            # Инструмент
+            item = TOOLS[index](self.game, pos=npos)
+            item.set_owner(self)
+        else:
+            item = ItemsTile(self.game, index, count_items, npos)
+        self.add_dinamic_obj(*self.to_chunk_xy(x, y), item)
 
     def convert_pos_to_i(self, x, y):
         # cx, cy = x % CHUNK_SIZE, y % CHUNK_SIZE
@@ -399,10 +407,8 @@ def random_plant_selection(biome=None):
         if plant_tile_type == 101:
             return plant_tile_type, random.randint(0, 3)
         if plant_tile_type == 102:
-            if random.randint(0, 10) > 8:
-                return plant_tile_type, random.randint(0, FPS * 430)
-            else:
-                return plant_tile_type, 0
+            if random.randint(0, 10) < 9:
+                return plant_tile_type, 2  # вырастить мгновено дерево
         return plant_tile_type, 0
     return None
 
@@ -419,5 +425,5 @@ def grow_tree(pos, game_map: GameMap):
 
 
 def random_creature_selection():
-    crt = random.choices([None, Slime, Cow, Wolf], [90, 10, 5, 5], k=1)
+    crt = random.choices([None, Slime, Cow, Wolf, SlimeBigBoss], [90, 10, 5, 5, 0.5], k=1)
     return crt[0]

@@ -39,6 +39,7 @@ class Items(PhysicalObject):
             for obj in dynamic:
                 if obj is not self and obj.class_obj == OBJ_ITEM:
                     if obj.alive and self.index == obj.index:
+                        # объеденение в один, двух рядом леж предметов одного типа
                         self.count += obj.count
                         obj.alive = False
 

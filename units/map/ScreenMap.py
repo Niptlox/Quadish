@@ -120,14 +120,20 @@ class ScreenMap:
                                                 # tile[3] = tact --> тк срез
                                                 chunk[0][index + 3] += random.randint(FPS * 60, FPS * 120)
                                     elif tile_type == 102:
-                                        if tile[2] == -1:
+                                        # дерево
+                                        if tile[2] == 0:
+                                            # посажено дерево
+                                            chunk[0][index + 3] = tact + random.randint(FPS * 240, FPS * 660)
+                                            chunk[0][index + 2] = 1  # растет
+                                        elif tile[2] == 2:
+                                            # вырастить мгновено
+                                            grow_tree((tile_x, tile_y), game_map=self.game_map)
+                                        elif tile[2] == 1:
+                                            # растет дерево
                                             if tile[3] <= tact:
                                                 if tile[3] != 0:
                                                     # проращиваем дерево
                                                     grow_tree((tile_x, tile_y), game_map=self.game_map)
-                                        else:
-                                            chunk[0][index + 3] = tact + tile[2]
-                                            chunk[0][index + 2] = -1
                                     elif tile_type == 126:  # шкаф
                                         img = tile_imgs[tile_type].copy()
                                         step = TSIZE // 2

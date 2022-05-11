@@ -2,8 +2,9 @@ from random import randint
 from time import time
 
 from units import Entities
+from units.Creatures import SlimeBigBoss
 from units.Items import ItemsTile, Items
-from units.AnimationTool import *
+from units.Tools.AnimationTool import *
 
 from units.Tiles import item_of_break_tile, item_of_right_click_tile, STANDING_TILES, ITEM_TILES, tile_imgs, \
     tile_many_imgs
@@ -24,7 +25,6 @@ class Tool:
         self.flip = False
         self.action = False
         self.reload_time = 1 / self.speed
-        self.tile_click = False
 
     def draw(self, surface, x, y):
         self.animation.draw(surface, x, y)
@@ -39,14 +39,15 @@ class Tool:
         pass
 
     def right_button(self, vector_to_mouse):
+        pass
+
+    def right_button_click(self, vector_to_mouse):
         vtm = vector_to_mouse
         vp: Vector2 = self.owner.vector  # player
         v_tile = (vtm + vp) // TSIZE
         v_local_pos_tile = (vtm + vp) - v_tile * TSIZE
         x, y = int(v_tile.x), int(v_tile.y)
-        if self.tile_click:
-            tile_click(self.owner.game_map, None, x, y, v_local_pos_tile, self.owner)
-            self.tile_click = False
+        return tile_click(self.owner.game_map, None, x, y, v_local_pos_tile, self.owner)
 
 
 class ToolSword(Tool):
@@ -188,7 +189,19 @@ class ToolWoodPickaxe(ToolPickaxe):
     distance = 1.5 * TSIZE  # punch
     discard_distance = 4  # отбрасывание
     index = 530
-    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 105, 110, 121, 122, 123, 124, 125, 126, 127, 128, 130]
+    sprite = tile_imgs[index]
+    #  capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 105, 110, 121, 122, 123, 124, 125, 126, 127, 128, 130]
+
+
+class ToolCopperPickaxe(ToolPickaxe):
+    strength = 20  # dig
+    damage = 9  # punch
+    speed = 1.7
+    distance = 1.5 * TSIZE  # punch
+    discard_distance = 4  # отбрасывание
+    index = 533
+    sprite = tile_imgs[index]
+    #  capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 105, 110, 121, 122, 123, 124, 125, 126, 127, 128, 130]
 
 
 class ToolHand(ToolPickaxe):
@@ -214,7 +227,6 @@ class ToolHand(ToolPickaxe):
         self.stroke_rect = pg.Rect((0, 0, TSIZE, TSIZE))
         self.stroke = False
         self.vector_to_mouse = Vector2(0)
-        self.tile_click = False
 
     def draw(self, surface, x, y):
         self.animation.sprite = self.owner.hand_img
@@ -248,12 +260,37 @@ class ToolHand(ToolPickaxe):
                 self.stroke = True
             else:
                 self.stroke = False
-                if self.tile_click:
-                    v_local_pos_tile = (vtm + vp) - v_tile * TSIZE
-                    tile_click(game_map, None, x, y, v_local_pos_tile, self.owner)
-                    self.tile_click = False
 
         return result
+
+    def update(self, vector_to_mouse: Vector2):
+        self.vector_to_mouse = vector_to_mouse
+        super().update(vector_to_mouse)
+
+
+class ToolSummon(ToolSword):
+    tool_cls = CLS_WEAPON + CLS_COMMON
+    damage = 5
+    speed = 5
+    distance = 2 * TSIZE
+    Animation = AnimationHand
+    discard_distance = 5
+    index = 610
+    sprite = tile_imgs[index]
+    creatureCls = SlimeBigBoss
+
+    def right_button_click(self, vector_to_mouse: Vector2):
+        if super(ToolSummon, self).right_button_click(vector_to_mouse):
+            # кликнул по интеракт объекту
+            return
+        if self.owner.get_from_inventory(51, 50) and self.owner.get_from_inventory(66, 1):
+            # на боса - 50 слизи и 1 рубин
+            vtm = vector_to_mouse
+            vp: Vector2 = self.owner.vector  # player
+            vcreture = vtm + vp
+            creature = self.creatureCls(self.owner.game, vcreture.xy)
+            chunk = vcreture // TSIZE // CHUNK_SIZE
+            self.owner.game_map.add_dinamic_obj(*chunk.xy, creature)
 
     def update(self, vector_to_mouse: Vector2):
         self.vector_to_mouse = vector_to_mouse
@@ -303,7 +340,7 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
 
 def check_dig_tile(game_map, x, y, tool: ToolHand):
     tile = game_map.get_static_tile(x, y)
-    if tile is None:# or tile[1] == -1:
+    if tile is None:  # or tile[1] == -1:
         return
     d_ttile = game_map.get_static_tile_type(x, y - 1)
     if d_ttile in {101, 102, 103}:
@@ -404,6 +441,11 @@ class ItemPickaxe(ItemTool):
     _Tool = ToolPickaxe
 
 
+class ItemSummon(ItemTool):
+    class_item = CLS_TOOL + CLS_COMMON
+    _Tool = ToolSummon
+
+
 class ItemGoldSword(ItemSword):
     _Tool = ToolGoldSword
 
@@ -416,6 +458,10 @@ class ItemWoodPickaxe(ItemPickaxe):
     _Tool = ToolWoodPickaxe
 
 
+class ItemCopperPickaxe(ItemPickaxe):
+    _Tool = ToolCopperPickaxe
+
+
 TOOLS = {cls._Tool.index: cls for cls in
          {
              ItemSword,
@@ -423,5 +469,7 @@ TOOLS = {cls._Tool.index: cls for cls in
              ItemPickaxe,
              ItemGoldPickaxe,
              ItemWoodPickaxe,
+             ItemCopperPickaxe,
+             ItemSummon
          }
          }
