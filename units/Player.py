@@ -9,7 +9,7 @@ from units.Items import Items, ItemsTile
 from units.Texture import rot_center
 # from units.Tiles import PICKAXES_CAPABILITY, PICKAXES_SPEED, PICKAXES_STRENGTH, STANDING_TILES, ITEM_TILES
 from units.Tiles import hand_pass_img, player_img, dig_rect_img, tile_hand_imgs
-from units.Tools import ToolHand, ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe, ItemTool
+from units.Tools import ToolHand, TOOLS  # ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe, ItemTool
 from units.common import *
 
 
@@ -75,7 +75,7 @@ class Player(Entity.PhysicalObject):
         self.inventory_size = 16
         self.inventory = [None] * self.inventory_size
         # self.inventory[0] = ItemSword(self.game)
-        self.inventory[0] = ItemPickaxe(self.game)
+        self.inventory[0] = TOOLS[531](self.game)  # pickaxe
         self.inventory[0].set_owner(self)
         self.active_cell = 0
         self.cell_size = 1000
@@ -128,7 +128,7 @@ class Player(Entity.PhysicalObject):
                 self.jump()
                 # =========================================
             elif event.key == K_j and self.on_up:
-                item = ItemGoldPickaxe(self.game)
+                item = TOOLS[532](self.game)  # gold pickaxe
                 item.set_owner(self)
                 self.put_to_inventory(item)
             elif event.key == K_t:
@@ -183,7 +183,7 @@ class Player(Entity.PhysicalObject):
 
     def tp_random(self):
         # self.tp_to((random.randint(-1e9, 1e9), random.randint(-1e9, 1e9)))
-        self.tp_to((2**31-1500, 2**31-1500))
+        self.tp_to((2 ** 31 - 1500, 2 ** 31 - 1500))
 
     def tp_to(self, pos):
         self.rect.center = pos

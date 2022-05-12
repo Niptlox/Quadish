@@ -220,8 +220,8 @@ class GameUI(UI):
             x += step
             if (i + 1) % cnt_in_row == 0:
                 y -= 15
-                x = 10 + iy
                 iy += 2
+                x = 10 + iy
 
     def pg_event(self, event: pg.event.Event):
         if event.type == pg.MOUSEBUTTONDOWN:
