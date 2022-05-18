@@ -191,6 +191,8 @@ IDX_TOOLS = {501, 502, 530, 531, 532, 533, 610}
 
 # блоки через которые нельзя пройти
 PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 103, 124, 128}
+
+SEMIPHYSBODY_TILES = {120, 127}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
 STANDING_TILES = {0, 101, 102, 103, 110, 120, 121, 122, 123, 125, 126, 130}
 # предметы которые нельзя физически поставить
@@ -346,9 +348,9 @@ def item_of_right_click_tile(tile, res=True):
 
 if DEBUG_DRAW_TILES:
     clock = pg.time.Clock()
-    screen_.fill("black")
+    screen_.fill("green")
     x, y = 5, 5
-    for im in pickaxe_1_imgs:
+    for im in break_imgs:
         screen_.blit(im, (x, y))
         x += im.get_width() + 5
     pg.display.flip()

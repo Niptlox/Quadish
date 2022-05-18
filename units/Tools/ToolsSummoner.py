@@ -1,5 +1,4 @@
 from units.Tools.ToolsSword import *
-from units.Tools.Tools import *
 
 
 class ToolSummon(ToolSword):

@@ -5,6 +5,7 @@ from pygame import Vector2
 from pygame.locals import *
 
 from units import Entity
+from units.Entity import collision_test
 from units.Items import Items, ItemsTile
 from units.Texture import rot_center
 # from units.Tiles import PICKAXES_CAPABILITY, PICKAXES_SPEED, PICKAXES_STRENGTH, STANDING_TILES, ITEM_TILES
@@ -85,6 +86,9 @@ class Player(Entity.PhysicalObject):
         self.tool = None
         self.vector = Vector2(0)
 
+        self.creative_mode = CREATIVE_MODE
+
+
     def get_vars(self):
         d = self.__dict__.copy()
         d.pop("game_map")
@@ -101,6 +105,7 @@ class Player(Entity.PhysicalObject):
 
     def set_vars(self, vrs):
         vrs["inventory"] = []
+        # vrs["max_fall_speed"] = self.max_fall_speed
         vrs["rect"].size = self.rect.size
         for i in vrs.pop("_inventory"):
             if i is None:
@@ -128,9 +133,7 @@ class Player(Entity.PhysicalObject):
                 self.jump()
                 # =========================================
             elif event.key == K_j and self.on_up:
-                item = TOOLS[532](self.game)  # gold pickaxe
-                item.set_owner(self)
-                self.put_to_inventory(item)
+                self.set_game_mode(not self.creative_mode)
             elif event.key == K_t:
                 self.tp_to_home()
             elif event.key == K_r:
@@ -198,6 +201,8 @@ class Player(Entity.PhysicalObject):
         self.vertical_momentum = 0
         self.physical_vector = pg.Vector2(0, 0)
         self.first_fall = True
+        self.moving_right = False
+        self.moving_left = False
         print("relive", self.lives)
 
     def update(self, tact):
@@ -309,6 +314,8 @@ class Player(Entity.PhysicalObject):
         return True, None
 
     def find_in_inventory(self, ttile, count=1):
+        if self.creative_mode:
+            return True
         all_cnt = 0
         for i in filter(lambda x: x, self.inventory):
             if i.index == ttile:
@@ -318,6 +325,8 @@ class Player(Entity.PhysicalObject):
         return False
 
     def get_from_inventory(self, ttile, count):
+        if self.creative_mode:
+            return True
         if not self.find_in_inventory(ttile, count):
             return False
             # мы знаем что ttile есть в инвенторе
@@ -341,6 +350,8 @@ class Player(Entity.PhysicalObject):
         return item
 
     def check_creating_item_of_i(self, rec_i):
+        if self.creative_mode:
+            return True
         if rec_i < len(RECIPES):
             out, need = RECIPES[rec_i]
             for t, c in need:
@@ -356,7 +367,7 @@ class Player(Entity.PhysicalObject):
             return True
         return False
 
-    def creating_item_of_i(self, rec_i):
+    def creating_item_of_i(self, rec_i, cnt=1):
         if self.check_creating_item_of_i(rec_i):
             out, need = RECIPES[rec_i]
             [self.get_from_inventory(t, c) for t, c in need]
@@ -418,7 +429,13 @@ class Player(Entity.PhysicalObject):
             self.vertical_momentum = self.max_fall_speed
 
         collisions = self.move(player_movement, self.game.screen_map.static_tiles)
-
+        collisions_ttile = [col[1] for arrow in collisions for col in collisions[arrow]]
+        print(collisions_ttile)
+        # _, _, semiphysbody_lst = collision_test(self.game_map, self.rect, self.game.screen_map.static_tiles, semiphysbody=True)
+        if 120 in collisions_ttile:
+            self.air_timer = 0
+            self.jump_count = 0
+            self.vertical_momentum /= 1.5
         if collisions['bottom']:
             if not self.first_fall and self.vertical_momentum > 25:
                 self.damage(int(self.vertical_momentum // 5))
@@ -444,6 +461,8 @@ class Player(Entity.PhysicalObject):
         self.draw_lives(self.ui.display, player_display_pos)
 
     def damage(self, lives):
+        if self.creative_mode:
+            return True
         if self.max_lives == -1:
             return True
         self.lives -= lives
@@ -459,3 +478,14 @@ class Player(Entity.PhysicalObject):
         # self.physical_vector.x += vector[0]
         # self.physical_vector.y += vector[1]
         pass
+
+    def set_game_mode(self, creative_mode=False):
+        # global self.creative_mode
+        self.creative_mode = creative_mode
+        if self.creative_mode:
+            self.ui.new_sys_message("Режим создателя включен")
+            item = TOOLS[532](self.game)  # gold pickaxe
+            item.set_owner(self)
+            self.put_to_inventory(item)
+        else:
+            self.ui.new_sys_message("Режим создателя выключен")

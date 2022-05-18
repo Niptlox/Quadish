@@ -42,6 +42,7 @@ class GameUI(UI):
 
         self.cell_size = TSIZE + 7
         self.inventory_rect = pg.Rect((0, 0, self.cell_size * self.app.player.inventory_size, self.cell_size))
+        self.inventory_rect.centerx = WSIZE[0] // 2
         self.top_surface = pygame.Surface(self.inventory_rect.size).convert_alpha()
         self.inventory_info_index = None
         self.inventory_info_index_surface = pygame.Surface((1, 1))
@@ -71,7 +72,7 @@ class GameUI(UI):
     def draw(self):
         # DRAW DISPLAY GAME TO WINDOW ========================================
 
-        self.display.blit(self.top_surface, (0, 0))
+        self.display.blit(self.top_surface, self.inventory_rect)
         self.display.blit(self.recipes_surface, self.recipes_rect)
         if self.recipes_info_index is not None:
             self.display.blit(self.recipes_info_index_surface,
@@ -368,7 +369,7 @@ def center_pos_2rects(len1, big_len):
 
 class PauseUI(UI):
     def init_ui(self):
-        self.rect = pg.Rect((0, 0, 320, 320))
+        self.rect = pg.Rect((0, 0, 320, 370))
         w, h = self.screen.get_size()
         self.rect.center = w // 2, h // 2
         self.surface = pg.Surface(self.rect.size).convert_alpha()
@@ -390,6 +391,7 @@ class PauseUI(UI):
             ("Справка по игре", lambda _: self.app.app.open_help()),
             ("Телепорт домой", lambda _: self.app.tp_to_home()),
             ("Сохранить и выйти", lambda _: self.app.save_and_exit()),
+            ("Выйти", lambda _: self.app.exit()),
         ]
 
         self.img_btns = [createImagesButton(btn_rect.size, t, font=textfont_btn)

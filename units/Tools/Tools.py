@@ -148,17 +148,18 @@ def check_set_tile(game_map, x, y, inventory_cell):
     return tile
 
 
-def set_tile(game_map, x, y, inventory_cell, check=True):
+def set_tile(player, x, y, inventory_cell, check=True):
     if not check:
-        tile = check_set_tile(game_map, x, y, inventory_cell)
+        tile = check_set_tile(player.game_map, x, y, inventory_cell)
         if tile:
             return
-    inventory_cell.count -= 1
+    if not player.creative_mode:
+        inventory_cell.count -= 1
     # if inventory_cell.index == 9:  # tnt
     #     obj = Entities.Dynamite(game_map.game, x * TSIZE, y * TSIZE)
     #     game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), obj)
     # else:
-    game_map.set_static_tile(x, y, game_map.get_tile_ttile(inventory_cell.index))
+    player.game_map.set_static_tile(x, y, player.game_map.get_tile_ttile(inventory_cell.index))
     if inventory_cell.count <= 0:
         return 0
     return inventory_cell.count

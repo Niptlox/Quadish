@@ -54,7 +54,7 @@ class GameMap:
         game_map = {}
         for pos, chunk in d["game_map"].items():
             game_map[pos] = chunk.copy()
-            game_map[pos][1] = []  # [(type(obj), obj.get_vars()) for obj in chunk[1]]
+            game_map[pos][1] = [(type(obj), obj.get_vars()) for obj in chunk[1]]
         d["game_map"] = game_map
         d.pop("game")
         return d
@@ -65,8 +65,8 @@ class GameMap:
             res = self.generate_chunk(*xy)
         if res and for_player:
             crt_cash = res[3]
-            if self.game.tact > crt_cash[2] + 10 * FPS:
-                if crt_cash[1] < 3:
+            if self.game.tact > crt_cash[2] + FPS*60:
+                if crt_cash[1] < CHUNK_CREATURE_LIMIT:
                     crt_cash[2] = self.game.tact
                     dynamic_tiles = res[1]
                     scroll = self.game.screen_map.scroll
@@ -77,7 +77,7 @@ class GameMap:
                             if Crt is not None:
                                 dynamic_tiles.append(Crt(self.game, (x, y)))
                                 crt_cash[1] += 1
-                            if crt_cash[1] > 15:
+                            if crt_cash[1] > CHUNK_CREATURE_LIMIT:
                                 break
         return res
 
@@ -123,8 +123,8 @@ class GameMap:
         i = self.convert_pos_to_i(x, y)
         return chunk[0][i]
 
-    def set_static_tile(self, x, y, tile):
-        chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE))
+    def set_static_tile(self, x, y, tile, create_chunk=True):
+        chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE), create_chunk=create_chunk)
         if chunk is not None:
             if tile is None:
                 tile = [0, 0, 0, 0]
@@ -170,8 +170,12 @@ class GameMap:
                 chunk[3][1] += 1
             ochunk[1].remove(obj)
             chunk[1].append(obj)
+            if obj.class_obj ^ OBJ_CREATURE:
+                ochunk[3][1] -= 1
+                chunk[3][1] += 1
             return True
         else:
+            obj.sprite.blit(pg.Surface((10, 10)), (0, 0))
             print(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
             # raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
 
@@ -210,10 +214,11 @@ class GameMap:
     def del_dinamic_obj(self, chunk_x, chunk_y, obj, creature=False):
         chunk = self.chunk((chunk_x, chunk_y))
         if chunk:
-            if creature:
-                chunk[3][1] -= 1
+
             if obj in chunk[1]:
                 chunk[1].remove(obj)
+                if obj.class_obj ^ OBJ_CREATURE:
+                    chunk[3][1] -= 1
             else:
                 print("Error !!! del_dinamic_obj", (chunk_x, chunk_y), obj)
             return True
@@ -425,5 +430,8 @@ def grow_tree(pos, game_map: GameMap):
 
 
 def random_creature_selection():
-    crt = random.choices([None, Slime, Cow, Wolf, SlimeBigBoss], [90, 10, 5, 5, 0.5], k=1)
+    if random.randint(0, 100) < 95:
+        return None
+    crt = random.choices([Slime, Cow, Wolf, SlimeBigBoss], [10, 5, 5, 0.5], k=1)
+    # print("random_creature_selection", crt)
     return crt[0]

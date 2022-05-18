@@ -1,3 +1,4 @@
+from math import floor
 from time import time
 
 from units.biomes import biome_tiles, biome_colors
@@ -68,7 +69,7 @@ class ScreenMap:
             chunk_x = scroll_chunk_x
             for cx in range(WCSIZE[0]):
                 chunk_pos = (chunk_x, chunk_y)
-                chunk = self.game_map.chunk(chunk_pos)
+                chunk = self.game_map.chunk(chunk_pos, for_player=True)
                 if chunk is None:
                     # генериует статические и динамичские чанки
                     chunk = self.game_map.generate_chunk(chunk_x, chunk_y)  # [static_lst, dynamic_lst]
@@ -142,12 +143,14 @@ class ScreenMap:
                                                 if tile[3]:
                                                     item = tile[3][ity * 2 + itx]
                                                     if item:
-                                                        img.blit(tile_hand_imgs[item[0]],
+                                                        img.blit(
+                                                                 pg.transform.scale(tile_hand_imgs[item[0]], (TSIZE//2, TSIZE//2)),
                                                                  (itx * step + 2, ity * step + 2))
                                     self.display.blit(img, b_pos)
                                     sol = tile[1]
                                     if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
-                                        br_i = 2 - int(sol * break_imgs_cnt / TILES_SOLIDITY[tile_type])
+                                        br_i = (break_imgs_cnt - 1) - int(
+                                            sol * (break_imgs_cnt - 1) / TILES_SOLIDITY[tile_type])
                                         self.display.blit(break_imgs[br_i], b_pos)
 
                             # else:

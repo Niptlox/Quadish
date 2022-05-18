@@ -6,7 +6,8 @@ from units.Tools.ToolsSummoner import *
 from units.Tools.ToolHand import *
 from units.Tiles import IDX_TOOLS
 
-# модуль обобщения
+
+# модуль обобщения and items
 
 class ItemTool(Items):
     class_item = CLS_TOOL
@@ -25,13 +26,19 @@ class ItemTool(Items):
     def set_owner(self, owner):
         self.tool.owner = owner
 
+    def set_vars(self, vrs):
+        print(vrs)
+        self.tool = vrs.get("_Tool")(None)
+        self.sprite = self.tool.sprite
+        super().set_vars(vrs)
+
     def get_vars(self):
         d = super().get_vars()
         d.pop("tool")
         # d["_tool"] = d.pop("tool")
         return d
 
-
+#
 # class ItemSword(ItemTool):
 #     class_item = CLS_TOOL + CLS_SWORD
 #     _Tool = ToolSword

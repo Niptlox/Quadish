@@ -138,10 +138,11 @@ class Slime(Creature):
                 self.jump_state = -1
 
         self.sprite = self.sprites[self.i_sprite]
-        self.move_tact -= 1
-        if self.move_tact <= 0:
-            self.move_tact = random.randint(30, 205)
-            self.move_direction = random.randint(-1, 1)
+        if self.move_tact is not None:
+            self.move_tact -= 1
+            if self.move_tact <= 0:
+                self.move_tact = random.randint(30, 205)
+                self.move_direction = random.randint(-1, 1)
         self.movement_vector.x += self.move_direction * self.move_speed
         return True
 
@@ -202,7 +203,7 @@ class Wolf(Creature):
         self.move_tact = 0
         self.sprite = pg.Surface((self.rect.w, self.rect.h))
         self.sprite.fill(self.color)
-        self.angry_rect = pg.Rect(((0, 0), self.angry_rect_size))
+        self.angry_rect = pg.Rect((0, 0), self.angry_rect_size)
 
     def update(self, tact):
         super().update(tact)
@@ -249,6 +250,36 @@ class SlimeBigBoss(Slime):
     move_speed = 4
     drop_items = [(ItemsTile, (51, (20, 30))), (ItemsTile, (63, (3, 8))), (ItemsTile, (66, (4, 7))),
                   (ItemsTile, (55, (1, 2)))]
+
+    # агриться ли сейчас на игрока
+    angry = False
+    angry_rect_size = (int(TSIZE * 19), int(TSIZE * 19))
+    move_speed_angry = 6
+    angry_player = None
+
+    def __init__(self, game, pos=(0, 0)):
+        super(SlimeBigBoss, self).__init__(game, pos)
+        self.angry_rect = pg.Rect((0, 0), self.angry_rect_size)
+
+    def update(self, tact):
+        super(SlimeBigBoss, self).update(tact)
+        self.angry_rect.center = self.rect.center
+
+        if self.angry:
+            if self.angry_player.rect.x > self.rect.x:
+                self.move_direction = 1
+            else:
+                self.move_direction = -1
+            if not self.angry_rect.colliderect(self.angry_player):
+                self.angry = False
+                self.angry_player = None
+                self.move_tact = 0
+        else:
+            if self.angry_rect.colliderect(self.game.player.rect):
+                self.angry = True
+                self.angry_player = self.game.player
+                self.move_tact = None
+
 
 
 CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss]

@@ -1,11 +1,11 @@
-from units.Tiles import PHYSBODY_TILES
+from units.Tiles import PHYSBODY_TILES, SEMIPHYSBODY_TILES
 from units.common import *
 
 
 # from units.map.GameMap import GameMap
 
 def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic_tiles: list = [],
-                   first_tile_pos=(0, 0), collide_all_tiles=False):
+                   first_tile_pos=(0, 0), collide_all_tiles=False, semiphysbody=False):
     """collide_all_tiles: True - если надо соприкосновение не только с физическими блоками по умолч False"""
     # rect_x_map, rect_y_map = rect.x // TILE_SIZE, rect. // 
     hit_dynamic_lst = []
@@ -16,6 +16,7 @@ def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic
 
     hit_static_lst = []
     # static_tiles = []
+    semiphysbody_lst = []
     if static_tiles:
         rect = rect.move(-first_tile_pos[0], -first_tile_pos[1])
 
@@ -23,8 +24,8 @@ def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic
             vertexes = [(rect.right - 1, rect.top), (
                 rect.right - 1, rect.bottom - 1)]
             x, y = rect.topleft
-            for i in range(0, rect.w-1, TSIZE-1):
-                for j in range(0, rect.h-1, TSIZE-1):
+            for i in range(0, rect.w - 1, TSIZE - 1):
+                for j in range(0, rect.h - 1, TSIZE - 1):
                     vertexes.append((x + i, y + j))
             for i in range(0, rect.w - 1, TSIZE - 1):
                 vertexes.append((x + i, rect.bottom - 1))
@@ -41,6 +42,10 @@ def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic
             #     hit_static_lst.append((v_xy_map, -1))
             if static_tiles.get(v_xy_map) in PHYSBODY_TILES or collide_all_tiles:
                 hit_static_lst.append((v_xy_map, static_tiles.get(v_xy_map)))
+            elif semiphysbody and static_tiles.get(v_xy_map) in SEMIPHYSBODY_TILES:
+                semiphysbody_lst.append((v_xy_map, static_tiles.get(v_xy_map)))
+    if semiphysbody:
+        return hit_static_lst, hit_dynamic_lst, semiphysbody_lst
     return hit_static_lst, hit_dynamic_lst
 
 
@@ -83,44 +88,48 @@ class PhysicalObject:
         return d
 
     def move(self, movement, static_tiles: dict, dynamic_tiles: list = [], first_tile_pos=(0, 0)):
-        collision_types = {'top': False, 'bottom': False, 'right': False, 'left': False}
+        collision_types = {'top': [], 'bottom': [], 'right': [], 'left': []}
         mx, my = movement
         self.rect.x += mx
         # блоки с которыми стлкунулись после премещения по оси x (hit_static_lst, hit_dynamic_lst )
-        collision_lsts = collision_test(self.game_map, self.rect, static_tiles, dynamic_tiles, first_tile_pos)
+        *collision_lsts, semiphysbody_lst = collision_test(self.game_map, self.rect, static_tiles, dynamic_tiles,
+                                                           first_tile_pos, semiphysbody=True)
         for type_coll in range(2):
+            collision_lst_t = collision_lsts[type_coll] + semiphysbody_lst
             for block in collision_lsts[type_coll]:
                 if mx > 0:
                     if type_coll == 0:
-                        self.rect.right = block[0][0] * TILE_SIZE + first_tile_pos[0]                        
+                        self.rect.right = block[0][0] * TILE_SIZE + first_tile_pos[0]
                     elif type_coll == 1:
                         self.rect.right = block.left
-                    collision_types['right'] = True
+                    collision_types['right'] = collision_lst_t
                 elif mx < 0:
                     if type_coll == 0:
                         self.rect.left = block[0][0] * TILE_SIZE + first_tile_pos[0] + TILE_SIZE
                     elif type_coll == 1:
                         self.rect.left = block.right
-                    collision_types['left'] = True
+                    collision_types['left'] = collision_lst_t
                 if type_coll == 0 and block[1] == 103:
                     self.damage(1)
         self.rect.y += my
         # блоки с которыми стлкунулись после премещения по оси y (hit_static_lst, hit_dynamic_lst )
-        collision_lsts = collision_test(self.game_map, self.rect, static_tiles, dynamic_tiles, first_tile_pos)
+        *collision_lsts, semiphysbody_lst = collision_test(self.game_map, self.rect, static_tiles, dynamic_tiles,
+                                                           first_tile_pos, semiphysbody=True)
         for type_coll in range(2):
+            collision_lst_t = collision_lsts[type_coll] + semiphysbody_lst
             for block in collision_lsts[type_coll]:
                 if my >= 0:
                     if type_coll == 0:
                         self.rect.bottom = block[0][1] * TILE_SIZE + first_tile_pos[1]
                     elif type_coll == 1:
                         self.rect.bottom = block.top
-                    collision_types['bottom'] = True
+                    collision_types['bottom'] = collision_lst_t
                 elif my < 0:
                     if type_coll == 0:
                         self.rect.top = block[0][1] * TILE_SIZE + first_tile_pos[1] + TILE_SIZE
                     elif type_coll == 1:
                         self.rect.top = block.bottom
-                    collision_types['top'] = True
+                    collision_types['top'] = collision_lst_t
                 if type_coll == 0 and block[1] == 103:
                     self.damage(1)
         return collision_types

@@ -12,9 +12,10 @@ desktop_size = pygame.display.get_desktop_sizes()[0]
 
 print("INIT GAME VARS")
 GAME_VERSION = "0.7"
-WINDOW_SIZE = (2200, 1100)
 WINDOW_SIZE = (700 * 2, 400 * 2)
 WINDOW_SIZE = (1000, 650)
+WINDOW_SIZE = (2200, 1100)
+WINDOW_SIZE = desktop_size
 
 if WINDOW_SIZE[0] > desktop_size[0]:
     WINDOW_SIZE = desktop_size
@@ -86,6 +87,7 @@ TGENERATE_INFINITE = 1
 TGENERATE_INFINITE_LANDS = 2
 generate_type = 2  # 0:load map,1: autogenerate
 
+CHUNK_CREATURE_LIMIT = 2
 # Player ===========================================================
 
 NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9, pg.K_0]
@@ -94,10 +96,10 @@ HAND_SIZE = int(TILE_SIZE // 1.5)
 HAND_RECT = (HAND_SIZE, HAND_SIZE)
 
 FALL_SPEED = 0.7
-MAX_FALL_SPEED = 10000
+MAX_FALL_SPEED = 100000
 AUTO_BUILD = True  # копать ближайший если мышка далеко
 
-
+CREATIVE_MODE = False
 # INIT TIME ================================================================
 
 EVENT_100_MSEC = pg.USEREVENT + 1
