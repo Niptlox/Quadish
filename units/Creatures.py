@@ -192,10 +192,8 @@ class Wolf(Creature):
     punch_discard = 8
 
     # агриться ли сейчас на игрока
-    angry = False
     angry_rect_size = (int(TSIZE * 19), int(TSIZE * 19))
     move_speed_angry = 6
-    angry_player = None
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
@@ -204,6 +202,15 @@ class Wolf(Creature):
         self.sprite = pg.Surface((self.rect.w, self.rect.h))
         self.sprite.fill(self.color)
         self.angry_rect = pg.Rect((0, 0), self.angry_rect_size)
+        self.angry = False
+
+        self.angry_player = None
+
+    def get_vars(self):
+        d = super(Wolf, self).get_vars()
+        d.pop("angry_player")
+        d.pop("angry")
+        return d
 
     def update(self, tact):
         super().update(tact)
@@ -279,7 +286,6 @@ class SlimeBigBoss(Slime):
                 self.angry = True
                 self.angry_player = self.game.player
                 self.move_tact = None
-
 
 
 CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss]

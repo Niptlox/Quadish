@@ -71,7 +71,7 @@ class GameScene(Scene):
         if not self.player.update(self.tact):
             self.running = False
             self.new_scene = self.app.end_scene
-
+        self.player.inventory.ui.draw(self.display)
         self.ui.draw()
         self.tact += 1
 

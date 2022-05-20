@@ -28,9 +28,10 @@ class UI:
 
 
 class SurfaceUI(pg.Surface):
-    def __init__(self, rect, flags=0, surface=None):
+    def __init__(self, rect, flags=0, depth=0):
+        # self.depth = depth
         self.rect = pg.Rect(rect)
-        super().__init__(self.rect.size, flags, surface)
+        super().__init__(self.rect.size, flags)
 
     def draw(self, surface):
         surface.blit(self, self.rect)
@@ -42,27 +43,33 @@ class SurfaceUI(pg.Surface):
         self.rect.size = size
         super().__init__(self.rect.size)
 
+    def convert_alpha(self):
+        """Изменяет саму плоскость"""
+        super(SurfaceUI, self).__init__(self.rect.size, pg.SRCALPHA, 32)
+        return self
 
-class SurfaceAlphaUI:
-    def __init__(self, rect, flags=0, surface=None):
-        self.rect = pg.Rect(rect)
-        self.surface = pg.Surface(self.rect.size, flags, surface).convert_alpha()
 
-    def draw(self, surface):
-        surface.blit(self.surface, self.rect)
-
-    def pg_event(self, event: pg.event.Event):
-        pass
-
-    def set_size(self, size):
-        self.rect.size = size
-        self.surface.__init__(self.rect.size)
-
-    def blit(self, surface, pos):
-        self.surface.blit(surface, pos)
-
-    def fill(self, color):
-        self.surface.fill(color)
+#
+# class SurfaceAlphaUI:
+#     def __init__(self, rect, flags=0, surface=None):
+#         self.rect = pg.Rect(rect)
+#         self.surface = pg.Surface(self.rect.size, flags, surface).convert_alpha()
+#
+#     def draw(self, surface):
+#         surface.blit(self.surface, self.rect)
+#
+#     def pg_event(self, event: pg.event.Event):
+#         pass
+#
+#     def set_size(self, size):
+#         self.rect.size = size
+#         self.surface.__init__(self.rect.size)
+#
+#     def blit(self, surface, pos):
+#         self.surface.blit(surface, pos)
+#
+#     def fill(self, color):
+#         self.surface.fill(color)
 
 
 class ScrollSurface(SurfaceUI):

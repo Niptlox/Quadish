@@ -4,7 +4,7 @@ from units.Texture import BLACK, WHITE
 from units.Tiles import tile_imgs, sky, tile_words, live_imgs, bg_live_img
 from units.UI.Button import createImagesButton, createVSteckButtons, Button
 from units.common import *
-from units.UI.ClassUI import SurfaceUI, UI, SurfaceAlphaUI
+from units.UI.ClassUI import SurfaceUI, UI
 
 # INIT TEXT ==================================================
 
@@ -25,6 +25,8 @@ sys_message_bg = (68, 64, 60, 150)
 
 color_none = (0, 0, 0, 0)
 
+bg_color = (82, 82, 91, 150)
+
 
 # =============================================================
 
@@ -38,21 +40,7 @@ class GameUI(UI):
         # self.sky_surface = pg.Surface(self.display.get_size()).convert_alpha()
         # self.sky_surface.fill(sky)
 
-        self.info_surface = pygame.Surface((250, 80), pygame.SRCALPHA, 32)
-
-        self.cell_size = TSIZE + 7
-        self.inventory_rect = pg.Rect((0, 0, self.cell_size * self.app.player.inventory_size, self.cell_size))
-        self.inventory_rect.centerx = WSIZE[0] // 2
-        self.top_surface = pygame.Surface(self.inventory_rect.size).convert_alpha()
-        self.inventory_info_index = None
-        self.inventory_info_index_surface = pygame.Surface((1, 1))
-        self.top_bg_color = (82, 82, 91, 150)
-        self.recipes_rect = pg.Rect((0, TSIZE + 10, self.cell_size * len(RECIPES), self.cell_size))
-        self.recipes_surface = pygame.Surface(self.recipes_rect.size, pygame.SRCALPHA, 32)
-        self.recipes_info_index = None
-        self.recipes_info_index_surface = pygame.Surface((1, 1))
-        self.redraw_recipes()
-        self.app.player.choose_active_cell()
+        self.info_surface = SurfaceUI((0, 0, 250, 80)).convert_alpha()
 
         self.sys_message_rect = pg.Rect(((WSIZE[0] - 330, WSIZE[1] - 45), (300, 32)))
         self.sys_message_text = ""
@@ -61,7 +49,7 @@ class GameUI(UI):
         self.sys_message_surface = pg.Surface(self.sys_message_rect.size).convert_alpha()
 
         # self.playerui = SurfaceAlphaUI((0, 0, 280, 120))
-        self.playerui = SurfaceAlphaUI((0, 0, 450, 420))
+        self.playerui = SurfaceUI((0, 0, 450, 420)).convert_alpha()
         self.playerui.rect.bottom = self.rect.bottom
         self.new_sys_message("Привет игрок")
 
@@ -71,17 +59,6 @@ class GameUI(UI):
 
     def draw(self):
         # DRAW DISPLAY GAME TO WINDOW ========================================
-
-        self.display.blit(self.top_surface, self.inventory_rect)
-        self.display.blit(self.recipes_surface, self.recipes_rect)
-        if self.recipes_info_index is not None:
-            self.display.blit(self.recipes_info_index_surface,
-                              (
-                                  self.recipes_rect.x + self.recipes_info_index * self.cell_size,
-                                  self.recipes_rect.bottom))
-        if self.inventory_info_index is not None:
-            self.display.blit(self.inventory_info_index_surface,
-                              (self.inventory_info_index * self.cell_size, self.cell_size))
         if show_info_menu:
             self.display.blit(self.info_surface, (WINDOW_SIZE[0] - 250, 0))
         if self.sys_message_left_tact > 0:
@@ -111,7 +88,7 @@ class GameUI(UI):
 
     def redraw_info(self):
         true_fps = self.app.clock.get_fps()
-        self.info_surface.fill(self.top_bg_color)
+        self.info_surface.fill(bg_color)
         text_fps = textfont_info.render(
             f" fps: {int(true_fps)}", 1, "white")
         text_pos_real = textfont_info.render(
@@ -124,84 +101,6 @@ class GameUI(UI):
         self.info_surface.blit(text_pos_real, (8, 25))
         self.info_surface.blit(text_pos, (8, 45))
         self.info_surface.blit(text_ents, (8, 65))
-
-    def redraw_top(self):
-        self.top_surface.fill(self.top_bg_color)
-        x = 0
-        i = 0
-        cell_size = self.cell_size
-        cell_size_2 = cell_size // 2
-        for i in range(self.app.player.inventory_size):
-            color = "#000000"
-            if i == self.app.player.active_cell:
-                color = "#FFFFFF"
-            pygame.draw.rect(self.top_surface, color,
-                             (x, 0, TSIZE + 7, TSIZE + 7), 1)
-            cell = self.app.player.inventory[i]
-            if cell is not None:
-                img = cell.sprite
-                iw, ih = img.get_size()
-                self.top_surface.blit(img, (x + cell_size_2 - iw // 2, cell_size_2 - ih // 2))
-                res = str(cell.count)
-                tx, ty = (x + TSIZE + 3 - 7 * len(res), TSIZE - 8)
-                text = textfont.render(res, 1, text_color_dark)
-                self.top_surface.blit(text, (tx + 1, ty + 1))
-                text = textfont.render(res, 1, text_color_light)
-                self.top_surface.blit(text, (tx, ty))
-            x += cell_size
-
-    def redraw_recipes(self):
-        self.recipes_surface.fill(self.top_bg_color)
-        x = 0
-        i = 0
-        cell_size = self.cell_size
-        cell_size_2 = cell_size // 2
-        for i in range(len(RECIPES)):
-            color = "#000000"
-            pygame.draw.rect(self.recipes_surface, color,
-                             (x, 0, TSIZE + 7, TSIZE + 7), 1)
-            cell = RECIPES[i][0]
-            img = tile_imgs[cell[0]]
-            iw, ih = img.get_size()
-            self.recipes_surface.blit(img, (x + cell_size_2 - iw // 2, cell_size_2 - ih // 2))
-            res = str(cell[1])
-            tx, ty = (x + TSIZE + 3 - 7 * len(res), TSIZE - 8)
-            text = textfont.render(res, 1, text_color_dark)
-            self.recipes_surface.blit(text, (tx + 1, ty + 1))
-            text = textfont.render(res, 1, text_color_light)
-            self.recipes_surface.blit(text, (tx, ty))
-            x += cell_size
-
-    def redraw_recipes_info(self):
-        out, recipe = RECIPES[self.recipes_info_index]
-        tx = 3
-        ty = 3
-        span = textfont.get_height() + 3
-        self.recipes_info_index_surface = pygame.Surface((self.cell_size * 3.5, span * (len(recipe) + 3)),
-                                                         pygame.SRCALPHA,
-                                                         32)
-        self.recipes_info_index_surface.fill(self.top_bg_color)
-        name = tile_words[out[0]]
-        self.recipes_info_index_surface.blit(textfont.render(name, True, text_color_light), (tx, ty))
-        ty += span
-        self.recipes_info_index_surface.blit(textfont.render("-" * 50, True, text_color_light), (0, ty))
-        ty += span
-        for index, cnt in recipe:
-            res = f"{tile_words[index]}: {cnt if cnt > 0 else ''}"
-            text = textfont.render(res, 1, text_color_light)
-            self.recipes_info_index_surface.blit(text, (tx, ty))
-            ty += span
-
-    def redraw_inventory_info(self):
-        item = self.app.player.inventory[self.inventory_info_index]
-        if item is None:
-            self.inventory_info_index = None
-            return
-        text = textfont.render(tile_words[item.index], True, text_color_light)
-        w, h = text.get_size()
-        self.inventory_info_index_surface = pygame.Surface((w + 6, h + 4)).convert_alpha()
-        self.inventory_info_index_surface.fill(self.top_bg_color)
-        self.inventory_info_index_surface.blit(text, (3, 2))
 
     def redraw_playerui(self):
         self.playerui.fill(color_none)
@@ -223,32 +122,6 @@ class GameUI(UI):
                 y -= 15
                 iy += 2
                 x = 10 + iy
-
-    def pg_event(self, event: pg.event.Event):
-        if event.type == pg.MOUSEBUTTONDOWN:
-            if event.button == pg.BUTTON_LEFT:
-                if self.recipes_rect.collidepoint(event.pos):
-                    i = (event.pos[0] - self.recipes_rect.x) // self.cell_size
-                    self.app.player.creating_item_of_i(i)
-                    return True
-        elif event.type == pg.MOUSEMOTION:
-            if self.recipes_rect.collidepoint(event.pos):
-                self.inventory_info_index = None
-                i = (event.pos[0] - self.recipes_rect.x) // self.cell_size
-                if i != self.recipes_info_index:
-                    self.recipes_info_index = i
-                    self.redraw_recipes_info()
-            elif self.inventory_rect.collidepoint(event.pos):
-                self.recipes_info_index = None
-                i = (event.pos[0] - self.inventory_rect.x) // self.cell_size
-                if i != self.recipes_info_index:
-                    self.inventory_info_index = i
-                    self.redraw_inventory_info()
-            else:
-                self.recipes_info_index = None
-                self.inventory_info_index = None
-
-        return False
 
 
 class SwitchMapUI(UI):
@@ -414,3 +287,189 @@ class PauseUI(UI):
     def pg_event(self, event: pg.event.Event):
         for btn in self.btns:
             btn.pg_event(event)
+
+
+class InventoryGameUI(SurfaceUI):
+    cell_size = TSIZE + 7
+
+    def __init__(self, inventory):
+        self.inventory = inventory
+        super(InventoryGameUI, self).__init__(pg.Rect((0, 0), WSIZE))
+        self.convert_alpha()
+        self.fill((0, 0, 0, 0))
+
+        self.info_surface = SurfaceUI((0, 0, 250, 80)).convert_alpha()
+
+        self.work_inventory = SurfaceUI((0, 0, self.inventory.size_table[0] * self.cell_size,
+                                         self.cell_size)).convert_alpha()
+        self.table_inventory = SurfaceUI((0, 0, self.inventory.size_table[0] * self.cell_size,
+                                          self.inventory.size_table[1] * self.cell_size)).convert_alpha()
+
+        self.work_inventory.rect.centerx = self.rect.centerx
+
+        # self.inventory_rect = pg.Rect((0, 0, self.cell_size * self.inventory.size_table[0], self.cell_size))
+        self.work_inventory.rect.centerx = WSIZE[0] // 2
+        self.table_inventory.rect.topleft = self.work_inventory.rect.topleft
+
+        self.inventory_info_index = None
+        self.inventory_info_index_surface = pygame.Surface((1, 1))
+        self.top_bg_color = (82, 82, 91, 150)
+        self.recipes = SurfaceUI(pg.Rect((0, TSIZE + 10, self.cell_size * len(RECIPES),
+                                          self.cell_size))).convert_alpha()
+        self.recipes_info_index = None
+        self.recipes_info_index_surface = pygame.Surface((1, 1))
+        self.redraw_recipes()
+
+    def redraw_table_inventory(self):
+        self.table_inventory.fill(self.top_bg_color)
+        x = 0
+        y = 0
+        i = 0
+        cell_size = self.cell_size
+        cell_size_2 = cell_size // 2
+        for i in range(self.inventory.inventory_size):
+            color = "#000000"
+            if i == self.inventory.active_cell:
+                color = "#FFFFFF"
+            pygame.draw.rect(self.table_inventory, color,
+                             (x, y, TSIZE + 7, TSIZE + 7), 1)
+            cell = self.inventory[i]
+            if cell is not None:
+                img = cell.sprite
+                iw, ih = img.get_size()
+                self.table_inventory.blit(img, (x + cell_size_2 - iw // 2, y + cell_size_2 - ih // 2))
+                res = str(cell.count)
+                tx, ty = (x + TSIZE + 3 - 7 * len(res), y + TSIZE - 8)
+                text = textfont.render(res, True, text_color_dark)
+                self.table_inventory.blit(text, (tx + 1, ty + 1))
+                text = textfont.render(res, True, text_color_light)
+                self.table_inventory.blit(text, (tx, ty))
+            x += cell_size
+            if i > 0 and i % self.inventory.size_table[0] == 0:
+                y += cell_size
+                x = 0
+
+    def redraw_top(self):
+        self.redraw_table_inventory()
+        self.work_inventory.fill(self.top_bg_color)
+        x = 0
+        i = 0
+        cell_size = self.cell_size
+        cell_size_2 = cell_size // 2
+        for i in range(self.inventory.size_table[0]):
+            color = "#000000"
+            if i == self.inventory.active_cell:
+                color = "#FFFFFF"
+            pygame.draw.rect(self.work_inventory, color,
+                             (x, 0, TSIZE + 7, TSIZE + 7), 1)
+            cell = self.inventory[i]
+            if cell is not None:
+                img = cell.sprite
+                iw, ih = img.get_size()
+                self.work_inventory.blit(img, (x + cell_size_2 - iw // 2, cell_size_2 - ih // 2))
+                res = str(cell.count)
+                tx, ty = (x + TSIZE + 3 - 7 * len(res), TSIZE - 8)
+                text = textfont.render(res, True, text_color_dark)
+                self.work_inventory.blit(text, (tx + 1, ty + 1))
+                text = textfont.render(res, True, text_color_light)
+                self.work_inventory.blit(text, (tx, ty))
+            x += cell_size
+
+    def redraw_recipes(self):
+        self.recipes.fill(self.top_bg_color)
+        x = 0
+        i = 0
+        cell_size = self.cell_size
+        cell_size_2 = cell_size // 2
+        for i in range(len(RECIPES)):
+            color = "#000000"
+            pygame.draw.rect(self.recipes, color,
+                             (x, 0, TSIZE + 7, TSIZE + 7), 1)
+            cell = RECIPES[i][0]
+            img = tile_imgs[cell[0]]
+            iw, ih = img.get_size()
+            self.recipes.blit(img, (x + cell_size_2 - iw // 2, cell_size_2 - ih // 2))
+            res = str(cell[1])
+            tx, ty = (x + TSIZE + 3 - 7 * len(res), TSIZE - 8)
+            text = textfont.render(res, True, text_color_dark)
+            self.recipes.blit(text, (tx + 1, ty + 1))
+            text = textfont.render(res, True, text_color_light)
+            self.recipes.blit(text, (tx, ty))
+            x += cell_size
+
+    def redraw_recipes_info(self):
+        out, recipe = RECIPES[self.recipes_info_index]
+        tx = 3
+        ty = 3
+        name = tile_words[out[0]]
+        name_surface = textfont.render(name, True, text_color_light)
+        span = textfont.get_height() + 3
+        self.recipes_info_index_surface = pygame.Surface((max(140, name_surface.get_width() + 6), span * (len(recipe) + 3)),
+                                                         pygame.SRCALPHA,
+                                                         32)
+        self.recipes_info_index_surface.fill(self.top_bg_color)
+        self.recipes_info_index_surface.blit(name_surface, (tx, ty))
+        ty += span
+        self.recipes_info_index_surface.blit(textfont.render("-" * 50, True, text_color_light), (0, ty))
+        ty += span
+        for index, cnt in recipe:
+            res = f"{tile_words[index]}: {cnt if cnt > 0 else ''}"
+            text = textfont.render(res, True, text_color_light)
+            self.recipes_info_index_surface.blit(text, (tx, ty))
+            ty += span
+
+    def redraw_inventory_info(self):
+        item = self.inventory[self.inventory_info_index]
+        if item is None:
+            self.inventory_info_index = None
+            return
+        text = textfont.render(tile_words[item.index], True, text_color_light)
+        w, h = text.get_size()
+        self.inventory_info_index_surface = pygame.Surface((w + 6, h + 4)).convert_alpha()
+        self.inventory_info_index_surface.fill(self.top_bg_color)
+        self.inventory_info_index_surface.blit(text, (3, 2))
+
+    def draw(self, surface):
+        self.fill(color_none)
+
+        self.work_inventory.draw(self)
+        self.table_inventory.draw(self)
+        self.recipes.draw(self)
+        if self.recipes_info_index is not None:
+            self.blit(self.recipes_info_index_surface,
+                      (
+                          self.recipes.rect.x + self.recipes_info_index * self.cell_size,
+                          self.recipes.rect.bottom))
+        if self.inventory_info_index is not None:
+            self.blit(self.inventory_info_index_surface,
+                      (self.work_inventory.rect.x + self.inventory_info_index * self.cell_size, self.cell_size))
+        if show_info_menu:
+            self.blit(self.info_surface, (WINDOW_SIZE[0] - 250, 0))
+
+        surface.blit(self, self.rect)
+
+    def pg_event(self, event: pg.event.Event):
+        if event.type == pg.MOUSEBUTTONDOWN:
+            if event.button == pg.BUTTON_LEFT:
+                if self.recipes.rect.collidepoint(event.pos):
+                    i = (event.pos[0] - self.recipes.rect.x) // self.cell_size
+                    self.inventory.creating_item_of_i(i)
+                    return True
+        elif event.type == pg.MOUSEMOTION:
+            if self.recipes.rect.collidepoint(event.pos):
+                self.inventory_info_index = None
+                i = (event.pos[0] - self.recipes.rect.x) // self.cell_size
+                if i != self.recipes_info_index:
+                    self.recipes_info_index = i
+                    self.redraw_recipes_info()
+            elif self.work_inventory.rect.collidepoint(event.pos):
+                self.recipes_info_index = None
+                i = (event.pos[0] - self.work_inventory.rect.x) // self.cell_size
+                if i != self.recipes_info_index:
+                    self.inventory_info_index = i
+                    self.redraw_inventory_info()
+            else:
+                self.recipes_info_index = None
+                self.inventory_info_index = None
+
+        return False

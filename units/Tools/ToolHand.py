@@ -42,14 +42,14 @@ class ToolHand(ToolPickaxe):
             v_tile = (vtm + vp) // TSIZE
             x, y = int(v_tile.x), int(v_tile.y)
             game_map = self.owner.game_map
-            check = check_set_tile(game_map, x, y, self.owner.inventory[self.owner.active_cell])
+            check = check_set_tile(game_map, x, y, self.owner.inventory[self.owner.inventory.active_cell])
             if check:
                 if time() > self.reload_time_set + self.last_action_time_set:
                     self.last_action_time_set = time()
                     self.animation.start()
-                    res = set_tile(self.owner, x, y, self.owner.inventory[self.owner.active_cell], True)
+                    res = set_tile(self.owner, x, y, self.owner.inventory[self.owner.inventory.active_cell], True)
                     if res == 0:
-                        self.owner.inventory[self.owner.active_cell] = None
+                        self.owner.inventory[self.owner.inventory.active_cell] = None
                     self.owner.choose_active_cell()
                     result = True
                 self.stroke_rect.x = x * TSIZE - vp.x

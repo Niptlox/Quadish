@@ -1,5 +1,6 @@
 import random
 from time import time
+from typing import Union
 
 from pygame import Vector2
 from pygame.locals import *
@@ -10,11 +11,222 @@ from units.Items import Items, ItemsTile
 from units.Texture import rot_center
 # from units.Tiles import PICKAXES_CAPABILITY, PICKAXES_SPEED, PICKAXES_STRENGTH, STANDING_TILES, ITEM_TILES
 from units.Tiles import hand_pass_img, player_img, dig_rect_img, tile_hand_imgs
-from units.Tools import ToolHand, TOOLS  # ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe, ItemTool
+from units.Tools import ToolHand, TOOLS, ItemTool  # ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe, ItemTool
 from units.common import *
+
+from units.UI.UI import InventoryGameUI
 
 
 # from units.Cursor import set_cursor, cursor_add_img, CURSOR_DIG, CURSOR_NORMAL, CURSOR_SET
+
+class Inventory:
+    cell_size = 1000
+
+    def __init__(self, owner, size_table=(10, 5)):
+        self.owner = owner
+        self.size_table = size_table
+        self.inventory_size = self.size_table[0] * self.size_table[1]
+        self.inventory = [None] * self.inventory_size
+        # self.inventory[0] = ItemSword(self.game)
+        self.active_cell = 0
+
+    def set_vars(self, vrs):
+        self.__init__(self.owner, vrs.pop("size_table"))
+        _inventory = vrs.pop("_inventory")
+        for i in range(len(_inventory)):
+            if _inventory[i] is None:
+                self.inventory[i] = None
+            else:
+                type_obj, vrs_obj = _inventory[i]
+
+                obj = type_obj(self.owner.game)
+                obj.set_vars(vrs_obj)
+                if obj.class_obj & OBJ_ITEM and obj.class_item & CLS_TOOL:
+                    obj.set_owner(self.owner)
+                self.inventory[i] = obj
+
+    def get_vars(self):
+        d = {"size_table": self.size_table}
+        d["_inventory"] = [(type(i), i.get_vars()) if i else None for i in self.inventory]
+        return d
+
+    def __getitem__(self, item):
+        """[index] - получение ячейки по индексу в масиве
+        [(row, column)] - получение ячейки по стлолбцу и строке в таблице"""
+        if type(item) is int:
+            return self.inventory[item]
+        elif type(item) is tuple:
+            x, y = item
+            return self.inventory[y * self.size_table[0] + x]
+
+    def __setitem__(self, key, value):
+        if type(key) is int:
+            self.inventory[key] = value
+        elif type(key) is tuple:
+            x, y = key
+            self.inventory[y * self.size_table[0] + x] = value
+
+    @property
+    def row_work(self) -> list:
+        return self.inventory[:self.size_table[0]]
+
+    def discard_item(self, num_cell=None, items: Items = None, discard_vector=(TSIZE * 2, 10)):
+        if num_cell is not None:
+            items = self.inventory[num_cell]
+            self.inventory[num_cell] = None
+            self.redraw()
+        if items:
+            ix, iy = self.owner.rect.centerx + discard_vector[0], self.owner.rect.centery + discard_vector[1]
+            items.rect.x, items.rect.y = ix, iy
+            items.alive = True
+            print(ix, iy, *self.owner.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
+            self.owner.game_map.add_dinamic_obj(*self.owner.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
+
+    def discard_all_items(self):
+        for i in range(len(self.inventory)):
+            self.discard_item(i, None, discard_vector=(0, 0))
+
+    def put_to_inventory(self, items):
+        i = 0
+        while i < self.inventory_size:
+            if self.inventory[i] and self.inventory[i].count < self.cell_size and \
+                    self.inventory[i].index == items.index:
+                free_place = self.cell_size - self.inventory[i].count
+                if items.count > free_place:
+                    self.inventory[i].count += free_place
+                    items.count -= free_place
+                else:
+                    self.inventory[i].count += items.count
+                    break
+            i += 1
+        else:
+            i = 0
+            while i < self.inventory_size:
+                if self.inventory[i] is None:
+                    if items.count < self.cell_size:
+                        self.inventory[i] = items
+                        if items.class_item & CLS_TOOL:
+                            items.set_owner(self.owner)
+                    else:
+                        self.inventory[i] = items.copy()
+                        self.inventory[i].count = self.cell_size
+                        items.count -= self.cell_size
+                        continue
+                    break
+                i += 1
+            else:
+                # print("Перепонен инвентарь", ttile)
+                self.redraw()
+                # self.ui.redraw_top()
+                return False, items.count
+        # self.ui.redraw_top()
+        self.redraw()
+        return True, None
+
+    def find_in_inventory(self, ttile, count=1):
+        if self.owner.creative_mode:
+            return True
+        all_cnt = 0
+        for i in filter(lambda x: x, self.inventory):
+            if i.index == ttile:
+                all_cnt += i.count
+                if all_cnt >= count:
+                    return True
+        return False
+
+    def get_from_inventory(self, ttile, count):
+        if self.owner.creative_mode:
+            return True
+        if not self.find_in_inventory(ttile, count):
+            return False
+            # мы знаем что ttile есть в инвенторе
+        for i in range(self.inventory_size):
+            if self.inventory[i]:
+                item = self.inventory[i]
+                if item.index == ttile:
+                    if item.count <= count:
+                        count -= item.count
+                        self.inventory[i] = None
+                    else:
+                        self.inventory[i].count -= count
+                        break
+        self.redraw()
+        return True
+
+    def get_cell_from_inventory(self, num_cell):
+        item = self.inventory[num_cell]
+        self.inventory[num_cell] = None
+        self.redraw()
+        return item
+
+    def redraw(self):
+        pass
+
+
+class InventoryPlayer(Inventory):
+    def __init__(self, owner, size_table=(10, 5)):
+        super(InventoryPlayer, self).__init__(owner=owner, size_table=size_table)
+        self.ui = InventoryGameUI(self)
+        self.active_cell = 0
+
+    def set_vars(self, vrs):
+        super(InventoryPlayer, self).set_vars(vrs)
+        self.active_cell = vrs["active_cell"]
+
+    def get_vars(self):
+        d = super(InventoryPlayer, self).get_vars()
+        d["active_cell"] = self.active_cell
+        return d
+
+    def pg_event(self, event):
+        if self.ui.pg_event(event):
+            return
+        if event.type == KEYDOWN:
+            if event.key in NUM_KEYS:
+                self.active_cell = NUM_KEYS.index(event.key)
+                self.redraw()
+        elif event.type == MOUSEWHEEL:
+            self.active_cell -= event.y
+            if self.active_cell <= -1:
+                self.active_cell = self.size_table[0] - 1
+            elif self.active_cell >= self.size_table[0]:
+                self.active_cell = 0
+            self.redraw()
+
+    def check_creating_item_of_i(self, rec_i):
+        if self.owner.creative_mode:
+            return True
+        if rec_i < len(RECIPES):
+            out, need = RECIPES[rec_i]
+            for t, c in need:
+                if c == -1:
+                    # косаемся ли мы нужного блока
+                    hit_static_lst, _ = Entity.collision_test(self.owner.game_map, self.owner.rect,
+                                                              self.owner.game.screen_map.static_tiles,
+                                                              collide_all_tiles=True)
+                    if any([e[1] == t for e in hit_static_lst]):
+                        continue
+                elif self.find_in_inventory(t, c):
+                    continue
+                return False
+            return True
+        return False
+
+    def creating_item_of_i(self, rec_i, cnt=1):
+        if self.check_creating_item_of_i(rec_i):
+            out, need = RECIPES[rec_i]
+            [self.get_from_inventory(t, c) for t, c in need]
+            if out[0] in TOOLS:
+                item = TOOLS[out[0]](self.owner.game)
+                item.set_owner(self)
+            else:
+                item = ItemsTile(self.owner.game, out[0], count=out[1])
+            res, _ = self.put_to_inventory(item)  # дверь
+            if not res:
+                self.discard_item(None, item)
+
+    def redraw(self):
+        self.owner.choose_active_cell()
 
 
 class Player(Entity.PhysicalObject):
@@ -72,14 +284,8 @@ class Player(Entity.PhysicalObject):
         self.first_fall = True
 
         # INVENTORY ============================        
-
-        self.inventory_size = 16
-        self.inventory = [None] * self.inventory_size
-        # self.inventory[0] = ItemSword(self.game)
-        self.inventory[0] = TOOLS[531](self.game)  # pickaxe
-        self.inventory[0].set_owner(self)
-        self.active_cell = 0
-        self.cell_size = 1000
+        self.inventory = InventoryPlayer(self, size_table=(10, 5))
+        self.inventory.redraw()
 
         self.flip = False
         self.toolHand = ToolHand(self)
@@ -87,7 +293,6 @@ class Player(Entity.PhysicalObject):
         self.vector = Vector2(0)
 
         self.creative_mode = CREATIVE_MODE
-
 
     def get_vars(self):
         d = self.__dict__.copy()
@@ -97,32 +302,24 @@ class Player(Entity.PhysicalObject):
         d.pop("hand_img")
         d.pop("lives_surface")
         # d.pop("inventory")
-        d["_inventory"] = [(type(i), i.get_vars()) if i else None for i in d.pop("inventory")]
+        d["inventory"] = self.inventory.get_vars()
         d.pop("toolHand")
         d.pop("tool")
         print(d)
         return d
 
     def set_vars(self, vrs):
-        vrs["inventory"] = []
+        self.inventory.set_vars(vrs.pop("inventory"))
         # vrs["max_fall_speed"] = self.max_fall_speed
         vrs["rect"].size = self.rect.size
-        for i in vrs.pop("_inventory"):
-            if i is None:
-                vrs["inventory"].append(None)
-            else:
-                type_obj, vrs_obj = i
 
-                obj = type_obj(self.game)
-                obj.set_vars(vrs_obj)
-                if obj.class_obj & OBJ_ITEM and obj.class_item & CLS_TOOL:
-                    obj.set_owner(self)
-                vrs["inventory"].append(obj)
         super().set_vars(vrs)
         self.fall_speed = FALL_SPEED
-        self.redraw_inventory()
+        self.inventory.redraw()
 
     def pg_event(self, event):
+        if self.inventory.pg_event(event):
+            return
         if event.type == KEYDOWN:
             if event.key in (K_RIGHT, K_d):
                 self.moving_right = True
@@ -139,9 +336,10 @@ class Player(Entity.PhysicalObject):
             elif event.key == K_r:
                 self.tp_random()
             elif event.key == K_q:  # выкинуть все предметы в текущей ячейке инвентаря
-                self.discard_item(self.active_cell)
+                self.inventory.discard_item(self.inventory.active_cell,
+                                            discard_vector=(TSIZE * (-2 if self.flip else 2), 10))
             elif event.key == K_f:
-                self.creating_item_of_i(self.active_cell)
+                self.inventory.creating_item_of_i(self.inventory.active_cell)
             elif event.key in NUM_KEYS:
                 self.num_down = NUM_KEYS.index(event.key)
         elif event.type == KEYUP:
@@ -169,13 +367,6 @@ class Player(Entity.PhysicalObject):
                 self.set = False
                 self.eat = True
         # ========================================
-        elif event.type == MOUSEWHEEL:
-            self.active_cell -= event.y
-            if self.active_cell <= -1:
-                self.active_cell = self.inventory_size - 1
-            elif self.active_cell >= self.inventory_size:
-                self.active_cell = 0
-            self.redraw_inventory()
 
     def set_spawn_point(self, point):
         self.spawn_point = point
@@ -194,7 +385,7 @@ class Player(Entity.PhysicalObject):
 
     def relive(self):
         self.alive = True
-        self.discard_all_items()
+        self.inventory.discard_all_items()
         self.lives = self.max_lives
         self.rect.center = self.spawn_point
         self.jump_count = 0
@@ -220,7 +411,7 @@ class Player(Entity.PhysicalObject):
         vector_player_display = self.vector - Vector2(self.game.screen_map.scroll)
         vector_to_mouse = Vector2(pg.mouse.get_pos()) - vector_player_display
 
-        item = self.inventory[self.active_cell]
+        item: Union[Items, ItemTool] = self.inventory[self.inventory.active_cell]
         if item is None or item.class_item & CLS_TOOL == 0:
             self.tool = self.toolHand
         else:
@@ -237,7 +428,7 @@ class Player(Entity.PhysicalObject):
             self.lives = min(self.lives + item.recovery_lives, self.max_lives)
             item.count -= 1
             if item.count <= 0:
-                self.inventory[self.active_cell] = None
+                self.inventory[self.inventory.active_cell] = None
             self.redraw_inventory()
         self.eat = False
 
@@ -246,7 +437,7 @@ class Player(Entity.PhysicalObject):
         for tile in self.game.screen_map.dynamic_tiles:
             if tile.class_obj & OBJ_ITEM != 0:
                 if self.get_item_rect.colliderect(tile):
-                    res, cnt = self.put_to_inventory(tile)
+                    res, cnt = self.inventory.put_to_inventory(tile)
                     if res:
                         tile.alive = False
                     else:
@@ -260,137 +451,15 @@ class Player(Entity.PhysicalObject):
         pg.draw.rect(self.lives_surface, "#A3E635AA", ((1, 1), (w, 4)))
         surface.blit(self.lives_surface, (pos_obj[0], pos_obj[1] - 10))
 
-    def discard_item(self, num_cell=None, items=None, discard_vector=(TSIZE * 2, 0)):
-        if num_cell is not None:
-            items = self.inventory[num_cell]
-            self.inventory[num_cell] = None
-            self.redraw_inventory()
-        if items:
-            ix, iy = self.rect.centerx + discard_vector[0], self.rect.centery + discard_vector[1]
-            items.rect.x, items.rect.y = ix, iy
-            items.alive = True
-            print(ix, iy, *self.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
-            self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
-
-    def discard_all_items(self):
-        for i in range(len(self.inventory)):
-            self.discard_item(i, None, discard_vector=(0, 0))
-
-    def put_to_inventory(self, items):
-        i = 0
-        while i < self.inventory_size:
-            if self.inventory[i] and self.inventory[i].count < self.cell_size and \
-                    self.inventory[i].index == items.index:
-                free_place = self.cell_size - self.inventory[i].count
-                if items.count > free_place:
-                    self.inventory[i].count += free_place
-                    items.count -= free_place
-                else:
-                    self.inventory[i].count += items.count
-                    break
-            i += 1
-        else:
-            i = 0
-            while i < self.inventory_size:
-                if self.inventory[i] is None:
-                    if items.count < self.cell_size:
-                        self.inventory[i] = items
-                        if items.class_item & CLS_TOOL:
-                            items.set_owner(self)
-                    else:
-                        self.inventory[i] = items.copy()
-                        self.inventory[i].count = self.cell_size
-                        items.count -= self.cell_size
-                        continue
-                    break
-                i += 1
-            else:
-                # print("Перепонен инвентарь", ttile)
-                self.redraw_inventory()
-                # self.ui.redraw_top()
-                return False, items.count
-        # self.ui.redraw_top()
-        self.redraw_inventory()
-        return True, None
-
-    def find_in_inventory(self, ttile, count=1):
-        if self.creative_mode:
-            return True
-        all_cnt = 0
-        for i in filter(lambda x: x, self.inventory):
-            if i.index == ttile:
-                all_cnt += i.count
-                if all_cnt >= count:
-                    return True
-        return False
-
-    def get_from_inventory(self, ttile, count):
-        if self.creative_mode:
-            return True
-        if not self.find_in_inventory(ttile, count):
-            return False
-            # мы знаем что ttile есть в инвенторе
-        for i in range(self.inventory_size):
-            if self.inventory[i]:
-                item = self.inventory[i]
-                if item.index == ttile:
-                    if item.count <= count:
-                        count -= item.count
-                        self.inventory[i] = None
-                    else:
-                        self.inventory[i].count -= count
-                        break
-        self.redraw_inventory()
-        return True
-
-    def get_cell_from_inventory(self, num_cell):
-        item = self.inventory[num_cell]
-        self.inventory[num_cell] = None
-        self.redraw_inventory()
-        return item
-
-    def check_creating_item_of_i(self, rec_i):
-        if self.creative_mode:
-            return True
-        if rec_i < len(RECIPES):
-            out, need = RECIPES[rec_i]
-            for t, c in need:
-                if c == -1:
-                    # косаемся ли мы нужного блока
-                    hit_static_lst, _ = Entity.collision_test(self.game_map, self.rect,
-                                                              self.game.screen_map.static_tiles, collide_all_tiles=True)
-                    if any([e[1] == t for e in hit_static_lst]):
-                        continue
-                elif self.find_in_inventory(t, c):
-                    continue
-                return False
-            return True
-        return False
-
-    def creating_item_of_i(self, rec_i, cnt=1):
-        if self.check_creating_item_of_i(rec_i):
-            out, need = RECIPES[rec_i]
-            [self.get_from_inventory(t, c) for t, c in need]
-            if out[0] in TOOLS:
-                item = TOOLS[out[0]](self.game)
-                item.set_owner(self)
-            else:
-                item = ItemsTile(self.game, out[0], count=out[1])
-            res, _ = self.put_to_inventory(item)  # дверь
-            if not res:
-                self.discard_item(None, item)
-
-    def redraw_inventory(self):
-        self.choose_active_cell()
-
     def choose_active_cell(self, cell=-1):
+        """Рисуем новую руку для игрока а также перерисвываем верхнее табло"""
         if cell != -1:
-            self.active_cell = cell
+            self.inventory.active_cell = cell
         self.hand_img = hand_pass_img
-        if self.inventory[self.active_cell]:
-            if self.inventory[self.active_cell] is not None:
-                self.hand_img = self.inventory[self.active_cell].sprite
-        self.ui.redraw_top()
+        if self.inventory[self.inventory.active_cell]:
+            if self.inventory[self.inventory.active_cell] is not None:
+                self.hand_img = self.inventory[self.inventory.active_cell].sprite
+        self.inventory.ui.redraw_top()
 
     def jump(self):
         if self.on_wall:
@@ -401,16 +470,20 @@ class Player(Entity.PhysicalObject):
         elif self.jump_count < self.max_jump_count:
             self.jump_count += 1
             self.vertical_momentum = -self.jump_speed * (self.jump_count * 0.25 + 1)
+        elif self.creative_mode:
+            self.vertical_momentum = -self.jump_speed * (self.jump_count * 0.25 + 1)
 
     def moving(self):
         player_movement = pg.Vector2(0, 0)
         if self.moving_right:
+            self.flip = False
             if self.speed < 0:
                 self.speed //= 2
             self.speed += self.accelerate_x
             if self.speed > self.max_speed:
                 self.speed = self.max_speed
         elif self.moving_left:
+            self.flip = True
             if self.speed > 0:
                 self.speed //= 2
                 if self.speed == -1: self.speed = 0
@@ -430,8 +503,7 @@ class Player(Entity.PhysicalObject):
 
         collisions = self.move(player_movement, self.game.screen_map.static_tiles)
         collisions_ttile = [col[1] for arrow in collisions for col in collisions[arrow]]
-        print(collisions_ttile)
-        # _, _, semiphysbody_lst = collision_test(self.game_map, self.rect, self.game.screen_map.static_tiles, semiphysbody=True)
+        # print(collisions_ttile)
         if 120 in collisions_ttile:
             self.air_timer = 0
             self.jump_count = 0
@@ -482,10 +554,11 @@ class Player(Entity.PhysicalObject):
     def set_game_mode(self, creative_mode=False):
         # global self.creative_mode
         self.creative_mode = creative_mode
+        self.jump_count = 0
         if self.creative_mode:
             self.ui.new_sys_message("Режим создателя включен")
             item = TOOLS[532](self.game)  # gold pickaxe
             item.set_owner(self)
-            self.put_to_inventory(item)
+            self.inventory.put_to_inventory(item)
         else:
             self.ui.new_sys_message("Режим создателя выключен")

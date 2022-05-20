@@ -83,7 +83,7 @@ class PhysicalObject:
         d.pop("game")
         # dell all Surfaces
         for k in [k for k, i in d.items() if
-                  type(i) is pg.Surface or (type(i) is list and i and type(i[0]) is pg.Surface)]:
+                  type(i) in {pg.Surface, PhysicalObject} or (type(i) is list and i and type(i[0]) is pg.Surface)]:
             d.pop(k)
         return d
 

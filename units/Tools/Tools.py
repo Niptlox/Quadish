@@ -65,7 +65,7 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
         items = tile[3]
         i = int((local_pos_tile[0] // 16) + (local_pos_tile[1] // 16) * 2)
         if items[i] is None:
-            item = player.get_cell_from_inventory(player.active_cell)
+            item = player.inventory.get_cell_from_inventory(player.active_cell)
             if item:
                 items[i] = (item.index, item.count)
         else:

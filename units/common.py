@@ -11,7 +11,7 @@ pygame.init()  # initiate pygame
 desktop_size = pygame.display.get_desktop_sizes()[0]
 
 print("INIT GAME VARS")
-GAME_VERSION = "0.7"
+GAME_VERSION = "0.9.1"
 WINDOW_SIZE = (700 * 2, 400 * 2)
 WINDOW_SIZE = (1000, 650)
 WINDOW_SIZE = (2200, 1100)

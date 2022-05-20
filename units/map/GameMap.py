@@ -350,44 +350,44 @@ class GameMap:
         file_p = f'data/maps/game_map-{num}.pclv'
         print(f"GamaMap: '{file_p}' - SAVING...")
         self.num_save_map = num
-        try:
-            data = {"game_map_vars": self.get_vars(), "player_vars": game.player.get_vars(),
-                    "game_version": GAME_VERSION, "game_tact": game.tact}
-            t = pickle.dumps(data)
-            with open(file_p, 'wb') as f:
-                f.write(t)
-            print("GamaMap - SAVE!")
-            self.game.ui.new_sys_message(f"Карта сохранена #{num}")
-        except Exception as exc:
-            print("Ошибка сохранения:", exc)
-            self.game.ui.new_sys_message(f"Ошибка {exc}")
-            return False
-        finally:
-
-            return True
+        # try:
+        data = {"game_map_vars": self.get_vars(), "player_vars": game.player.get_vars(),
+                "game_version": GAME_VERSION, "game_tact": game.tact}
+        t = pickle.dumps(data)
+        with open(file_p, 'wb') as f:
+            f.write(t)
+        print("GamaMap - SAVE!")
+        self.game.ui.new_sys_message(f"Карта сохранена #{num}")
+        # except Exception as exc:
+        #     print("Ошибка сохранения:", exc)
+        #     self.game.ui.new_sys_message(f"Ошибка {exc}")
+        #     return False
+        # finally:
+        #
+        #     return True
 
     def open_game_map(self, game, num=0):
         file_p = f'data/maps/game_map-{num}.pclv'
         self.num_save_map = num
         print(f"GamaMap: '{file_p}' - LOADING...")
-        try:
-            with open(file_p, 'rb') as f:
-                data = pickle.load(f)
-            version = data.get("game_version", "0.4")
-            if version != GAME_VERSION:
-                return
-            game_map = data["game_map_vars"]
-            game.game_map.set_vars(game_map)
-            player = data["player_vars"]
-            game.player.set_vars(player)
-            game.tact = data.get("game_tact", 0)
-            print(game.player.rect.center)
-            if abs(game.player.rect.x) > 10000 or abs(game.player.rect.y) > 10000:
-                game.screen_map.teleport_to_player()
-            game.ui.redraw_top()
-        except Exception as exc:
-            print("Ошибка загрузки:", exc)
-            return False
+        # try:
+        with open(file_p, 'rb') as f:
+            data = pickle.load(f)
+        version = data.get("game_version", "0.4")
+        if version != GAME_VERSION:
+            return
+        game_map = data["game_map_vars"]
+        game.game_map.set_vars(game_map)
+        player = data["player_vars"]
+        game.player.set_vars(player)
+        game.tact = data.get("game_tact", 0)
+        print(game.player.rect.center)
+        if abs(game.player.rect.x) > 10000 or abs(game.player.rect.y) > 10000:
+            game.screen_map.teleport_to_player()
+        game.player.inventory.ui.redraw_top()
+        # except Exception as exc:
+        #     print("Ошибка загрузки:", exc)
+        #     return False
         print("GamaMap - LOAD!")
         return file_p
 
@@ -430,7 +430,7 @@ def grow_tree(pos, game_map: GameMap):
 
 
 def random_creature_selection():
-    if random.randint(0, 100) < 95:
+    if random.randint(0, 100) < 50:
         return None
     crt = random.choices([Slime, Cow, Wolf, SlimeBigBoss], [10, 5, 5, 0.5], k=1)
     # print("random_creature_selection", crt)
