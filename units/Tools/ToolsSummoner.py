@@ -16,7 +16,7 @@ class ToolSummon(ToolSword):
         if super(ToolSummon, self).right_button_click(vector_to_mouse):
             # кликнул по интеракт объекту
             return
-        if self.owner.get_from_inventory(51, 50) and self.owner.get_from_inventory(66, 1):
+        if self.owner.inventory.get_from_inventory(51, 50) and self.owner.inventory.get_from_inventory(66, 1):
             # на боса - 50 слизи и 1 рубин
             vtm = vector_to_mouse
             vp: Vector2 = self.owner.vector  # player

@@ -27,7 +27,7 @@ class Game(App):
 class GameScene(Scene):
     def __init__(self, app) -> None:
         super().__init__(app)
-        self.game_map = GameMap(self, generate_type)
+        self.game_map = GameMap(self, Generate_type)
 
         self.ui = GameUI(self)
         self.player = Player(self, 0, 0)

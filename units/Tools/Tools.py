@@ -72,6 +72,9 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
             game_map.add_item_of_index(items[i][0], items[i][1], x, y)
             items[i] = None
         game_map.set_static_tile(x, y, tile)
+    elif ttile == 122:  # стул
+        sx, sy = x * TSIZE-3, y * TSIZE + 16
+        player.sit((sx, sy))
     elif ttile == 123:
         game_map.set_static_tile(x, y, game_map.get_tile_ttile(124))
     elif ttile == 124:

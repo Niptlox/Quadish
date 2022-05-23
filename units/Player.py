@@ -78,6 +78,7 @@ class Inventory:
         if items:
             ix, iy = self.owner.rect.centerx + discard_vector[0], self.owner.rect.centery + discard_vector[1]
             items.rect.x, items.rect.y = ix, iy
+            items.update_chunk_pos()
             items.alive = True
             print(ix, iy, *self.owner.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
             self.owner.game_map.add_dinamic_obj(*self.owner.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
@@ -180,7 +181,7 @@ class InventoryPlayer(Inventory):
 
     def pg_event(self, event):
         if self.ui.pg_event(event):
-            return
+            return True
         if event.type == KEYDOWN:
             if event.key in NUM_KEYS:
                 self.active_cell = NUM_KEYS.index(event.key)
@@ -194,9 +195,9 @@ class InventoryPlayer(Inventory):
             self.redraw()
 
     def check_creating_item_of_i(self, rec_i):
-        if self.owner.creative_mode:
-            return True
         if rec_i < len(RECIPES):
+            if self.owner.creative_mode:
+                return True
             out, need = RECIPES[rec_i]
             for t, c in need:
                 if c == -1:
@@ -225,6 +226,9 @@ class InventoryPlayer(Inventory):
             if not res:
                 self.discard_item(None, item)
 
+    def choose_active_cell(self, i):
+        self.owner.choose_active_cell(i)
+
     def redraw(self):
         self.owner.choose_active_cell()
 
@@ -252,6 +256,7 @@ class Player(Entity.PhysicalObject):
         self.moving_right = False
         self.moving_left = False
         self.on_up = False
+        self.sitting = False
         self.dig = False
         self.dig_pos = None
         self.dig_dist = 3
@@ -283,7 +288,9 @@ class Player(Entity.PhysicalObject):
         self.air_timer = 0
         self.first_fall = True
 
-        # INVENTORY ============================        
+        # INVENTORY ============================
+        self.creative_mode = CREATIVE_MODE
+
         self.inventory = InventoryPlayer(self, size_table=(10, 5))
         self.inventory.redraw()
 
@@ -291,8 +298,6 @@ class Player(Entity.PhysicalObject):
         self.toolHand = ToolHand(self)
         self.tool = None
         self.vector = Vector2(0)
-
-        self.creative_mode = CREATIVE_MODE
 
     def get_vars(self):
         d = self.__dict__.copy()
@@ -319,7 +324,7 @@ class Player(Entity.PhysicalObject):
 
     def pg_event(self, event):
         if self.inventory.pg_event(event):
-            return
+            return True
         if event.type == KEYDOWN:
             if event.key in (K_RIGHT, K_d):
                 self.moving_right = True
@@ -342,6 +347,8 @@ class Player(Entity.PhysicalObject):
                 self.inventory.creating_item_of_i(self.inventory.active_cell)
             elif event.key in NUM_KEYS:
                 self.num_down = NUM_KEYS.index(event.key)
+            if event.key in (K_DOWN, K_f, K_s, K_SPACE, K_w, K_UP):
+                self.sitting = False
         elif event.type == KEYUP:
             if event.key in (K_RIGHT, K_d):
                 self.moving_right = False
@@ -400,8 +407,10 @@ class Player(Entity.PhysicalObject):
         self.tact = tact
         if not self.alive:
             return False
+        if not self.sitting:
+            self.moving()
 
-        self.moving()
+        self.draw(self.ui.display)
 
         # SHOW PLAYER HAND ===============================================
         if self.num_down != -1:
@@ -429,7 +438,7 @@ class Player(Entity.PhysicalObject):
             item.count -= 1
             if item.count <= 0:
                 self.inventory[self.inventory.active_cell] = None
-            self.redraw_inventory()
+            self.inventory.redraw()
         self.eat = False
 
         # find and get ground items ==========================================
@@ -472,6 +481,12 @@ class Player(Entity.PhysicalObject):
             self.vertical_momentum = -self.jump_speed * (self.jump_count * 0.25 + 1)
         elif self.creative_mode:
             self.vertical_momentum = -self.jump_speed * (self.jump_count * 0.25 + 1)
+
+    def sit(self, pos=None):
+        self.sitting = True
+        self.vertical_momentum = 0
+        if pos:
+            self.rect.x, self.rect.bottom = pos
 
     def moving(self):
         player_movement = pg.Vector2(0, 0)
@@ -525,12 +540,14 @@ class Player(Entity.PhysicalObject):
                 self.vertical_momentum = 0
                 self.jump_count = min(self.max_jump_count, self.jump_count)
                 self.on_wall = True
+
+    def draw(self, surface):
         scroll = self.game.screen_map.scroll
         player_display_pos = (min(WSIZE[0], max(-TSIZE, self.rect.x - scroll[0])),
                               min(WSIZE[0], max(-TSIZE, self.rect.y - scroll[1])))
-        self.ui.display.blit(self.player_img, player_display_pos)
+        surface.blit(self.player_img, player_display_pos)
         # if self.lives != self.max_lives:
-        self.draw_lives(self.ui.display, player_display_pos)
+        self.draw_lives(surface, player_display_pos)
 
     def damage(self, lives):
         if self.creative_mode:
@@ -562,3 +579,4 @@ class Player(Entity.PhysicalObject):
             self.inventory.put_to_inventory(item)
         else:
             self.ui.new_sys_message("Режим создателя выключен")
+

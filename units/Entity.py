@@ -58,6 +58,8 @@ class PhysicalObject:
 
     def __init__(self, game, x=0, y=0, width=0, height=0, use_physics=False, sprite=None) -> None:
         self.rect: pygame.Rect = pygame.Rect(x, y, width, height)
+        self.chunk_pos = (0, 0)
+        self.update_chunk_pos()
         self.game = game
         self.game_map = game.game_map
         if self.sprite is None or sprite is not None:
@@ -143,8 +145,6 @@ class PhysicalObject:
 
     def update_physics(self):
 
-        cy = self.rect.y // (TSIZE * CSIZE)
-        cx = self.rect.x // (TSIZE * CSIZE)
         self.physical_vector.y += self.fall_speed
         if self.physical_vector.y > self.max_fall_speed:
             self.physical_vector.y = self.max_fall_speed
@@ -164,10 +164,14 @@ class PhysicalObject:
             self.physical_vector.x = 0
         new_cy = self.rect.y // (TSIZE * CSIZE)
         new_cx = self.rect.x // (TSIZE * CSIZE)
-        if new_cy != cy or new_cx != cx:
+        if self.chunk_pos[1] != new_cy or new_cx != self.chunk_pos[0]:
             # print(self.rect.y, cy, new_cy)
-            self.game_map.move_dinamic_obj(cx, cy, new_cx, new_cy, self)
+            self.game_map.move_dinamic_obj(*self.chunk_pos, new_cx, new_cy, self)
+            self.chunk_pos = (new_cx, new_cy)
         self.movement_vector.xy = (0, 0)
+
+    def update_chunk_pos(self):
+        self.chunk_pos = (self.rect.x // (TSIZE * CSIZE), self.rect.y // (TSIZE * CSIZE))
 
     def draw(self, surface, pos):
         if show_entity_border:

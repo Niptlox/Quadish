@@ -12,10 +12,10 @@ desktop_size = pygame.display.get_desktop_sizes()[0]
 
 print("INIT GAME VARS")
 GAME_VERSION = "0.9.1"
-WINDOW_SIZE = (700 * 2, 400 * 2)
 WINDOW_SIZE = (1000, 650)
 WINDOW_SIZE = (2200, 1100)
 WINDOW_SIZE = desktop_size
+WINDOW_SIZE = (700 * 2, 400 * 2)
 
 if WINDOW_SIZE[0] > desktop_size[0]:
     WINDOW_SIZE = desktop_size
@@ -85,9 +85,10 @@ CLS_COMMON = 128
 TGENERATE_LOAD = 0
 TGENERATE_INFINITE = 1
 TGENERATE_INFINITE_LANDS = 2
-generate_type = 2  # 0:load map,1: autogenerate
+Generate_type = 2  # 0:load map,1: autogenerate
 
-CHUNK_CREATURE_LIMIT = 2
+CHUNK_CREATURE_LIMIT = 5
+CHUNK_CREATURE_CHANCE = 0.1
 # Player ===========================================================
 
 NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9, pg.K_0]

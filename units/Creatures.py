@@ -6,6 +6,18 @@ from units.Items import ItemsTile
 from units.common import *
 
 
+def checking_abyss(pos, game_map, height_of_abyss=3, convert_to_tile_pos=False):
+    """Проверка на пропасть (не считая tile_pos)"""
+    if convert_to_tile_pos:
+        tx, _ty = pos[0] // TSIZE, (pos[1] - 3) // TSIZE
+    else:
+        tx, _ty = pos
+    for ty in range(_ty + 1, _ty + height_of_abyss + 1):
+        if game_map.get_static_tile_type(tx, ty):
+            return False
+    return True
+
+
 class Creature(PhysicalObject):
     class_obj = OBJ_CREATURE
     width, height = TSIZE, TSIZE
@@ -61,6 +73,36 @@ class Creature(PhysicalObject):
             self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(x // TSIZE, y // TSIZE), items)
 
 
+class MovingCreature(Creature):
+    height_of_abyss = 3
+    width_of_abyss = 2
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.move_direction = 0
+        self.move_tact = 0
+
+    def check_abyss(self):
+        x, y = self.rect.bottomleft
+        left_abyss = True
+        for i in range(self.width_of_abyss):
+            left_abyss = left_abyss and checking_abyss((x, y), self.game_map, height_of_abyss=self.height_of_abyss,
+                                                       convert_to_tile_pos=True)
+            x -= TSIZE
+        x, y = self.rect.bottomright
+        right_abyss = True
+        for i in range(self.width_of_abyss):
+            right_abyss = right_abyss and checking_abyss((x, y), self.game_map, height_of_abyss=self.height_of_abyss,
+                                                         convert_to_tile_pos=True)
+            x += TSIZE
+        if left_abyss and right_abyss:
+            pass
+        elif left_abyss:
+            self.move_direction = 1
+        elif right_abyss:
+            self.move_direction = -1
+
+
 "#D9F99DAA"
 
 
@@ -73,7 +115,7 @@ def slime_animation(color, size, reduction_step, count_sprites=3):
     return sprites
 
 
-class Slime(Creature):
+class Slime(MovingCreature):
     width, height = TSIZE // 1.3, TSIZE // 1.3 - 6
     reduction_step = 3
     count_sprites = 3
@@ -87,6 +129,8 @@ class Slime(Creature):
     drop_items = [(ItemsTile, (51, (1, 3)))]
     jump_speed = 8
     move_speed = 2
+    height_of_abyss = 4
+    width_of_abyss = 1
 
     enemy = True
     punch_damage = 5
@@ -94,10 +138,8 @@ class Slime(Creature):
     punch_discard = 0
 
     def __init__(self, game, pos=(0, 0)):
-        x, y = pos
         super().__init__(game, pos)
-        self.move_direction = 0
-        self.move_tact = 0
+        x, y = pos
         self.i_sprite = 0
         self.jump_state = -1
         self.color = random.choice(self.colors)
@@ -143,11 +185,12 @@ class Slime(Creature):
             if self.move_tact <= 0:
                 self.move_tact = random.randint(30, 205)
                 self.move_direction = random.randint(-1, 1)
+        self.check_abyss()
         self.movement_vector.x += self.move_direction * self.move_speed
         return True
 
 
-class Cow(Creature):
+class Cow(MovingCreature):
     width, height = int(TSIZE * 1), int(TSIZE * 0.8)
     colors = ["#FFFAFA", "#FAEBD7", "#FDF4E3", "#FAF0E6"]
     max_lives = 20
@@ -156,8 +199,6 @@ class Cow(Creature):
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
-        self.move_direction = 0
-        self.move_tact = 0
         self.color = random.choice(self.colors)
         self.sprite = pg.Surface((self.rect.w, self.rect.h))
         self.sprite.fill(self.color)
@@ -166,6 +207,7 @@ class Cow(Creature):
     def update(self, tact):
         self.update_physics()
         # if self.collisions["bottom"]:
+        self.check_abyss()
         self.movement_vector.x += self.move_direction * self.move_speed
         if self.collisions["bottom"] and (self.collisions["left"] or self.collisions["right"]):
             self.jump(self.jump_speed)
@@ -176,7 +218,7 @@ class Cow(Creature):
         return True
 
 
-class Wolf(Creature):
+class Wolf(MovingCreature):
     width, height = int(TSIZE * 1), int(TSIZE * 0.9)
 
     color = "#708090"
@@ -197,8 +239,6 @@ class Wolf(Creature):
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
-        self.move_direction = 0
-        self.move_tact = 0
         self.sprite = pg.Surface((self.rect.w, self.rect.h))
         self.sprite.fill(self.color)
         self.angry_rect = pg.Rect((0, 0), self.angry_rect_size)
@@ -214,6 +254,7 @@ class Wolf(Creature):
 
     def update(self, tact):
         super().update(tact)
+        self.check_abyss()
         if self.angry:
             self.movement_vector.x += self.move_direction * self.move_speed_angry
         else:
@@ -255,6 +296,8 @@ class SlimeBigBoss(Slime):
     reduction_step = 12
     jump_speed = 12
     move_speed = 4
+    height_of_abyss = 9
+    width_of_abyss = 3
     drop_items = [(ItemsTile, (51, (20, 30))), (ItemsTile, (63, (3, 8))), (ItemsTile, (66, (4, 7))),
                   (ItemsTile, (55, (1, 2)))]
 

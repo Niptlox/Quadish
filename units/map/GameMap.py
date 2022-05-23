@@ -430,8 +430,8 @@ def grow_tree(pos, game_map: GameMap):
 
 
 def random_creature_selection():
-    if random.randint(0, 100) < 50:
+    if random.randint(0, 100) < CHUNK_CREATURE_CHANCE:
         return None
-    crt = random.choices([Slime, Cow, Wolf, SlimeBigBoss], [10, 5, 5, 0.5], k=1)
+    crt = random.choices([Slime, Cow, Wolf, SlimeBigBoss], [10, 5, 1, 0.5], k=1)
     # print("random_creature_selection", crt)
     return crt[0]
