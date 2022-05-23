@@ -158,19 +158,16 @@ class GameMap:
             return True
         return False
 
-    def move_dinamic_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj, creature=False):
+    def move_dinamic_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
         # print(chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj)
         chunk = self.chunk((new_chunk_x, new_chunk_y))
         if not chunk:
             chunk = self.generate_chunk(new_chunk_x, new_chunk_y)
         ochunk = self.chunk((chunk_x, chunk_y))
         if ochunk is not None and obj in ochunk[1]:
-            if creature:
-                ochunk[3][1] -= 1
-                chunk[3][1] += 1
             ochunk[1].remove(obj)
             chunk[1].append(obj)
-            if obj.class_obj ^ OBJ_CREATURE:
+            if obj.class_obj & OBJ_CREATURE:
                 ochunk[3][1] -= 1
                 chunk[3][1] += 1
             return True
@@ -211,23 +208,22 @@ class GameMap:
             return True
         return False
 
-    def del_dinamic_obj(self, chunk_x, chunk_y, obj, creature=False):
+    def del_dinamic_obj(self, chunk_x, chunk_y, obj):
         chunk = self.chunk((chunk_x, chunk_y))
         if chunk:
-
             if obj in chunk[1]:
                 chunk[1].remove(obj)
-                if obj.class_obj ^ OBJ_CREATURE:
+                if obj.class_obj & OBJ_CREATURE:
                     chunk[3][1] -= 1
             else:
                 print("Error !!! del_dinamic_obj", (chunk_x, chunk_y), obj)
             return True
         return False
 
-    def add_dinamic_obj(self, chunk_x, chunk_y, obj, creature=False):
+    def add_dinamic_obj(self, chunk_x, chunk_y, obj):
         chunk = self.chunk((chunk_x, chunk_y))
         if chunk:
-            if creature:
+            if obj.class_obj & OBJ_CREATURE:
                 chunk[3][1] += 1
             chunk[1].append(obj)
             return True

@@ -29,7 +29,7 @@ class Dynamite(PhysicalObject):
     boom_radius = 5
     pattern = create_circle_pattern(boom_radius)
 
-    def __init__(self, game, x, y):
+    def __init__(self, game, x=0, y=0):
         print("d", x, y)
         super().__init__(game, x, y, TSIZE, TSIZE, use_physics=True)
         self.game = game
@@ -86,12 +86,11 @@ class Dynamite(PhysicalObject):
             return  # not break blocks
         for x, y in self.pattern:
             ix, iy = tx + x - self.boom_radius, ty + y - self.boom_radius
-            ttile = self.game_map.get_static_tile_type(ix, iy)
+            ttile = self.game_map.get_static_tile_type(ix, iy, 0)
             if ttile == 0:
                 continue
             elif ttile in DYNAMITE_NOT_BREAK:
                 continue
-
 
             res = item_of_break_tile(self.game_map.get_static_tile(ix, iy))
             for ttile, count_items in res:

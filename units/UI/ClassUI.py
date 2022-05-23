@@ -75,16 +75,37 @@ class SurfaceUI(pg.Surface):
 class ScrollSurface(SurfaceUI):
     """Поле с прокруткой. Только для объектов с методом 'draw(surface)'"""
 
-    def __init__(self, rect, scroll, background="black"):
+    def __init__(self, rect, scroll_size, scroll_pos=(0, 0), background="black"):
         super().__init__(rect)
         self.convert_alpha()
-        self.scroll_surface = SurfaceUI((scroll, self.rect.size))
+        self.scroll_surface = SurfaceUI((scroll_pos, scroll_size)).convert_alpha()
         self.objects = []
         self.background = background
+        self.scroll_accel = [0, 0]
 
-    def mouse_scroll(self, dx, dy):
+    def mouse_scroll(self, dx=0, dy=0):
+        self.scroll_accel = [dx, dy]
+
         self.scroll_surface.rect.x += dx
-        self.scroll_surface.rect.y += dy
+        if self.scroll_surface.rect.x < 0:
+            self.scroll_surface.rect.x = 0
+        elif self.scroll_surface.rect.right > self.rect.w:
+            self.scroll_surface.rect.right = self.rect.w
+        if self.scroll_surface.rect.h > self.rect.h:
+            self.scroll_surface.rect.y += dy
+            if self.scroll_surface.rect.y > 0:
+                self.scroll_surface.rect.y = 0
+            elif self.scroll_surface.rect.bottom < self.rect.h:
+                self.scroll_surface.rect.bottom = self.rect.h
+
+    def main_scrolling(self):
+        self.scroll_accel[0] //= 1.5
+        self.scroll_accel[1] //= 1.5
+        if self.scroll_accel[1] > -5:
+            self.scroll_accel[1] = 0
+        if self.scroll_accel[0] > -5:
+            self.scroll_accel[0] = 0
+        self.mouse_scroll(*self.scroll_accel)
 
     def add_objects(self, objects):
         self.objects += objects
@@ -95,6 +116,7 @@ class ScrollSurface(SurfaceUI):
                 self.set_size((self.rect.w, obj.rect.bottom + 5))
 
     def draw(self, surface):
+        self.main_scrolling()
         self.scroll_surface.fill((0, 0, 0, 0))
         self.fill(self.background)
         for obj in self.objects:

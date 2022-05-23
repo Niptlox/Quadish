@@ -562,6 +562,7 @@ class Player(Entity.PhysicalObject):
 
     def kill(self):
         self.alive = False
+        self.inventory.ui.opened_full_inventory = False
 
     def discard(self, vector):
         # self.physical_vector.x += vector[0]
@@ -579,4 +580,3 @@ class Player(Entity.PhysicalObject):
             self.inventory.put_to_inventory(item)
         else:
             self.ui.new_sys_message("Режим создателя выключен")
-

@@ -159,6 +159,12 @@ class Slime(MovingCreature):
         self.sprites = slime_animation(self.color, self.rect.size, self.reduction_step)
         self.sprite = self.sprites[0]
 
+    def set_vars(self, vrs):
+        super(Slime, self).set_vars(vrs)
+        self.sprites = slime_animation(self.color, (self.width, self.height), self.reduction_step)
+        self.sprite = self.sprites[self.i_sprite]
+        self.lives_surface = pg.Surface((self.width, 6)).convert_alpha()
+
     def update(self, tact):
         super().update(tact)
         if self.collisions["bottom"]:

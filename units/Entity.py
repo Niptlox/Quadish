@@ -172,6 +172,7 @@ class PhysicalObject:
 
     def update_chunk_pos(self):
         self.chunk_pos = (self.rect.x // (TSIZE * CSIZE), self.rect.y // (TSIZE * CSIZE))
+        return self.chunk_pos
 
     def draw(self, surface, pos):
         if show_entity_border:
