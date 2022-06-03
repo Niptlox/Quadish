@@ -1,7 +1,7 @@
 import random
 from time import time
 
-from units.Entity import PhysicalObject, collision_test
+from units.Entity import PhysicalObject
 from units.Items import ItemsTile
 from units.common import *
 
@@ -66,9 +66,9 @@ class Creature(PhysicalObject):
     def kill(self):
         super().kill()
         for item_cls, params in self.drop_items:
-            item_cls(self.game, *params)
             x, y = self.rect.x + random.randint(0, TSIZE - HAND_SIZE), self.rect.y
-            items = item_cls(self.game, *params,
+            idx, count = params
+            items = item_cls(self.game, index=idx, count=count,
                              pos=(x, y))
             self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(x // TSIZE, y // TSIZE), items)
 

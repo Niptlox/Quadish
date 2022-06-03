@@ -2,7 +2,7 @@ from units.Tools.ToolsPickaxe import *
 
 
 class ToolHand(ToolPickaxe):
-    tool_cls = CLS_WEAPON + CLS_PICKAXE + CLS_SWORD
+    tool_cls = CLS_NONE
     damage = 4  # punch
     strength = 8  # dig
     speed = 1.5  # dig

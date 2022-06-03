@@ -22,6 +22,7 @@ sky = "#A5F3FC"
 
 player_img = create_tile_image("#E7E5E4", size=(TSIZE - 10, TSIZE - 2), bd=2)
 live_imgs = load_imgs("data/sprites/player/lives_{}.png", 5, size=(20, 20))
+goldlive_imgs = load_imgs("data/sprites/player/goldherts_{}.png", 5, size=(20, 20))
 bg_live_img = load_img("data/sprites/player/bg_live.png", size=(20, 20))
 
 # hand_pass_img = pygame.transform.smoothscale(player_img, HAND_RECT)
@@ -82,6 +83,7 @@ close_trapdoor_img = load_img("data/sprites/tiles/close_trapdoor.png")
 table_img = load_img("data/sprites/tiles/table.png")
 chear_img = load_img("data/sprites/tiles/chear.png")  # стул
 rack_img = load_img("data/sprites/tiles/rack.png")  # шкаф
+chest_img = load_img("data/sprites/tiles/rack.png")  # сундук
 cauldron_img = load_img("data/sprites/tiles/cauldron.png")
 water_img = load_img("data/sprites/tiles/water.png")
 
@@ -158,6 +160,7 @@ tile_imgs = {None: none_img,
              126: rack_img,
              127: trapdoor_img,
              128: close_trapdoor_img,
+             129: chest_img,
              130: bedroll_of_pelts_img,
              151: group_img,
              201: cloud_img,
@@ -191,10 +194,10 @@ IDX_TOOLS = {501, 502, 530, 531, 532, 533, 610}
 
 # блоки через которые нельзя пройти
 PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 103, 124, 128}
-
-SEMIPHYSBODY_TILES = {120, 127}
+# полуфизические блоки например мебель листва вода
+SEMIPHYSBODY_TILES = {120, 127, 126, 125, 121, 122}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
-STANDING_TILES = {0, 101, 102, 103, 110, 120, 121, 122, 123, 125, 126, 130}
+STANDING_TILES = {0, 101, 102, 103, 110, 120, 121, 122, 123, 125, 126, 130, 129}
 # предметы которые нельзя физически поставить
 ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 801}
 
@@ -206,6 +209,7 @@ tile_hand_imgs[121] = load_img("data/sprites/tiles/table_item.png", HAND_RECT)  
 tile_hand_imgs[122] = load_img("data/sprites/tiles/chear_item.png", HAND_RECT)  # тк есть прозрачность
 tile_hand_imgs[130] = bedroll_of_pelts_item_img
 
+# INIT_TILES ====================================================
 tile_words = {None: "None",
               0: "None",
               1: "Трава",
@@ -242,6 +246,7 @@ tile_words = {None: "None",
               126: "Шкаф",
               127: "Люк",
               128: "Закрытый люк",
+              129: "Сундук",
               130: "Спальный мешок из шкур",
               # 151: "Группа обектов",
               201: "Облако",
@@ -257,8 +262,6 @@ tile_words = {None: "None",
 
               801: "Палка"
               }
-
-# INIT_TILES ====================================================
 
 # Прочность блоков
 TILES_SOLIDITY = {
@@ -328,6 +331,8 @@ def item_of_break_tile(tile):
     if ttile == 101:  # куст с ягодами
         items += item_of_right_click_tile(tile, res=False)
     res = [(i, cnt) for i, cnt, ch in items if ch == 1 or random.randint(0, 100 * 100) <= ch * 100 * 100]
+    if ttile == 126:  # куст с ягодами
+        res += [i for i in tile[3] if i]
     return res
 
 
@@ -356,3 +361,5 @@ if DEBUG_DRAW_TILES:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+
+

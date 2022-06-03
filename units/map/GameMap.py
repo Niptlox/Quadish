@@ -1,15 +1,14 @@
 import glob
 import pickle
-import random
 
 from noise import snoise2 as pnoise2
 
-from units import Items
-from units.Items import ItemsTile
-from units.Tools import ItemTool, TOOLS
-from units.biomes import biome_of_pos
 from units.Creatures import Slime, Cow, Wolf, SlimeBigBoss
 from units.Entity import PhysicalObject
+from units.Items import ItemsTile
+from units.TilesClass import Chest
+from units.Tools import TOOLS
+from units.biomes import biome_of_pos
 from ..Tiles import *
 
 
@@ -65,20 +64,21 @@ class GameMap:
             res = self.generate_chunk(*xy)
         if res and for_player:
             crt_cash = res[3]
-            if self.game.tact > crt_cash[2] + FPS*60:
+            if self.game.tact > crt_cash[2] + FPS * 300:
                 if crt_cash[1] < CHUNK_CREATURE_LIMIT:
                     crt_cash[2] = self.game.tact
                     dynamic_tiles = res[1]
                     scroll = self.game.screen_map.scroll
-                    for tile_xy in crt_cash[0]:
-                        x, y = tile_xy[0] * TSIZE, tile_xy[1] * TSIZE
-                        if not self.game.screen_map.display_rect.collidepoint(x - scroll[0], y - scroll[1]):
+                    # if not self.game.screen_map.display_rect.collidepoint(x - scroll[0], y - scroll[1]):
+                    crt_cnt = min(len(crt_cash[0]), random.randint(0, CHUNK_CREATURE_LIMIT - crt_cash[1]))
+                    tiles_xy = random.choices(tuple(crt_cash[0]), k=crt_cnt)
+                    for tile_xy in tiles_xy:
+                        # if random.random() < 0.005:
+                            x, y = tile_xy[0] * TSIZE, tile_xy[1] * TSIZE
                             Crt = random_creature_selection()
                             if Crt is not None:
                                 dynamic_tiles.append(Crt(self.game, (x, y)))
                                 crt_cash[1] += 1
-                            if crt_cash[1] > CHUNK_CREATURE_LIMIT:
-                                break
         return res
 
     def chunk_gen(self, xy):
@@ -91,7 +91,7 @@ class GameMap:
 
     def index_gen(self):
         index = 0
-        while index < self.chunk_array_size:
+        while index < self.chunk_arr_size:
             yield index
             index += self.tile_data_size
 
@@ -116,8 +116,8 @@ class GameMap:
         i = self.convert_pos_to_i(x, y)
         return chunk[0][i:i + self.tile_data_size]
 
-    def get_static_tile_type(self, x, y, default=None):
-        chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE))
+    def get_static_tile_type(self, x, y, default=None, create_chunk=True):
+        chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE), create_chunk=create_chunk)
         if chunk is None:
             return default
         i = self.convert_pos_to_i(x, y)
@@ -190,7 +190,7 @@ class GameMap:
             else:
                 raise Exception(
                     f"Ошибка передвижения динамики. Объект {i, obj} не находится в чанке {(chunk_x, chunk_y)}")
-            return False
+            # return False
         return
 
     def del_group_obj(self, chunk_x, chunk_y, obj):
@@ -236,7 +236,7 @@ class GameMap:
             item = TOOLS[index](self.game, pos=npos)
             item.set_owner(self)
         else:
-            item = ItemsTile(self.game, index, count_items, npos)
+            item = ItemsTile(self.game, index, npos, count_items)
         self.add_dinamic_obj(*self.to_chunk_xy(x, y), item)
 
     def convert_pos_to_i(self, x, y):
@@ -248,6 +248,13 @@ class GameMap:
     def get_tile_ttile(ttile):
         """тип, прочность, состояние, переменная"""
         return [ttile, TILES_SOLIDITY.get(ttile, -1), 0, 0]
+
+    def get_tile_ttile_tpos(self, ttile, tpos):
+        """тип, прочность, состояние, переменная"""
+        tile = self.get_tile_ttile(ttile)
+        if tile[0] == 129:  # chest
+            tile[3] = Chest(self.game, (tpos[0] * TSIZE, tpos[1] * TSIZE))
+        return tile
 
     def create_pass_chunk(self, xy):
         """static tiles; dynamic tiles; group obj; creatures cash \
@@ -301,7 +308,7 @@ class GameMap:
                         # if v2 < threshold:
                         tile_type = 2  # dirt
                         if (y_pos > 0 and static_tiles[tile_index - self.chunk_arr_width] == 0) or \
-                                (y_pos == 0 and self.get_static_tile(tile_x, tile_y - 1, create_chunk=True)[0] == 0):
+                                (y_pos == 0 and self.get_static_tile_type(tile_x, tile_y - 1, create_chunk=True) == 0):
                             tile_type = 1  # grass
                             if y_pos > 0:
                                 on_ground_tiles.add((tile_x, tile_y))
@@ -312,10 +319,11 @@ class GameMap:
                                     static_tiles[pl_i] = plant_tile_type
                                     static_tiles[pl_i + 1] = TILES_SOLIDITY.get(plant_tile_type, -1)
                                     static_tiles[pl_i + 2] = state
-                                    Crt = random_creature_selection()
-                                    if Crt is not None:
-                                        dynamic_tiles.append(Crt(self.game, (tile_x * TSIZE, tile_y * TSIZE)))
-                                        cnt_creatures += 1
+                                    if cnt_creatures < CHUNK_CREATURE_LIMIT:
+                                        Crt = random_creature_selection()
+                                        if Crt is not None:
+                                            dynamic_tiles.append(Crt(self.game, (tile_x * TSIZE, tile_y * TSIZE)))
+                                            cnt_creatures += 1
                 else:
                     # пусто  
                     # ставим растение     
@@ -343,6 +351,8 @@ class GameMap:
 
     def save_game_map(self, game, num=0):
         self.saved = True
+        self.game.ui.new_sys_message(f"Сохранение", draw_now=True)
+
         file_p = f'data/maps/game_map-{num}.pclv'
         print(f"GamaMap: '{file_p}' - SAVING...")
         self.num_save_map = num
@@ -353,7 +363,7 @@ class GameMap:
         with open(file_p, 'wb') as f:
             f.write(t)
         print("GamaMap - SAVE!")
-        self.game.ui.new_sys_message(f"Карта сохранена #{num}")
+        self.game.ui.new_sys_message(f"Карта сохранена #{num}", draw_now=True)
         # except Exception as exc:
         #     print("Ошибка сохранения:", exc)
         #     self.game.ui.new_sys_message(f"Ошибка {exc}")
@@ -363,6 +373,8 @@ class GameMap:
         #     return True
 
     def open_game_map(self, game, num=0):
+        self.game.ui.new_sys_message(f"Загрузка карты #{num}", draw_now=True)
+
         file_p = f'data/maps/game_map-{num}.pclv'
         self.num_save_map = num
         print(f"GamaMap: '{file_p}' - LOADING...")
@@ -426,8 +438,15 @@ def grow_tree(pos, game_map: GameMap):
 
 
 def random_creature_selection():
-    if random.randint(0, 100) < CHUNK_CREATURE_CHANCE:
+    r = random.random()
+    if r >= CHUNK_CREATURE_CHANCE:
         return None
-    crt = random.choices([Slime, Cow, Wolf, SlimeBigBoss], [10, 5, 1, 0.5], k=1)
+
+    crt = random.choices([Slime, Cow, Wolf, SlimeBigBoss], [20, 5, 0.7, 0.25], k=1)
     # print("random_creature_selection", crt)
     return crt[0]
+
+# from collections import Counter
+# Counter(random.choices(['Slime', 'Cow', 'Wolf', 'SlimeBigBoss'], [20, 5, 0.7, 0.25])[0]
+#         for _ in range(100000))
+# Counter({'Slime': 77209, 'Cow': 19239, 'Wolf': 2595, 'SlimeBigBoss': 957})

@@ -2,35 +2,35 @@ import math
 
 import pygame
 import pygame as pg
+
+import units.config as config
+
 # используетсЯ ы других модулях
-from units.creating_items import RECIPES
 
 # INIT GAME ==============================================
 pygame.init()  # initiate pygame
+FPS = 30
 
+flags = 0
 desktop_size = pygame.display.get_desktop_sizes()[0]
-
 print("INIT GAME VARS")
 GAME_VERSION = "0.9.1"
-WINDOW_SIZE = (1000, 650)
-WINDOW_SIZE = (2200, 1100)
-WINDOW_SIZE = desktop_size
-WINDOW_SIZE = (700 * 2, 400 * 2)
 
-if WINDOW_SIZE[0] > desktop_size[0]:
+WINDOW_SIZE = config.Window.size
+FULLSCREEN = config.Window.fullscreen
+if FULLSCREEN:
     WINDOW_SIZE = desktop_size
 WSIZE = WINDOW_SIZE
 # WINDOW_SIZE = (1920, 1080)
 
-FPS = 30
 
+# flags |= pygame.SCALED
 pygame.display.set_caption('Quadish')
+screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags, vsync=1)
+display_ = pygame.Surface(WINDOW_SIZE)
 
-# screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=pygame.SCALED, vsync=2)
-screen_ = pygame.display.set_mode(WINDOW_SIZE, vsync=2)
 screen_.blit(pygame.font.SysFont(None, 40, ).render("Загрузка...", True, "white"), (35, WSIZE[1] - 50))
 pygame.display.flip()
-display_ = pygame.Surface(WINDOW_SIZE)
 
 # TILE ==================================================
 
@@ -68,6 +68,7 @@ OBJ_NONE = 0
 OBJ_CREATURE = 2
 OBJ_ITEM = 4
 OBJ_TILE = 8
+OBJ_PLAYER = 16
 
 # ITEMS ==========================================================
 
@@ -87,8 +88,8 @@ TGENERATE_INFINITE = 1
 TGENERATE_INFINITE_LANDS = 2
 Generate_type = 2  # 0:load map,1: autogenerate
 
-CHUNK_CREATURE_LIMIT = 5
-CHUNK_CREATURE_CHANCE = 0.1
+CHUNK_CREATURE_LIMIT = 4
+CHUNK_CREATURE_CHANCE = 0.2
 # Player ===========================================================
 
 NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9, pg.K_0]
@@ -124,3 +125,5 @@ colors = ['#CD5C5C', '#F08080', '#FA8072', '#E9967A', '#FFA07A', '#DC143C', '#FF
           '#FDF5E6', '#FFFAF0', '#FFFFF0', '#FAEBD7', '#FAF0E6', '#FFF0F5', '#FFE4E1', '#DCDCDC', '#D3D3D3', '#D3D3D3',
           '#C0C0C0', '#A9A9A9', '#A9A9A9', '#808080', '#808080', '#696969', '#696969', '#778899', '#778899', '#708090',
           '#708090', '#2F4F4F', '#2F4F4F', '#000000']
+
+Chest_size_table = 5, 4

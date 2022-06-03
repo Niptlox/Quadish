@@ -90,14 +90,15 @@ class PhysicalObject:
         return d
 
     def move(self, movement, static_tiles: dict, dynamic_tiles: list = [], first_tile_pos=(0, 0)):
-        collision_types = {'top': [], 'bottom': [], 'right': [], 'left': []}
+        collision_types = {'top': [], 'bottom': [], 'right': [], 'left': [], 'semiphysbody': []}
         mx, my = movement
         self.rect.x += mx
         # блоки с которыми стлкунулись после премещения по оси x (hit_static_lst, hit_dynamic_lst )
         *collision_lsts, semiphysbody_lst = collision_test(self.game_map, self.rect, static_tiles, dynamic_tiles,
                                                            first_tile_pos, semiphysbody=True)
+        collision_types["semiphysbody"] = semiphysbody_lst
         for type_coll in range(2):
-            collision_lst_t = collision_lsts[type_coll] + semiphysbody_lst
+            collision_lst_t = collision_lsts[type_coll]
             for block in collision_lsts[type_coll]:
                 if mx > 0:
                     if type_coll == 0:
@@ -117,8 +118,9 @@ class PhysicalObject:
         # блоки с которыми стлкунулись после премещения по оси y (hit_static_lst, hit_dynamic_lst )
         *collision_lsts, semiphysbody_lst = collision_test(self.game_map, self.rect, static_tiles, dynamic_tiles,
                                                            first_tile_pos, semiphysbody=True)
+        collision_types["semiphysbody"] += semiphysbody_lst
         for type_coll in range(2):
-            collision_lst_t = collision_lsts[type_coll] + semiphysbody_lst
+            collision_lst_t = collision_lsts[type_coll]
             for block in collision_lsts[type_coll]:
                 if my >= 0:
                     if type_coll == 0:

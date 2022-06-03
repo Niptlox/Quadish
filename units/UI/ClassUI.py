@@ -101,9 +101,9 @@ class ScrollSurface(SurfaceUI):
     def main_scrolling(self):
         self.scroll_accel[0] //= 1.5
         self.scroll_accel[1] //= 1.5
-        if self.scroll_accel[1] > -5:
+        if 0 > self.scroll_accel[1] >= -3:
             self.scroll_accel[1] = 0
-        if self.scroll_accel[0] > -5:
+        if 0 > self.scroll_accel[0] >= -3:
             self.scroll_accel[0] = 0
         self.mouse_scroll(*self.scroll_accel)
 

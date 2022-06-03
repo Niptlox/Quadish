@@ -1,5 +1,7 @@
-import units.Game
 import os
+
+import units.Game
+
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 

@@ -1,13 +1,13 @@
-from math import floor, ceil
+from math import ceil
 
 from pygame import Surface
 
-from units.Texture import BLACK, WHITE
-from units.Tiles import tile_imgs, sky, tile_words, live_imgs, bg_live_img
+from units.Texture import WHITE
+from units.Tiles import tile_imgs, sky, tile_words, live_imgs, bg_live_img, goldlive_imgs
 from units.Tools import TOOLS, ItemsTile
 from units.UI.Button import createImagesButton, createVSteckButtons, Button
-from units.common import *
 from units.UI.ClassUI import SurfaceUI, UI, ScrollSurface
+from units.common import *
 
 # INIT TEXT ==================================================
 
@@ -80,15 +80,17 @@ class GameUI(UI):
         self.screen.blit(self.display, (0, 0))
         pygame.display.flip()
 
-    def new_sys_message(self, text, count_tact=FPS * 3):
+    def new_sys_message(self, text, count_tact=FPS * 3, draw_now=False):
         self.sys_message_text = text
         self.sys_message_left_tact = count_tact
         self.sys_message_count_tact = count_tact
         self.sys_message_surface.set_alpha(255)
         self.sys_message_surface.fill(sys_message_bg)
         text_msg = textfont_sys_msg.render(text, 1, "#FDE047")
-
         self.sys_message_surface.blit(text_msg, (5, 5))
+        if draw_now:
+            self.sys_message_left_tact -= 8
+            self.draw()
 
     def redraw_info(self):
         true_fps = self.app.clock.get_fps()
@@ -111,25 +113,34 @@ class GameUI(UI):
         self.info_surface.blit(text_c_ents, (8, 85))
 
     def redraw_playerui(self):
+        lives_in_heart = 10
         self.playerui.fill(color_none)
+        imgs = live_imgs
         cnt_in_row = 15
-        step = live_imgs[0].get_width() + 5
+        step = imgs[0].get_width() + 5
         x, y = 10, self.playerui.rect.h - step - 5
+        startx, starty = x, y
         iy = 0
-        for i in range(self.app.player.max_lives // 10):
-            if i < self.app.player.lives // 10:
-                self.playerui.blit(live_imgs[0], (x, y))
+
+        for i in range(self.app.player.max_lives // lives_in_heart):
+            if i == cnt_in_row * 2:
+                x, y = startx, starty
+                iy = 0
+                imgs = goldlive_imgs
+            if i < self.app.player.lives // lives_in_heart:
+                self.playerui.blit(imgs[0], (x, y))
             else:
-                if (i - 1) < self.app.player.lives // 10 and self.app.player.lives % 10 > 0:
-                    self.playerui.blit(live_imgs[4 - self.app.player.lives % 10 // 2], (x, y))
+                if (i - 1) < self.app.player.lives // lives_in_heart and self.app.player.lives % lives_in_heart > 0:
+                    self.playerui.blit(imgs[4 - self.app.player.lives % lives_in_heart // 2], (x, y))
                 else:
-                    self.playerui.blit(bg_live_img, (x, y))
+                    if i < cnt_in_row * 2:
+                        self.playerui.blit(bg_live_img, (x, y))
 
             x += step
             if (i + 1) % cnt_in_row == 0:
                 y -= 15
                 iy += 2
-                x = 10 + iy
+                x = startx + iy
 
 
 class SwitchMapUI(UI):
@@ -241,6 +252,8 @@ class EndUI(UI):
 
     def pg_event(self, event: pg.event.Event):
         self.btn_relive.pg_event(event)
+        if event.type == pg.KEYDOWN:
+            self.app.relive()
 
 
 # находит позицию xy чтобы один стоял в центре другого
@@ -250,7 +263,7 @@ def center_pos_2rects(len1, big_len):
 
 class PauseUI(UI):
     def init_ui(self):
-        self.rect = pg.Rect((0, 0, 320, 370))
+        self.rect = pg.Rect((0, 0, 320, 400))
         w, h = self.screen.get_size()
         self.rect.center = w // 2, h // 2
         self.surface = pg.Surface(self.rect.size).convert_alpha()
@@ -273,6 +286,7 @@ class PauseUI(UI):
             ("Телепорт домой", lambda _: self.app.tp_to_home()),
             ("Сохранить и выйти", lambda _: self.app.save_and_exit()),
             ("Выйти", lambda _: self.app.exit()),
+            ("1400x800" if FULLSCREEN else "Полный экран", lambda _: self.app.editfullscreen()),
         ]
 
         self.img_btns = [createImagesButton(btn_rect.size, t, font=textfont_btn)
@@ -300,15 +314,125 @@ class PauseUI(UI):
 cell_size = int(TSIZE * 1.5)  # in interface
 
 
-class InventoryGameUI(SurfaceUI):
+class InventoryUI(SurfaceUI):
+    cell_size = cell_size
+
+    def __init__(self, inventory, size_table):
+        self.inventory = inventory
+        super(InventoryUI, self).__init__(((0, 0), WSIZE))
+        self.convert_alpha()
+        self.fill((0, 0, 0, 0))
+        self.replace_two_items = True
+
+        self.table_inventory = SurfaceUI((0, 0, size_table[0] * self.cell_size + 40,
+                                          size_table[1] * self.cell_size + 40)).convert_alpha()
+        self.table_inventory.rect.center = self.rect.center
+        self.mouse_rect = self.table_inventory.rect
+
+        self.table_item_inhend = None
+        self.table_item_inhend_i = -1
+
+        self.inventory_info_index = None
+        self.inventory_info_index_surface = pygame.Surface((1, 1))
+        self.top_bg_color = (82, 82, 91, 150)
+
+    def redraw_table_inventory(self):
+        self.table_inventory.fill(bg_color)
+        self.table_inventory.fill(bg_color_dark,
+                                  (20, 20, self.table_inventory.rect.w - 40, self.table_inventory.rect.h - 40))
+        # pg.draw.rect(self.table_inventory, self.top_bg_color,)
+        x = 20
+        y = 20
+        i = 0
+        cell_size = self.cell_size
+        cell_size_2 = cell_size // 2
+        for i in range(self.inventory.inventory_size):
+            if i > 0 and i % self.inventory.size_table[0] == 0:
+                y += cell_size
+                x = 20
+            color = "#000000"
+            # if i == self.inventory.active_cell:
+            #     color = "#FFFFFF"
+            pygame.draw.rect(self.table_inventory, color,
+                             (x, y, self.cell_size, self.cell_size), 1)
+            cell = self.inventory[i]
+            if cell is not None:
+                img = cell.sprite
+                iw, ih = img.get_size()
+                self.table_inventory.blit(img, (x + cell_size_2 - iw // 2, y + cell_size_2 - ih // 2))
+                res = str(cell.count)
+                tx, ty = (x + self.cell_size - 4 - 7 * len(res), y + self.cell_size - 15)
+                text = textfont.render(res, True, text_color_dark)
+                self.table_inventory.blit(text, (tx + 1, ty + 1))
+                text = textfont.render(res, True, text_color_light)
+                self.table_inventory.blit(text, (tx, ty))
+            x += cell_size
+
+    def redraw_inventory_info(self):
+        item = self.inventory[self.inventory_info_index]
+        if item is None:
+            self.inventory_info_index = None
+            return
+        text = textfont.render(tile_words[item.index], True, text_color_light)
+        w, h = text.get_size()
+        self.inventory_info_index_surface = pygame.Surface((w + 6, h + 4)).convert_alpha()
+        self.inventory_info_index_surface.fill(self.top_bg_color)
+        self.inventory_info_index_surface.blit(text, (3, 2))
+
+    def draw(self, surface):
+        self.fill(color_none)
+        # pg.draw.rect(self, bg_color, self.rect)
+        self.table_inventory.draw(self)
+        if self.table_item_inhend:
+            mx, my = pg.mouse.get_pos()
+            self.blit(self.table_item_inhend.sprite, (mx, my))
+        surface.blit(self, self.rect)
+
+    def convert_table_mpos_to_i(self, pos):
+        offset = 20
+        i = (pos[0] - (self.table_inventory.rect.x + offset)) // self.cell_size + \
+            (pos[1] - (self.table_inventory.rect.y + offset)) // self.cell_size * self.inventory.size_table[0]
+        return i
+
+    def pg_event(self, event: pg.event.Event):
+        if event.type == pg.MOUSEBUTTONDOWN:
+            if event.button == pg.BUTTON_LEFT:
+                if self.table_inventory.rect.collidepoint(event.pos):
+                    i = self.convert_table_mpos_to_i(event.pos)
+                    if i != -1 and i < self.inventory.inventory_size and self.table_item_inhend is None:
+                        self.table_item_inhend = self.inventory.get_cell_from_inventory(i)
+                        self.table_item_inhend_i = i
+                    return True
+        if event.type == pg.MOUSEBUTTONUP:
+            if event.button == pg.BUTTON_LEFT:
+                if self.table_item_inhend is not None:
+                    if self.mouse_rect.collidepoint(event.pos):
+                        i = self.convert_table_mpos_to_i(event.pos)
+                        if i != -1 and i < self.inventory.inventory_size:
+                            item = self.inventory.get_cell_from_inventory(i)
+                            self.inventory[i] = self.table_item_inhend
+                            if item and self.replace_two_items:
+                                self.inventory[self.table_item_inhend_i] = item
+                            self.inventory.redraw()
+                            self.table_item_inhend = None
+                            return True
+                    discard_vector = (TSIZE * (2 if event.pos[0] > self.rect.centerx else -2), 10)
+                    self.inventory.discard_item(items=self.table_item_inhend, discard_vector=discard_vector)
+                    self.table_item_inhend = None
+                    return True
+        return False
+
+
+class InventoryPlayerUI(SurfaceUI):
     cell_size = cell_size
 
     def __init__(self, inventory):
         self.inventory = inventory
-        super(InventoryGameUI, self).__init__(pg.Rect((0, 0), WSIZE))
+        super(InventoryPlayerUI, self).__init__(pg.Rect((0, 0), WSIZE))
         self.convert_alpha()
         self.fill((0, 0, 0, 0))
 
+        self.replace_two_items = True
         # self.info_surface = SurfaceUI((0, 0, 250, 80)).convert_alpha()
 
         self.work_inventory = SurfaceUI((15, 15, self.inventory.size_table[0] * self.cell_size,
@@ -317,6 +441,8 @@ class InventoryGameUI(SurfaceUI):
                                           self.inventory.size_table[1] * self.cell_size + 10 + 40)).convert_alpha()
         self.work_inventory.rect.centerx = self.rect.centerx
         self.table_inventory.rect.center = self.rect.center
+        self.mouse_rect = self.table_inventory.rect
+        # self.table_inventory.rect.y = 40
         self.table_item_inhend = None
         self.table_item_inhend_i = -1
 
@@ -340,7 +466,7 @@ class InventoryGameUI(SurfaceUI):
         x = 20
         y = 20
         i = 0
-        cell_size = self.cell_size
+        # cell_size = self.cell_size
         cell_size_2 = cell_size // 2
         for i in range(self.inventory.inventory_size):
             if i == self.inventory.size_table[0]:
@@ -410,7 +536,7 @@ class InventoryGameUI(SurfaceUI):
 
         self.work_inventory.draw(self)
         if self.opened_full_inventory:
-            pg.draw.rect(self, bg_color, self.rect)
+            # pg.draw.rect(self, bg_color, self.rect)
             self.table_inventory.draw(self)
             if self.inventory.owner.creative_mode:
                 self.all_tiles.draw(self)
@@ -453,6 +579,7 @@ class InventoryGameUI(SurfaceUI):
                 self.opened_full_inventory = not self.opened_full_inventory
                 self.recipes.info_index = None
                 self.inventory_info_index = None
+                return True
             # elif event.key == pg.K_ESCAPE:
             # self.opened_full_inventory = False
         if event.type == pg.MOUSEBUTTONDOWN:
@@ -472,16 +599,20 @@ class InventoryGameUI(SurfaceUI):
         if event.type == pg.MOUSEBUTTONUP:
             if event.button == pg.BUTTON_LEFT:
                 if self.opened_full_inventory and self.table_item_inhend is not None:
-                    if self.table_inventory.rect.collidepoint(event.pos):
+                    if self.mouse_rect.collidepoint(event.pos):
                         i = self.convert_table_mpos_to_i(event.pos)
                         if i != -1 and i < self.inventory.inventory_size:
                             item = self.inventory.get_cell_from_inventory(i)
                             self.inventory[i] = self.table_item_inhend
-                            if item:
+                            if item and self.replace_two_items:
                                 self.inventory[self.table_item_inhend_i] = item
                             self.inventory.redraw()
                             self.table_item_inhend = None
-                            return True
+                        return True
+                    elif self.recipes.rect.collidepoint(event.pos):
+                        self.inventory.redraw()
+                        self.table_item_inhend = None
+                        return True
                     discard_vector = (TSIZE * (2 if event.pos[0] > self.rect.centerx else -2), 10)
                     self.inventory.discard_item(items=self.table_item_inhend, discard_vector=discard_vector)
                     self.table_item_inhend = None
@@ -495,6 +626,48 @@ class InventoryGameUI(SurfaceUI):
                 else:
                     self.inventory_info_index = None
         return False
+
+
+class InventoryPlayerChestUI(SurfaceUI):
+    def __init__(self, player_inventory):
+        super(InventoryPlayerChestUI, self).__init__(((0, 0), WSIZE))
+        self.player_inventory_ui = InventoryPlayerUI(player_inventory)
+        self.player_inventory_ui.replace_two_items = False
+        self.player_inventory_ui.opened_full_inventory = True
+        self.player_inventory_ui.table_inventory.rect.y = 100
+
+        self.chest_inventory_ui = InventoryUI(None, Chest_size_table)
+        self.chest_inventory_ui.replace_two_items = False
+        self.chest_inventory_ui.table_inventory.rect.y = self.player_inventory_ui.table_inventory.rect.bottom + 40
+        self.mouse_rect = pg.Rect.union(self.chest_inventory_ui.mouse_rect, self.player_inventory_ui.mouse_rect)
+        self.player_inventory_ui.mouse_rect = self.chest_inventory_ui.mouse_rect = self.mouse_rect
+        self.table_item_inhend = None
+        self.opened = False
+
+    def set_chest_inventory(self, chest_inventory):
+        self.chest_inventory_ui.inventory = chest_inventory
+        self.chest_inventory_ui.redraw_table_inventory()
+        self.player_inventory_ui.opened_full_inventory = True
+
+    def draw(self, surface):
+        self.player_inventory_ui.redraw_table_inventory()
+        self.chest_inventory_ui.redraw_table_inventory()
+        self.player_inventory_ui.draw(surface)
+        self.chest_inventory_ui.draw(surface)
+        if self.table_item_inhend:
+            mx, my = pg.mouse.get_pos()
+            self.blit(self.table_item_inhend.sprite, (mx, my))
+        self.opened = self.player_inventory_ui.opened_full_inventory
+
+    def pg_event(self, event: pg.event.Event):
+        res = self.player_inventory_ui.pg_event(event)
+        self.table_item_inhend = self.player_inventory_ui.table_item_inhend
+        self.chest_inventory_ui.table_item_inhend = self.table_item_inhend
+
+        res = self.chest_inventory_ui.pg_event(event) or res
+        self.table_item_inhend = self.chest_inventory_ui.table_item_inhend
+        self.player_inventory_ui.table_item_inhend = self.table_item_inhend
+        return res
 
 
 class ScrollSurfaceRecipes(ScrollSurface):
@@ -556,34 +729,40 @@ class ScrollSurfaceRecipes(ScrollSurface):
             self.scroll_surface.blit(text, (tx + 1, ty + 1))
             text = textfont.render(res, True, text_color_light)
             self.scroll_surface.blit(text, (tx, ty))
-            if not self.inventory.check_creating_item_of_i(i):
+            if cell[0] not in self.inventory.available_create_items:
                 self.scroll_surface.blit(gray_cell, (x, y))
             x += cell_size
 
     def draw(self, surface):
         self.main_scrolling()
         self.fill(bg_color)
+        # self.inventory.update_available_create_items()
+        self.redraw()
         self.blit(self.scroll_surface, self.scroll_surface.rect)
         surface.blit(self, self.rect)
         if self.info_index is not None:
             mx, my = pg.mouse.get_pos()
             surface.blit(self.info_index_surface, (mx, my + 26))
 
-    def creating_item_of_i(self, i):
-        self.inventory.creating_item_of_i(i)
+    def creating_item_of_i(self, i, cnt=1):
+        self.inventory.creating_item_of_i(i, cnt=cnt)
 
     def pg_event(self, event: pg.event.Event):
         if event.type == pg.MOUSEBUTTONDOWN:
             if self.rect.collidepoint(event.pos):
                 event.pos = (event.pos[0] - self.scroll_surface.rect.x, event.pos[1] - self.scroll_surface.rect.y)
-                if event.button == pg.BUTTON_LEFT:
+                if event.button in (pg.BUTTON_LEFT, pg.BUTTON_MIDDLE):
                     i = (event.pos[0] - self.rect.x) // self.cell_size + (
                             event.pos[1] - self.rect.y) // self.cell_size * 5
-                    self.creating_item_of_i(i)
+                    if i < self.count_cells:
+                        cnt = 1
+                        if event.button == pg.BUTTON_MIDDLE:
+                            cnt = 1000
+                        self.creating_item_of_i(i, cnt=cnt)
                     return True
         elif event.type == pg.MOUSEWHEEL:
             if self.rect.collidepoint(pg.mouse.get_pos()):
-                self.mouse_scroll(dy=event.y * self.cell_size // 2)
+                self.mouse_scroll(dy=event.y * self.cell_size // 3)
                 self.info_index = None
                 return True
         elif event.type == pg.MOUSEMOTION:
@@ -639,11 +818,11 @@ class ScrollSurfaceAllTiles(ScrollSurfaceRecipes):
             self.scroll_surface.blit(img, (x + cell_size_2 - iw // 2, y + cell_size_2 - ih // 2))
             x += cell_size
 
-    def creating_item_of_i(self, i):
+    def creating_item_of_i(self, i, cnt=1):
         ttile = list(tile_words.keys())[i]
         if ttile in TOOLS:
             item = TOOLS[ttile](self.inventory.owner.game)
             item.set_owner(self)
         else:
-            item = ItemsTile(self.inventory.owner.game, ttile)
+            item = ItemsTile(self.inventory.owner.game, ttile, count=cnt)
         self.inventory.put_to_inventory(item)

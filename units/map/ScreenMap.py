@@ -1,7 +1,5 @@
-from math import floor
 from time import time
 
-from units.biomes import biome_tiles, biome_colors
 from units.Tiles import *
 # rect для отрисовки
 from units.map.GameMap import GameMap, grow_tree
@@ -144,8 +142,9 @@ class ScreenMap:
                                                     item = tile[3][ity * 2 + itx]
                                                     if item:
                                                         img.blit(
-                                                                 pg.transform.scale(tile_hand_imgs[item[0]], (TSIZE//2, TSIZE//2)),
-                                                                 (itx * step + 2, ity * step + 2))
+                                                                 pg.transform.scale(tile_hand_imgs[item[0]],
+                                                                                    (TSIZE//2-1, TSIZE//2-1)),
+                                                                 (itx * step + 1, ity * step + 1))
                                     self.display.blit(img, b_pos)
                                     sol = tile[1]
                                     if sol != -1 and sol != TILES_SOLIDITY[tile_type]:

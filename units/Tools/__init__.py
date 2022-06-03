@@ -1,10 +1,10 @@
 from pprint import pprint
 
-from units.Tools.ToolsPickaxe import *
-from units.Tools.ToolsSword import *
-from units.Tools.ToolsSummoner import *
-from units.Tools.ToolHand import *
 from units.Tiles import IDX_TOOLS
+from units.Tools.ToolHand import *
+from units.Tools.ToolsPickaxe import *
+from units.Tools.ToolsSummoner import *
+from units.Tools.ToolsSword import *
 
 
 # модуль обобщения and items
@@ -12,16 +12,22 @@ from units.Tiles import IDX_TOOLS
 class ItemTool(Items):
     class_item = CLS_TOOL
     _Tool = Tool
+    cell_size = 1
 
-    def __init__(self, game, pos=(0, 0), _Tool=None, class_item=None):
-        if _Tool is not None:
+    def __init__(self, game, _Tool_index=0, pos=(0, 0), _Tool=None, class_item=None):
+        if _Tool_index is not None:
+            self._Tool = TOOLS_CLASSES[_Tool_index]
+        elif _Tool is not None:
             self._Tool = _Tool
         tool = self._Tool(None)
-        if class_item is not None:
-            self.class_item = class_item
-        super().__init__(game, tool.index, 1, pos)
+        self.class_item += tool.tool_cls
+        super().__init__(game, tool.index, pos, 1)
         self.sprite = tool.sprite
         self.tool = tool
+
+    def __copy__(self):
+        obj = self.__class__(self.game, self.index, self.rect.topleft)
+        return obj
 
     def set_owner(self, owner):
         self.tool.owner = owner
@@ -37,6 +43,7 @@ class ItemTool(Items):
         d.pop("tool")
         # d["_tool"] = d.pop("tool")
         return d
+
 
 #
 # class ItemSword(ItemTool):
@@ -70,12 +77,12 @@ class ItemTool(Items):
 #     _Tool = ToolCopperPickaxe
 
 
-TOOLS_CLASSES = [obj for obj in vars().values() if type(obj) is type and vars(obj).get("index") in IDX_TOOLS]
+TOOLS_CLASSES = {obj.index: obj for obj in vars().values() if type(obj) is type and vars(obj).get("index") in IDX_TOOLS}
+TOOLS_CLASSES[0] = Tool
 
 # items of tools
-TOOLS = {Cls_tool.index: lambda game, pos=(0, 0), cls=Cls_tool: ItemTool(game, pos, _Tool=cls,
-                                                                         class_item=cls.tool_cls + CLS_TOOL)
-         for Cls_tool in TOOLS_CLASSES}
+TOOLS = {idx: lambda game, idx=idx, pos=(0, 0): ItemTool(game, idx, pos)
+         for idx, Cls_tool in TOOLS_CLASSES.items()}
 #
 # TOOLS = {cls._Tool.index: cls for cls in
 #          {

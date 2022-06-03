@@ -1,13 +1,9 @@
-from random import randint
 from time import time
 
 from units import Entities
-from units.Creatures import SlimeBigBoss
-from units.Items import ItemsTile, Items
-from units.Tools.AnimationTool import *
-
 from units.Tiles import item_of_break_tile, item_of_right_click_tile, STANDING_TILES, ITEM_TILES, tile_imgs, \
-    tile_many_imgs
+    tile_drops
+from units.Tools.AnimationTool import *
 from units.common import *
 
 
@@ -30,7 +26,8 @@ class Tool:
         self.animation.draw(surface, x, y)
 
     def update(self, vector_to_mouse):
-        self.flip = vector_to_mouse.x < 0
+        if not self.animation.animation:
+            self.flip = vector_to_mouse.x < 0
         self.animation.update()
         if self.animation.animation and time() > self.reload_time + self.last_action_time:
             self.animation.end()
@@ -65,7 +62,7 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
         items = tile[3]
         i = int((local_pos_tile[0] // 16) + (local_pos_tile[1] // 16) * 2)
         if items[i] is None:
-            item = player.inventory.get_cell_from_inventory(player.active_cell)
+            item = player.inventory.get_cell_from_inventory(player.inventory.active_cell)
             if item:
                 items[i] = (item.index, item.count)
         else:
@@ -73,7 +70,7 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
             items[i] = None
         game_map.set_static_tile(x, y, tile)
     elif ttile == 122:  # стул
-        sx, sy = x * TSIZE-3, y * TSIZE + 16
+        sx, sy = x * TSIZE - 3, y * TSIZE + 16
         player.sit((sx, sy))
     elif ttile == 123:
         game_map.set_static_tile(x, y, game_map.get_tile_ttile(124))
@@ -83,15 +80,17 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
         game_map.set_static_tile(x, y, game_map.get_tile_ttile(128))
     elif ttile == 128:
         game_map.set_static_tile(x, y, game_map.get_tile_ttile(127))
+    elif ttile == 129:
+        tile[3].right_click(local_pos_tile)
     elif ttile == 101:
         if tile[2] > 0:
             item = item_of_right_click_tile(tile)[0]
             game_map.add_item_of_index(*item, x, y)
             tile[2], tile[3] = 0, 0
             game_map.set_static_tile(x, y, tile)
-    elif ttile == 130:
-        point = (x + 0.5) * TSIZE, (y + 0.5) * TSIZE
-        game_map.game.player.set_spawn_point(point)
+    # elif ttile == 130:
+    #     point = (x + 0.5) * TSIZE, (y + 0.5) * TSIZE
+    #     game_map.game.player.set_spawn_point(point)
 
 
 def check_dig_tile(game_map, x, y, tool):
@@ -119,15 +118,37 @@ def dig_tile(game_map, x, y, tool, check=True):
     else:
         tile = game_map.get_static_tile(x, y)
     sol = tile[1]  # прочность
-    sol -= tool.strength
+    if tool is None:
+        sol = 0
+    else:
+        sol -= tool.strength
     if sol <= 0:
-        res = item_of_break_tile(tile)
-        for ttile, count_items in res:
-            game_map.add_item_of_index(ttile, count_items, x, y)
-        game_map.set_static_tile(x, y, None)
+        if tile[0] == 110 and tool.tool_cls & CLS_PICKAXE:
+            dig_wood(game_map, x, y, tool)
+        else:
+            res = item_of_break_tile(tile)
+            for ttile, count_items in res:
+                game_map.add_item_of_index(ttile, count_items, x, y)
+            game_map.set_static_tile(x, y, None)
     else:
         game_map.set_static_tile_solidity(x, y, sol)
     return True
+
+
+def dig_wood(game_map, x, y, tool):
+    ttile = game_map.get_static_tile_type(x, y)
+    while ttile == 110:
+        if game_map.get_static_tile_type(x+1, y) == 105:
+            dig_tile(game_map, x+1, y, None, check=True)
+        if game_map.get_static_tile_type(x-1, y) == 105:
+            dig_tile(game_map, x-1, y, None, check=True)
+        itm_ttile, itm_count_items, ch = tile_drops[ttile][0]
+        game_map.add_item_of_index(itm_ttile, itm_count_items, x, y)
+        game_map.set_static_tile(x, y, None)
+        y -= 1
+        ttile = game_map.get_static_tile_type(x, y)
+    if ttile == 105:
+        dig_tile(game_map, x, y, None, check=True)
 
 
 def check_set_tile(game_map, x, y, inventory_cell):
@@ -140,7 +161,9 @@ def check_set_tile(game_map, x, y, inventory_cell):
     cell_ttile = inventory_cell.index
     # id блока под местом куда ставим
     bottom_ttile = game_map.get_static_tile_type(x, y + 1, 0)
-    if cell_ttile == 126 and bottom_ttile == 126:
+    if cell_ttile == bottom_ttile == 110:
+        return tile
+    if cell_ttile == bottom_ttile == 126:
         return tile
     if cell_ttile in STANDING_TILES and bottom_ttile in STANDING_TILES:
         return False
@@ -162,8 +185,8 @@ def set_tile(player, x, y, inventory_cell, check=True):
     #     obj = Entities.Dynamite(game_map.game, x * TSIZE, y * TSIZE)
     #     game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), obj)
     # else:
-    player.game_map.set_static_tile(x, y, player.game_map.get_tile_ttile(inventory_cell.index))
+    tile = player.game_map.get_tile_ttile_tpos(inventory_cell.index, (x, y))
+    player.game_map.set_static_tile(x, y, tile)
     if inventory_cell.count <= 0:
         return 0
     return inventory_cell.count
-

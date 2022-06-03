@@ -1,8 +1,8 @@
-from units.Tiles import item_of_break_tile, item_of_right_click_tile, tile_imgs, tile_many_imgs
-from units.Tiles import STANDING_TILES, ITEM_TILES
 from pygame import Vector2
-from units.Texture import rot_center
+
+from units.Tiles import tile_many_imgs
 from units.common import *
+
 
 class AnimationTool:
     def __init__(self, tool):
@@ -71,6 +71,7 @@ class AnimationSword(AnimationTool):
     def start(self):
         super().start()
         self.rotate = -50
+        self.flip = self.tool.flip
 
     def set_sprite(self, sprite: pg.Surface):
         w, h = sprite.get_size()
@@ -83,20 +84,10 @@ class AnimationSword(AnimationTool):
     def draw(self, surface, x, y):
         if self.animation:
             imgs = tile_many_imgs[self.tool.index]
-            img = imgs[int(self.rotate/360 * len(imgs))]
+            img = imgs[int(self.rotate / 360 * len(imgs))]
             new_xy = x - img.get_width() // 2, y - img.get_height() // 2
-            img = pygame.transform.flip(img, self.tool.flip, False)
+            img = pygame.transform.flip(img, self.flip, False)
             surface.blit(img, new_xy)
-            return
-            sprite, new_rect = rot_center(self.sprite, -self.rotate, x, y)
-            sprite = pygame.transform.flip(sprite, self.tool.flip, False)
-            surface.blit(sprite, new_rect)
-        # else:
-        #     sprite = pygame.transform.flip(self.sprite, self.tool.flip, False)
-        #     x, y = x - self.sprite.get_width() // 2, y - self.sprite.get_height() // 2
-        #     surface.blit(sprite, (x, y))
-        # rx, ry = self.tool.action_rect.x - self.tool.owner.vector.x, self.tool.action_rect.y - self.tool.owner.vector.y
-        # pg.draw.rect(surface, "red", ((rx + x, ry + y), self.tool.action_rect.size), width=2)
 
     def update(self):
         if self.animation:
@@ -139,4 +130,3 @@ class AnimationHand(AnimationTool):
             elif self.dist <= self.distance_norm:
                 self.animation = False
                 self.dist = self.distance_norm
-

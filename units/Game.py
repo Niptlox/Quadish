@@ -4,6 +4,7 @@ from units.App import *
 from units.Cursor import set_cursor, CURSOR_NORMAL
 from units.Player import Player
 from units.UI.UI import GameUI, SwitchMapUI, EndUI, PauseUI
+from units.config import Window
 from units.map.GameMap import GameMap
 from units.map.ScreenMap import ScreenMap
 
@@ -71,7 +72,11 @@ class GameScene(Scene):
         if not self.player.update(self.tact):
             self.running = False
             self.new_scene = self.app.end_scene
-        self.player.inventory.ui.draw(self.display)
+
+        if self.player.chest_ui.opened:
+            self.player.chest_ui.draw(self.display)
+        else:
+            self.player.inventory.ui.draw(self.display)
         self.ui.draw()
         self.tact += 1
 
@@ -143,3 +148,7 @@ class PauseSceneUI(SceneUI):
     def save_and_exit(self):
         self.app.game_scene.game_map.save_current_game_map()
         self.exit()
+
+    def editfullscreen(self):
+        Window.set_fullscreen(not FULLSCREEN)
+        self.app.game_scene.ui.new_sys_message("Перезапустите игру", draw_now=True)

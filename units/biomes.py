@@ -3,7 +3,8 @@
 import numpy as np
 from PIL import Image
 from noise import snoise2
-from units.Tiles import create_tile_image, grass_img
+
+from units.Tiles import create_tile_image
 
 im = np.array(Image.open("data/sprites/biomes/TP_map.png"))[:, :, :3]
 biomes = np.zeros((256, 256))

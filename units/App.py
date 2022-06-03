@@ -1,4 +1,3 @@
-import pygame as pg
 from pygame.locals import *
 
 from units.common import *
