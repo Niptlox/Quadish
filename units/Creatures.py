@@ -293,6 +293,12 @@ class Wolf(MovingCreature):
         return True
 
 
+class Snake(Wolf):
+    width, height = int(TSIZE * 1), int(TSIZE * 0.1)
+    color = "#4d7c0f"
+    drop_items = [(ItemsTile, (401, (1, 2))), (ItemsTile, (301, (0, 1)))]
+
+
 class SlimeBigBoss(Slime):
     colors = ["#ff9d00"]
     max_lives = 250
@@ -337,4 +343,4 @@ class SlimeBigBoss(Slime):
                 self.move_tact = None
 
 
-CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss]
+CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss, Snake]

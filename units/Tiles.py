@@ -59,7 +59,7 @@ purore_img = create_tile_image("#9333EA")  # purple ore
 tnt_img = create_tile_image("#B91C1C")  # tnt
 
 # granite_img = create_tile_image("#09070A")
-granite_img = create_border(load_img("data/sprites/tiles/granite.png"))
+granite_img = load_img("data/sprites/tiles/granite.png")
 
 tnt_1_img = create_tile_image("#F87171")  # tnt activ
 tnt_imgs = [tnt_1_img, create_tile_image("#FECACA")]  # tnt activ
@@ -100,6 +100,8 @@ rain_img = load_img("data/sprites/tiles/rain.png")
 wildberry_item_img = load_img("data/sprites/tiles/wildberry_item.png", None)
 meet_cow_item_img = load_img("data/sprites/tiles/meet_cow_item.png", None)
 meet_wolf_item_img = load_img("data/sprites/tiles/meet_wolf_item.png", None)
+meet_snake_item_img = load_img("data/sprites/items/meet_snake_item.png", None)
+poison_item_img = load_img("data/sprites/items/poison_item.png", None)
 potion_life_item_img = load_img("data/sprites/tiles/potion_life_item.png", None)
 
 slime_item_img = load_img("data/sprites/tiles/slime_item.png", None)
@@ -165,7 +167,8 @@ tile_imgs = {None: none_img,
              151: group_img,
              201: cloud_img,
              # 203: tnt_1_img,
-
+             301: poison_item_img,
+             401: meet_snake_item_img,
              501: sword_1_img,
              502: sword_77_img,
              530: pickaxe_0_img,
@@ -199,7 +202,7 @@ SEMIPHYSBODY_TILES = {120, 127, 126, 125, 121, 122}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
 STANDING_TILES = {0, 101, 102, 103, 110, 120, 121, 122, 123, 125, 126, 130, 129}
 # предметы которые нельзя физически поставить
-ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 801}
+ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 401, 801}
 
 # специальные каринки предметов для инвентаря
 tile_hand_imgs = {k: tile_imgs[k] if k in ITEM_TILES else transform_hand(i) for k, i in tile_imgs.items()}
@@ -250,7 +253,8 @@ tile_words = {None: "None",
               130: "Спальный мешок из шкур",
               # 151: "Группа обектов",
               201: "Облако",
-
+              301: "Ядовитая железа",
+              401: "Мясо змеи",
               501: "Железный меч",
               502: "Золотой меч",
               530: "Деревянная кирка",

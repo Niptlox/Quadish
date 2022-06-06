@@ -124,7 +124,7 @@ def dig_tile(game_map, x, y, tool, check=True):
         sol -= tool.strength
     if sol <= 0:
         if tile[0] == 110 and tool.tool_cls & CLS_PICKAXE:
-            dig_wood(game_map, x, y, tool)
+            dig_tree(game_map, x, y, tool)
         else:
             res = item_of_break_tile(tile)
             for ttile, count_items in res:
@@ -135,7 +135,7 @@ def dig_tile(game_map, x, y, tool, check=True):
     return True
 
 
-def dig_wood(game_map, x, y, tool):
+def dig_tree(game_map, x, y, tool):
     ttile = game_map.get_static_tile_type(x, y)
     while ttile == 110:
         if game_map.get_static_tile_type(x+1, y) == 105:

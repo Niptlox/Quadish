@@ -2,14 +2,16 @@ from math import ceil
 
 from pygame import Surface
 
+from units.Items import ItemsTile
 from units.Texture import WHITE
 from units.Tiles import tile_imgs, sky, tile_words, live_imgs, bg_live_img, goldlive_imgs
-from units.Tools import TOOLS, ItemsTile
+from units.Tools import TOOLS
 from units.UI.Button import createImagesButton, createVSteckButtons, Button
 from units.UI.ClassUI import SurfaceUI, UI, ScrollSurface
 from units.common import *
 
 # INIT TEXT ==================================================
+from units.creating_items import RECIPES
 
 pygame.font.init()
 # textfont = pygame.font.SysFont('Jokerman', 19)
@@ -736,7 +738,7 @@ class ScrollSurfaceRecipes(ScrollSurface):
     def draw(self, surface):
         self.main_scrolling()
         self.fill(bg_color)
-        # self.inventory.update_available_create_items()
+        self.inventory.update_available_create_items()
         self.redraw()
         self.blit(self.scroll_surface, self.scroll_surface.rect)
         surface.blit(self, self.rect)

@@ -3,7 +3,7 @@ import pickle
 
 from noise import snoise2 as pnoise2
 
-from units.Creatures import Slime, Cow, Wolf, SlimeBigBoss
+from units.Creatures import Slime, Cow, Wolf, SlimeBigBoss, Snake
 from units.Entity import PhysicalObject
 from units.Items import ItemsTile
 from units.TilesClass import Chest
@@ -274,10 +274,11 @@ class GameMap:
         on_ground_tiles, cnt_creatures = creature_cash[0], creature_cash[1]
         tile_index = 0
         octaves = 6
-        freq_x = 45 * 3.5
-        freq_y = 15 * 3.5
+        freq_x = 49 * 5
+        freq_y = 14 * 5
         base = self.base_generation
         threshold = -0.3
+        threshold = -0.2
         lacunarity = 2.4
         base_x = x * CHUNK_SIZE
         base_y = y * CHUNK_SIZE
@@ -299,8 +300,8 @@ class GameMap:
                         if v4 < -0.7:
                             tile_type = 4  # blore
                         else:
-                            v5 = pnoise2(tile_x / 8, tile_y / 8, 2, persistence=0.35, base=base + 1, lacunarity=1)
-                            if v5 < -0.7:
+                            v5 = pnoise2(tile_x / 16+100, tile_y / 16+100, 2, persistence=0.35, base=base + 1, lacunarity=1)
+                            if v5 < -0.88:
                                 tile_type = 5  # granite
                     else:
                         # v2 = pnoise2((tile_x + 1) / freq_x, (tile_y - 2 - random.randint(0, 1)) / freq_y, octaves,
@@ -442,7 +443,7 @@ def random_creature_selection():
     if r >= CHUNK_CREATURE_CHANCE:
         return None
 
-    crt = random.choices([Slime, Cow, Wolf, SlimeBigBoss], [20, 5, 0.7, 0.25], k=1)
+    crt = random.choices([Slime, Cow, Snake, Wolf, SlimeBigBoss], [20, 5, 1, 0.7, 0.25], k=1)
     # print("random_creature_selection", crt)
     return crt[0]
 

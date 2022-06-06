@@ -15,13 +15,15 @@ class Items(PhysicalObject):
     sprite.fill("#FF00FF")
     cell_size = 1000
 
-    def __init__(self, game, index=None, pos=(0, 0), count=1):
+    def __init__(self, game, index=None, pos=(0, 0), count: int or tuple = 1):
         self.index = index
         if index in eats:
             self.class_item = CLS_EAT
             self.recovery_lives = eats[index]
-        if type(count) is tuple:
+        if isinstance(count, tuple):
             count = randint(*count)
+            if count <= 0:
+                self.kill()
         self.count = count
         super().__init__(game, pos[0], pos[1], self.width, self.height, use_physics=True)
 
@@ -61,4 +63,3 @@ class ItemsTile(Items):
     def set_vars(self, vrs):
         super().set_vars(vrs)
         self.sprite = tile_hand_imgs.get(self.index, self.sprite)
-

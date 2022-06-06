@@ -4,6 +4,7 @@ from units.Items import Items, ItemsTile
 from units.Tools import TOOLS
 from units.UI.UI import InventoryPlayerUI
 from units.common import *
+from units.creating_items import RECIPES
 
 
 class Inventory:
@@ -185,11 +186,15 @@ class InventoryPlayer(Inventory):
         for i in range(len(RECIPES)):
             if self.check_creating_item_of_i(i):
                 self.available_create_items.append(RECIPES[i][0][0])
+        print(self.available_create_items)
+        return self.available_create_items
 
     def check_creating_item_of_i(self, rec_i):
-        if rec_i < len(RECIPES):
+        
+        if 0 <= rec_i < len(RECIPES):
             if self.owner.creative_mode:
                 return True
+            
             out, need = RECIPES[rec_i]
             for t, c in need:
                 # t - ttile, c - count
@@ -198,6 +203,7 @@ class InventoryPlayer(Inventory):
                     if t in self.owner.collisions_ttile:
                         continue
                 elif self.find_in_inventory(t, c):
+                 
                     continue
                 return False
             return True
@@ -226,12 +232,12 @@ class InventoryPlayer(Inventory):
     def find_in_inventory(self, ttile, count=1):
         if self.owner.creative_mode:
             return True
-        super(InventoryPlayer, self).find_in_inventory(ttile, count)
+        return super(InventoryPlayer, self).find_in_inventory(ttile, count)
 
     def get_from_inventory(self, ttile, count):
         if self.owner.creative_mode:
             return True
-        super(InventoryPlayer, self).get_from_inventory(ttile, count)
+        return super(InventoryPlayer, self).get_from_inventory(ttile, count)
 
 
 class InventoryChest(Inventory):
