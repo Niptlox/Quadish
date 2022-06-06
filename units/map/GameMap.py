@@ -274,8 +274,9 @@ class GameMap:
         on_ground_tiles, cnt_creatures = creature_cash[0], creature_cash[1]
         tile_index = 0
         octaves = 6
-        freq_x = 49 * 5
-        freq_y = 14 * 5
+        cof = 4.5
+        freq_x = 49 * cof
+        freq_y = 14 * cof
         base = self.base_generation
         threshold = -0.3
         threshold = -0.2

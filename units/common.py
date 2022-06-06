@@ -53,10 +53,10 @@ WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 1, \
 WCSIZE = WINDOW_CHUNK_SIZE
 
 # DEBUG ====================================================
-DEBUG = True
-# DEBUG = False
-show_chunk_grid = True
-show_entity_border = True
+# DEBUG = True
+DEBUG = False
+show_chunk_grid = False
+show_entity_border = False
 show_group_obj = True
 show_info_menu = True
 
