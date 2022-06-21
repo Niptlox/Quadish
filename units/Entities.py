@@ -74,7 +74,7 @@ class Dynamite(PhysicalObject):
                     continue
                 elif ttile in DYNAMITE_NOT_BREAK:
                     continue
-                res = item_of_break_tile(self.game_map.get_static_tile(ix, iy))
+                res = item_of_break_tile(self.game_map.get_static_tile(ix, iy), self.game_map, (ix, iy))
                 self.game_map.set_static_tile(ix, iy, None)
                 if ttile == 9:  # tnt
                     obj = Dynamite(self.game, ix * TSIZE, iy * TSIZE)

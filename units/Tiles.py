@@ -326,7 +326,7 @@ tile_drops = {
 }
 
 
-def item_of_break_tile(tile):
+def item_of_break_tile(tile, game_map, tile_xy):
     # (index, count, chance)
     ttile = tile[0]
     items = [(ttile, 1, 1)]
@@ -337,6 +337,9 @@ def item_of_break_tile(tile):
     res = [(i, cnt) for i, cnt, ch in items if ch == 1 or random.randint(0, 100 * 100) <= ch * 100 * 100]
     if ttile == 126:  # куст с ягодами
         res += [i for i in tile[3] if i]
+    elif ttile == 129:
+        tile_obj = game_map.get_tile_obj(tile_xy[0] // CHUNK_SIZE, tile_xy[1] // CHUNK_SIZE, tile[3])
+        res += tile_obj.items_of_break()
     return res
 
 

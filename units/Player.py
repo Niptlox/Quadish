@@ -97,11 +97,13 @@ class Player(PhysicalObject):
         d["inventory"] = self.inventory.get_vars()
         d.pop("toolHand")
         d.pop("tool")
+        d.pop("chest_ui")
         print(d)
         return d
 
     def set_vars(self, vrs):
         self.inventory.set_vars(vrs.pop("inventory"))
+        self.chest_ui = InventoryPlayerChestUI(self.inventory)
         # vrs["max_fall_speed"] = self.max_fall_speed
         vrs["rect"].size = self.rect.size
 

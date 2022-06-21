@@ -41,6 +41,11 @@ class GameMap:
                 obj: PhysicalObject = type_obj(self.game)
                 obj.set_vars(vrs_obj)
                 chunk[1][i] = obj
+            for key, val in chunk[2].items():
+                type_obj, vrs_obj = chunk[2][key]
+                tile_obj = type_obj(self.game, vrs_obj.get("tile_pos", (0, 0)))
+                tile_obj.set_vars(vrs_obj)
+                chunk[2][key] = tile_obj
         # set vars
         for k, i in vrs.items():
             self.__dict__[k] = i
@@ -54,6 +59,7 @@ class GameMap:
         for pos, chunk in d["game_map"].items():
             game_map[pos] = chunk.copy()
             game_map[pos][1] = [(type(obj), obj.get_vars()) for obj in chunk[1]]
+            game_map[pos][2] = {key: (type(obj), obj.get_vars()) for key, obj in chunk[2].items()}
         d["game_map"] = game_map
         d.pop("game")
         return d
@@ -63,23 +69,26 @@ class GameMap:
         if res is default and create_chunk:
             res = self.generate_chunk(*xy)
         if res and for_player:
-            crt_cash = res[3]
-            if self.game.tact > crt_cash[2] + FPS * 300:
-                if crt_cash[1] < CHUNK_CREATURE_LIMIT:
-                    crt_cash[2] = self.game.tact
-                    dynamic_tiles = res[1]
-                    scroll = self.game.screen_map.scroll
-                    # if not self.game.screen_map.display_rect.collidepoint(x - scroll[0], y - scroll[1]):
-                    crt_cnt = min(len(crt_cash[0]), random.randint(0, CHUNK_CREATURE_LIMIT - crt_cash[1]))
-                    tiles_xy = random.choices(tuple(crt_cash[0]), k=crt_cnt)
-                    for tile_xy in tiles_xy:
-                        # if random.random() < 0.005:
-                            x, y = tile_xy[0] * TSIZE, tile_xy[1] * TSIZE
-                            Crt = random_creature_selection()
-                            if Crt is not None:
-                                dynamic_tiles.append(Crt(self.game, (x, y)))
-                                crt_cash[1] += 1
+            self.update_chunk(res)
         return res
+
+    def update_chunk(self, chunk):
+        crt_cash = chunk[3]
+        if self.game.tact > crt_cash[2] + FPS * 300:
+            if crt_cash[1] < CHUNK_CREATURE_LIMIT:
+                crt_cash[2] = self.game.tact
+                dynamic_tiles = chunk[1]
+                scroll = self.game.screen_map.scroll
+                # if not self.game.screen_map.display_rect.collidepoint(x - scroll[0], y - scroll[1]):
+                crt_cnt = min(len(crt_cash[0]), random.randint(0, CHUNK_CREATURE_LIMIT - crt_cash[1]))
+                tiles_xy = random.choices(tuple(crt_cash[0]), k=crt_cnt)
+                for tile_xy in tiles_xy:
+                    # if random.random() < 0.005:
+                    x, y = tile_xy[0] * TSIZE, tile_xy[1] * TSIZE
+                    Crt = random_creature_selection()
+                    if Crt is not None:
+                        dynamic_tiles.append(Crt(self.game, (x, y)))
+                        crt_cash[1] += 1
 
     def chunk_gen(self, xy):
         index = 0
@@ -128,12 +137,16 @@ class GameMap:
         if chunk is not None:
             if tile is None:
                 tile = [0, 0, 0, 0]
+            if tile[0] == 129:  # chest
+                obj = Chest(self.game, (x, y))
+                self.add_tile_obj_to_chunk(chunk, obj)
+                tile[3] = obj.id
             i = self.convert_pos_to_i(x, y)
             chunk[0][i:i + self.tile_data_size] = tile
             return True
         return False
 
-    def set_static_tile_group(self, x, y, group_id):
+    def set_obj_static_tile(self, x, y, group_id):
         chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE))
         if chunk is not None:
             i = self.convert_pos_to_i(x, y)
@@ -158,27 +171,7 @@ class GameMap:
             return True
         return False
 
-    def move_dinamic_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
-        # print(chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj)
-        chunk = self.chunk((new_chunk_x, new_chunk_y))
-        if not chunk:
-            chunk = self.generate_chunk(new_chunk_x, new_chunk_y)
-        ochunk = self.chunk((chunk_x, chunk_y))
-        if ochunk is not None and obj in ochunk[1]:
-            ochunk[1].remove(obj)
-            chunk[1].append(obj)
-            if obj.class_obj & OBJ_CREATURE:
-                ochunk[3][1] -= 1
-                chunk[3][1] += 1
-            return True
-        else:
-            obj.sprite.blit(pg.Surface((10, 10)), (0, 0))
-            print(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
-            # raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
-
-        return
-
-    def move_group_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
+    def move_tile_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
         chunk = self.chunk((new_chunk_x, new_chunk_y))
         i = obj.id
         if chunk:
@@ -193,7 +186,7 @@ class GameMap:
             # return False
         return
 
-    def del_group_obj(self, chunk_x, chunk_y, obj):
+    def del_tile_obj(self, chunk_x, chunk_y, obj):
         chunk = self.chunk((chunk_x, chunk_y))
         i = obj.id
         if chunk and i in chunk[2]:
@@ -201,12 +194,21 @@ class GameMap:
             return True
         return False
 
-    def add_group_obj(self, chunk_x, chunk_y, obj):
+    def add_tile_obj(self, chunk_x, chunk_y, obj):
         chunk = self.chunk((chunk_x, chunk_y))
         if chunk:
-            chunk[2][obj.id] = obj
+            self.add_tile_obj_to_chunk(chunk, obj)
             return True
         return False
+
+    def get_tile_obj(self, chunk_x, chunk_y, obj_id: int):
+        chunk = self.chunk((chunk_x, chunk_y), create_chunk=True)
+        if chunk:
+            return chunk[2].get(obj_id)
+        return None
+
+    def add_tile_obj_to_chunk(self, chunk, obj):
+        chunk[2][obj.id] = obj
 
     def del_dinamic_obj(self, chunk_x, chunk_y, obj):
         chunk = self.chunk((chunk_x, chunk_y))
@@ -229,6 +231,26 @@ class GameMap:
             return True
         return False
 
+    def move_dinamic_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
+        # print(chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj)
+        chunk = self.chunk((new_chunk_x, new_chunk_y))
+        if not chunk:
+            chunk = self.generate_chunk(new_chunk_x, new_chunk_y)
+        ochunk = self.chunk((chunk_x, chunk_y))
+        if ochunk is not None and obj in ochunk[1]:
+            ochunk[1].remove(obj)
+            chunk[1].append(obj)
+            if obj.class_obj & OBJ_CREATURE:
+                ochunk[3][1] -= 1
+                chunk[3][1] += 1
+            return True
+        else:
+            obj.sprite.blit(pg.Surface((10, 10)), (0, 0))
+            print(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
+            # raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
+
+        return
+
     def add_item_of_index(self, index, count_items, x, y):
         npos = (x * TSIZE + random.randint(0, TSIZE - HAND_SIZE), y * TSIZE)
         if index in TOOLS:
@@ -246,18 +268,17 @@ class GameMap:
 
     @staticmethod
     def get_tile_ttile(ttile):
-        """тип, прочность, состояние, переменная"""
+        """тип, прочность, состояние, переменная(таймер | ссылка на объект и тд)"""
         return [ttile, TILES_SOLIDITY.get(ttile, -1), 0, 0]
 
     def get_tile_ttile_tpos(self, ttile, tpos):
         """тип, прочность, состояние, переменная"""
         tile = self.get_tile_ttile(ttile)
-        if tile[0] == 129:  # chest
-            tile[3] = Chest(self.game, (tpos[0] * TSIZE, tpos[1] * TSIZE))
+
         return tile
 
     def create_pass_chunk(self, xy):
-        """static tiles; dynamic tiles; group obj; creatures cash \
+        """static tiles; dynamic object; tile object; creatures cash \
         (on graund tiles, cnt creatures, last tact generate); climate"""
         #                    0                          1   2   3              4
         self.game_map[xy] = [[0] * self.chunk_arr_size, [], {}, [set(), 0, 0], [0] * (CHUNK_SIZE ** 2)]
@@ -270,7 +291,7 @@ class GameMap:
 
     def generate_chunk_noise_island(self, x, y):
         res = self.create_pass_chunk((x, y))
-        static_tiles, dynamic_tiles, group_handlers, creature_cash, biome_info = res
+        static_tiles, dynamic_tiles, tile_objs, creature_cash, biome_info = res
         on_ground_tiles, cnt_creatures = creature_cash[0], creature_cash[1]
         tile_index = 0
         octaves = 6
@@ -301,7 +322,8 @@ class GameMap:
                         if v4 < -0.7:
                             tile_type = 4  # blore
                         else:
-                            v5 = pnoise2(tile_x / 16+100, tile_y / 16+100, 2, persistence=0.35, base=base + 1, lacunarity=1)
+                            v5 = pnoise2(tile_x / 16 + 100, tile_y / 16 + 100, 2, persistence=0.35, base=base + 1,
+                                         lacunarity=1)
                             if v5 < -0.88:
                                 tile_type = 5  # granite
                     else:

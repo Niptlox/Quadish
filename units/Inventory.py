@@ -21,7 +21,34 @@ class Inventory:
 
     def set_vars(self, vrs):
         self.__init__(self.game_map, self.owner, vrs.pop("size_table"))
-        _inventory = vrs.pop("_inventory")
+        self.update_inventory_from_lst(vrs.pop("_inventory"))
+
+    def get_vars(self):
+        d = {"size_table": self.size_table}
+        d["_inventory"] = [(type(i), i.get_vars()) if i else None for i in self.inventory]
+        return d
+
+    def __getitem__(self, pos):
+        """[index] - получение ячейки по индексу в масиве
+        [(row, column)] - получение ячейки по стлолбцу и строке в таблице"""
+        if type(pos) is int:
+            return self.inventory[pos]
+        elif type(pos) is tuple:
+            x, y = pos
+            return self.inventory[y * self.size_table[0] + x]
+
+    def __setitem__(self, key, value):
+        if type(key) is int:
+            self.inventory[key] = value
+        elif type(key) is tuple:
+            x, y = key
+            self.inventory[y * self.size_table[0] + x] = value
+
+    def __iter__(self):
+        for item in self.inventory:
+            yield item
+
+    def update_inventory_from_lst(self, _inventory):
         for i in range(len(_inventory)):
             if _inventory[i] is None:
                 self.inventory[i] = None
@@ -33,28 +60,6 @@ class Inventory:
                 if obj.class_obj & OBJ_ITEM and obj.class_item & CLS_TOOL:
                     obj.set_owner(self.owner)
                 self.inventory[i] = obj
-
-    def get_vars(self):
-        d = {"size_table": self.size_table}
-        d["_inventory"] = [(type(i), i.get_vars()) if i else None for i in self.inventory]
-        return d
-
-    def __getitem__(self, item):
-        """[index] - получение ячейки по индексу в масиве
-        [(row, column)] - получение ячейки по стлолбцу и строке в таблице"""
-        if type(item) is int:
-            return self.inventory[item]
-        elif type(item) is tuple:
-            x, y = item
-            return self.inventory[y * self.size_table[0] + x]
-
-    def __setitem__(self, key, value):
-        if type(key) is int:
-            self.inventory[key] = value
-        elif type(key) is tuple:
-            x, y = key
-            self.inventory[y * self.size_table[0] + x] = value
-
     @property
     def row_work(self) -> list:
         return self.inventory[:self.size_table[0]]
@@ -158,7 +163,7 @@ class InventoryPlayer(Inventory):
         self.available_create_items = []
 
     def set_vars(self, vrs):
-        super(InventoryPlayer, self).set_vars(vrs)
+        self.update_inventory_from_lst(vrs.pop("_inventory"))
         self.active_cell = vrs["active_cell"]
 
     def get_vars(self):

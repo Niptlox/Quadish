@@ -81,7 +81,8 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
     elif ttile == 128:
         game_map.set_static_tile(x, y, game_map.get_tile_ttile(127))
     elif ttile == 129:
-        tile[3].right_click(local_pos_tile)
+        obj = game_map.get_tile_obj(x // CHUNK_SIZE, y // CHUNK_SIZE, tile[3])
+        obj.right_click(local_pos_tile)
     elif ttile == 101:
         if tile[2] > 0:
             item = item_of_right_click_tile(tile)[0]
@@ -126,7 +127,7 @@ def dig_tile(game_map, x, y, tool, check=True):
         if tile[0] == 110 and tool.tool_cls & CLS_PICKAXE:
             dig_tree(game_map, x, y, tool)
         else:
-            res = item_of_break_tile(tile)
+            res = item_of_break_tile(tile, game_map, (x, y))
             for ttile, count_items in res:
                 game_map.add_item_of_index(ttile, count_items, x, y)
             game_map.set_static_tile(x, y, None)
@@ -138,10 +139,10 @@ def dig_tile(game_map, x, y, tool, check=True):
 def dig_tree(game_map, x, y, tool):
     ttile = game_map.get_static_tile_type(x, y)
     while ttile == 110:
-        if game_map.get_static_tile_type(x+1, y) == 105:
-            dig_tile(game_map, x+1, y, None, check=True)
-        if game_map.get_static_tile_type(x-1, y) == 105:
-            dig_tile(game_map, x-1, y, None, check=True)
+        if game_map.get_static_tile_type(x + 1, y) == 105:
+            dig_tile(game_map, x + 1, y, None, check=True)
+        if game_map.get_static_tile_type(x - 1, y) == 105:
+            dig_tile(game_map, x - 1, y, None, check=True)
         itm_ttile, itm_count_items, ch = tile_drops[ttile][0]
         game_map.add_item_of_index(itm_ttile, itm_count_items, x, y)
         game_map.set_static_tile(x, y, None)
@@ -165,7 +166,7 @@ def check_set_tile(game_map, x, y, inventory_cell):
         return tile
     if cell_ttile == bottom_ttile == 126:
         return tile
-    if cell_ttile in STANDING_TILES and bottom_ttile in STANDING_TILES:
+    if cell_ttile in STANDING_TILES and bottom_ttile == 0:
         return False
     if cell_ttile == 101 and not bottom_ttile == 1:
         return False
