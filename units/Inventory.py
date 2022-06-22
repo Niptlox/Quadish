@@ -74,7 +74,7 @@ class Inventory:
             items.rect.x, items.rect.y = ix, iy
             items.update_chunk_pos()
             items.alive = True
-            print(ix, iy, *self.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
+            # print(ix, iy, *self.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
             self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
 
     def discard_all_items(self):
@@ -82,6 +82,8 @@ class Inventory:
             self.discard_item(i, None, discard_vector=(0, 0))
 
     def put_to_inventory(self, items):
+        if items.count <= 0:
+            return True, None
         i = 0
         while i < self.inventory_size:
             cell = self.inventory[i]
@@ -100,12 +102,10 @@ class Inventory:
                 cell = self.inventory[i]
                 if cell is None:
                     if items.count <= items.cell_size:
-                        self.inventory[i] = items
-                        if items.class_item & CLS_TOOL:
-                            items.set_owner(self.owner)
+                        self.set_cell(i, items)
                     else:
                         self.inventory[i] = items.copy()
-                        cell.count = items.cell_size
+                        self.inventory[i].count = items.cell_size
                         items.count -= items.cell_size
                         continue
                     break
@@ -145,11 +145,22 @@ class Inventory:
         self.redraw()
         return True
 
-    def get_cell_from_inventory(self, num_cell):
+    def get_cell_from_inventory(self, num_cell, del_in_inventory=True):
         item = self.inventory[num_cell]
-        self.inventory[num_cell] = None
+        if del_in_inventory:
+            self.inventory[num_cell] = None
         self.redraw()
         return item
+
+    def set_cell(self, num_cell, item):
+
+        if item is not None:
+            if item.count <= 0:
+                item = None
+            elif item.class_item & CLS_TOOL:
+                item.set_owner(self.owner)
+
+        self.inventory[num_cell] = item
 
     def redraw(self):
         pass
@@ -191,7 +202,7 @@ class InventoryPlayer(Inventory):
         for i in range(len(RECIPES)):
             if self.check_creating_item_of_i(i):
                 self.available_create_items.append(RECIPES[i][0][0])
-        print(self.available_create_items)
+        # print(self.available_create_items)
         return self.available_create_items
 
     def check_creating_item_of_i(self, rec_i):

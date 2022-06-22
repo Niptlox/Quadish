@@ -1,8 +1,9 @@
 from math import ceil
+from typing import Union
 
 from pygame import Surface
 
-from units.Items import ItemsTile
+from units.Items import ItemsTile, Items
 from units.Texture import WHITE
 from units.Tiles import tile_imgs, sky, tile_words, live_imgs, bg_live_img, goldlive_imgs
 from units.Tools import TOOLS
@@ -33,9 +34,28 @@ color_none = (0, 0, 0, 0)
 bg_color = (82, 82, 91, 150)
 bg_color_dark = (52, 52, 51, 150)
 
-
 # =============================================================
 
+# OBJECT IN MOUSE =============================================
+__object_in_mouse = None
+__place_of_object_in_mouse = (None, -1)
+
+
+def set_obj_mouse(obj, place=None):
+    global __object_in_mouse, __place_of_object_in_mouse
+    __object_in_mouse = obj
+    __place_of_object_in_mouse = place
+
+
+def get_obj_mouse() -> Union[Items, None]:
+    return __object_in_mouse
+
+
+def get_place_obj_mouse() -> tuple:
+    return __place_of_object_in_mouse
+
+
+# =============================================================
 
 class GameUI(UI):
     def __init__(self, app) -> None:
@@ -88,7 +108,7 @@ class GameUI(UI):
         self.sys_message_count_tact = count_tact
         self.sys_message_surface.set_alpha(255)
         self.sys_message_surface.fill(sys_message_bg)
-        text_msg = textfont_sys_msg.render(text, 1, "#FDE047")
+        text_msg = textfont_sys_msg.render(text, True, "#FDE047")
         self.sys_message_surface.blit(text_msg, (5, 5))
         if draw_now:
             self.sys_message_left_tact -= 8
@@ -98,16 +118,16 @@ class GameUI(UI):
         true_fps = self.app.clock.get_fps()
         self.info_surface.fill(bg_color)
         text_fps = textfont_info.render(
-            f" fps: {int(true_fps)}", 1, "white")
+            f" fps: {int(true_fps)}", True, "white")
         text_pos_real = textfont_info.render(
-            f"rpos: {self.app.player.rect.x, self.app.player.rect.y}", 1, "white")
+            f"rpos: {self.app.player.rect.x, self.app.player.rect.y}", True, "white")
         text_pos = textfont_info.render(
-            f" pos: {self.app.player.rect.x // TSIZE, self.app.player.rect.y // TSIZE}", 1, "white")
+            f" pos: {self.app.player.rect.x // TSIZE, self.app.player.rect.y // TSIZE}", True, "white")
         text_ents = textfont_info.render(
-            f"Ents: {len(self.app.screen_map.dynamic_tiles)}", 1, "white")
+            f"Ents: {len(self.app.screen_map.dynamic_tiles)}", True, "white")
         chunk_ents = self.app.game_map.chunk(self.app.player.update_chunk_pos())[3][1]
         text_c_ents = textfont_info.render(
-            f"CEnts: {chunk_ents}", 1, "white")
+            f"CEnts: {chunk_ents}", True, "white")
         self.info_surface.blit(text_fps, (8, 5))
         self.info_surface.blit(text_pos_real, (8, 25))
         self.info_surface.blit(text_pos, (8, 45))
@@ -180,7 +200,7 @@ class SwitchMapUI(UI):
 
         self.btns = btns
 
-    def pg_event(self, event: pg.event.Event):
+    def pg_event(self, event: pg.event.Event) -> Union[bool, None]:
         if event.type == pg.MOUSEBUTTONDOWN:
             if event.button == 5:
                 self.btns_scroll[1] -= self.btns_scroll_step
@@ -324,15 +344,11 @@ class InventoryUI(SurfaceUI):
         super(InventoryUI, self).__init__(((0, 0), WSIZE))
         self.convert_alpha()
         self.fill((0, 0, 0, 0))
-        self.replace_two_items = True
 
         self.table_inventory = SurfaceUI((0, 0, size_table[0] * self.cell_size + 40,
                                           size_table[1] * self.cell_size + 40)).convert_alpha()
         self.table_inventory.rect.center = self.rect.center
-        self.mouse_rect = self.table_inventory.rect
-
-        self.table_item_inhend = None
-        self.table_item_inhend_i = -1
+        self.work_rect = self.table_inventory.rect
 
         self.inventory_info_index = None
         self.inventory_info_index_surface = pygame.Surface((1, 1))
@@ -373,7 +389,7 @@ class InventoryUI(SurfaceUI):
     def redraw_inventory_info(self):
         item = self.inventory[self.inventory_info_index]
         if item is None:
-            self.inventory_info_index = None
+            self.inventory_info_index = -1
             return
         text = textfont.render(tile_words[item.index], True, text_color_light)
         w, h = text.get_size()
@@ -383,11 +399,12 @@ class InventoryUI(SurfaceUI):
 
     def draw(self, surface):
         self.fill(color_none)
-        # pg.draw.rect(self, bg_color, self.rect)
         self.table_inventory.draw(self)
-        if self.table_item_inhend:
+        if get_obj_mouse():
+            self.blit(get_obj_mouse().sprite, pg.mouse.get_pos())
+        elif self.inventory_info_index != -1:
             mx, my = pg.mouse.get_pos()
-            self.blit(self.table_item_inhend.sprite, (mx, my))
+            self.blit(self.inventory_info_index_surface, (mx, my + 26))
         surface.blit(self, self.rect)
 
     def convert_table_mpos_to_i(self, pos):
@@ -396,45 +413,59 @@ class InventoryUI(SurfaceUI):
             (pos[1] - (self.table_inventory.rect.y + offset)) // self.cell_size * self.inventory.size_table[0]
         return i
 
-    def pg_event(self, event: pg.event.Event):
+    def pg_event(self, event: pg.event.Event) -> Union[bool, None]:
         if event.type == pg.MOUSEBUTTONDOWN:
-            if event.button == pg.BUTTON_LEFT:
-                if self.table_inventory.rect.collidepoint(event.pos):
-                    i = self.convert_table_mpos_to_i(event.pos)
-                    if i != -1 and i < self.inventory.inventory_size and self.table_item_inhend is None:
-                        self.table_item_inhend = self.inventory.get_cell_from_inventory(i)
-                        self.table_item_inhend_i = i
-                    return True
-        if event.type == pg.MOUSEBUTTONUP:
-            if event.button == pg.BUTTON_LEFT:
-                if self.table_item_inhend is not None:
-                    if self.mouse_rect.collidepoint(event.pos):
-                        i = self.convert_table_mpos_to_i(event.pos)
-                        if i != -1 and i < self.inventory.inventory_size:
-                            item = self.inventory.get_cell_from_inventory(i)
-                            self.inventory[i] = self.table_item_inhend
-                            if item and self.replace_two_items:
-                                self.inventory[self.table_item_inhend_i] = item
-                            self.inventory.redraw()
-                            self.table_item_inhend = None
-                            return True
-                    discard_vector = (TSIZE * (2 if event.pos[0] > self.rect.centerx else -2), 10)
-                    self.inventory.discard_item(items=self.table_item_inhend, discard_vector=discard_vector)
-                    self.table_item_inhend = None
-                    return True
+            if get_obj_mouse() and not self.work_rect.collidepoint(event.pos):
+                # DISCARD ITEM
+                discard_vector = (TSIZE * (2 if event.pos[0] > self.rect.centerx else -2), 10)
+                self.inventory.discard_item(items=get_obj_mouse(), discard_vector=discard_vector)
+                set_obj_mouse(None)
+                return True
+            i = self.convert_table_mpos_to_i(event.pos)
+            if 0 <= i < self.inventory.inventory_size:
+
+                if get_obj_mouse():
+                    # PUT OBJ
+                    item = self.inventory.get_cell_from_inventory(i)
+                    self.inventory.set_cell(i, get_obj_mouse())
+                    set_obj_mouse(item)
+                    self.inventory.redraw()
+                else:
+                    # GET OBJ
+                    item = None
+                    if event.button == pg.BUTTON_LEFT:
+                        item = self.inventory.get_cell_from_inventory(i, del_in_inventory=True)
+                    elif event.button == pg.BUTTON_RIGHT:
+                        _item = self.inventory.get_cell_from_inventory(i, del_in_inventory=False)
+                        item = _item.copy()
+                        _item.count //= 2
+                        item.count -= _item.count
+                        if _item.count == 0:
+                            self.inventory[i] = None
+                        self.inventory.redraw()
+                    elif event.button == pg.BUTTON_MIDDLE and self.inventory.owner.creative_mode:
+                        item = self.inventory.get_cell_from_inventory(i, del_in_inventory=False).copy()
+                        item.count = item.cell_size
+                    set_obj_mouse(item, place=(self, i))
+                return True
+        elif event.type == pg.MOUSEMOTION:
+            i = self.convert_table_mpos_to_i(event.pos)
+            if self.rect.collidepoint(event.pos) and 0 <= i < self.inventory.inventory_size:
+                self.inventory_info_index = i
+                self.redraw_inventory_info()
+            else:
+                self.inventory_info_index = -1
         return False
 
 
-class InventoryPlayerUI(SurfaceUI):
+class InventoryPlayerUI(InventoryUI):
     cell_size = cell_size
 
     def __init__(self, inventory):
-        self.inventory = inventory
-        super(InventoryPlayerUI, self).__init__(pg.Rect((0, 0), WSIZE))
+        super(InventoryPlayerUI, self).__init__(inventory, inventory.size_table)
         self.convert_alpha()
         self.fill((0, 0, 0, 0))
 
-        self.replace_two_items = True
         # self.info_surface = SurfaceUI((0, 0, 250, 80)).convert_alpha()
 
         self.work_inventory = SurfaceUI((15, 15, self.inventory.size_table[0] * self.cell_size,
@@ -443,12 +474,9 @@ class InventoryPlayerUI(SurfaceUI):
                                           self.inventory.size_table[1] * self.cell_size + 10 + 40)).convert_alpha()
         self.work_inventory.rect.centerx = self.rect.centerx
         self.table_inventory.rect.center = self.rect.center
-        self.mouse_rect = self.table_inventory.rect
-        # self.table_inventory.rect.y = 40
-        self.table_item_inhend = None
-        self.table_item_inhend_i = -1
+        self.work_rect = self.table_inventory.rect
 
-        self.inventory_info_index = None
+        self.inventory_info_index = -1
         self.inventory_info_index_surface = pygame.Surface((1, 1))
         self.top_bg_color = (82, 82, 91, 150)
         self.recipes = ScrollSurfaceRecipes(self.inventory,
@@ -464,11 +492,9 @@ class InventoryPlayerUI(SurfaceUI):
         self.table_inventory.fill(bg_color)
         self.table_inventory.fill(bg_color_dark,
                                   (20, 20, self.table_inventory.rect.w - 40, self.table_inventory.rect.h - 40))
-        # pg.draw.rect(self.table_inventory, self.top_bg_color,)
         x = 20
         y = 20
         i = 0
-        # cell_size = self.cell_size
         cell_size_2 = cell_size // 2
         for i in range(self.inventory.inventory_size):
             if i == self.inventory.size_table[0]:
@@ -522,17 +548,6 @@ class InventoryPlayerUI(SurfaceUI):
                 self.work_inventory.blit(text, (tx, ty))
             x += cell_size
 
-    def redraw_inventory_info(self):
-        item = self.inventory[self.inventory_info_index]
-        if item is None:
-            self.inventory_info_index = None
-            return
-        text = textfont.render(tile_words[item.index], True, text_color_light)
-        w, h = text.get_size()
-        self.inventory_info_index_surface = pygame.Surface((w + 6, h + 4)).convert_alpha()
-        self.inventory_info_index_surface.fill(self.top_bg_color)
-        self.inventory_info_index_surface.blit(text, (3, 2))
-
     def draw(self, surface):
         self.fill(color_none)
 
@@ -544,13 +559,16 @@ class InventoryPlayerUI(SurfaceUI):
                 self.all_tiles.draw(self)
             else:
                 self.recipes.draw(self)
-            if self.table_item_inhend:
+            if get_obj_mouse():
+                self.blit(get_obj_mouse().sprite, pg.mouse.get_pos())
+            elif self.inventory_info_index != -1:
                 mx, my = pg.mouse.get_pos()
-                self.blit(self.table_item_inhend.sprite, (mx, my))
-        if self.inventory_info_index is not None:
-            self.blit(self.inventory_info_index_surface,
-                      (self.work_inventory.rect.x + self.inventory_info_index * self.cell_size,
-                       self.work_inventory.rect.y + self.cell_size))
+                self.blit(self.inventory_info_index_surface, (mx, my + 26))
+        else:
+            if self.inventory_info_index != -1:
+                self.blit(self.inventory_info_index_surface,
+                          (self.work_inventory.rect.x + self.inventory_info_index * self.cell_size,
+                           self.work_inventory.rect.y + self.cell_size))
 
         surface.blit(self, self.rect)
 
@@ -576,57 +594,29 @@ class InventoryPlayerUI(SurfaceUI):
             else:
                 if self.recipes.pg_event(event):
                     return True
-        if event.type == pg.KEYDOWN:
-            if event.key == pg.K_e:
-                self.opened_full_inventory = not self.opened_full_inventory
-                self.recipes.info_index = None
-                self.inventory_info_index = None
+        if event.type == pg.KEYDOWN and event.key == pg.K_e:
+            # OPEN OR CLOSE  full INVENTORY
+            self.opened_full_inventory = not self.opened_full_inventory
+            self.recipes.info_index = None
+            self.inventory_info_index = -1
+            return True
+        if self.opened_full_inventory:
+            if super(InventoryPlayerUI, self).pg_event(event):
                 return True
-            # elif event.key == pg.K_ESCAPE:
-            # self.opened_full_inventory = False
-        if event.type == pg.MOUSEBUTTONDOWN:
-            if event.button == pg.BUTTON_LEFT:
-                if self.opened_full_inventory:
-                    if self.table_inventory.rect.collidepoint(event.pos):
-                        i = self.convert_table_mpos_to_i(event.pos)
-                        if i != -1 and i < self.inventory.inventory_size and self.table_item_inhend is None:
-                            self.table_item_inhend = self.inventory.get_cell_from_inventory(i)
-                            self.table_item_inhend_i = i
-                        return True
-                else:
+        else:
+            if event.type == pg.MOUSEBUTTONDOWN:
+                if event.button == pg.BUTTON_LEFT:
                     if self.work_inventory.rect.collidepoint(event.pos):
                         i = (event.pos[0] - self.work_inventory.rect.x) // self.cell_size
                         self.inventory.choose_active_cell(i)
                         return True
-        if event.type == pg.MOUSEBUTTONUP:
-            if event.button == pg.BUTTON_LEFT:
-                if self.opened_full_inventory and self.table_item_inhend is not None:
-                    if self.mouse_rect.collidepoint(event.pos):
-                        i = self.convert_table_mpos_to_i(event.pos)
-                        if i != -1 and i < self.inventory.inventory_size:
-                            item = self.inventory.get_cell_from_inventory(i)
-                            self.inventory[i] = self.table_item_inhend
-                            if item and self.replace_two_items:
-                                self.inventory[self.table_item_inhend_i] = item
-                            self.inventory.redraw()
-                            self.table_item_inhend = None
-                        return True
-                    elif self.recipes.rect.collidepoint(event.pos):
-                        self.inventory.redraw()
-                        self.table_item_inhend = None
-                        return True
-                    discard_vector = (TSIZE * (2 if event.pos[0] > self.rect.centerx else -2), 10)
-                    self.inventory.discard_item(items=self.table_item_inhend, discard_vector=discard_vector)
-                    self.table_item_inhend = None
-                    return True
-        elif event.type == pg.MOUSEMOTION:
-            if not self.opened_full_inventory:
+            elif event.type == pg.MOUSEMOTION:
                 if self.work_inventory.rect.collidepoint(event.pos):
                     i = (event.pos[0] - self.work_inventory.rect.x) // self.cell_size
                     self.inventory_info_index = i
                     self.redraw_inventory_info()
                 else:
-                    self.inventory_info_index = None
+                    self.inventory_info_index = -1
         return False
 
 
@@ -634,16 +624,14 @@ class InventoryPlayerChestUI(SurfaceUI):
     def __init__(self, player_inventory):
         super(InventoryPlayerChestUI, self).__init__(((0, 0), WSIZE))
         self.player_inventory_ui = InventoryPlayerUI(player_inventory)
-        self.player_inventory_ui.replace_two_items = False
         self.player_inventory_ui.opened_full_inventory = True
         self.player_inventory_ui.table_inventory.rect.y = 100
 
         self.chest_inventory_ui = InventoryUI(None, Chest_size_table)
-        self.chest_inventory_ui.replace_two_items = False
         self.chest_inventory_ui.table_inventory.rect.y = self.player_inventory_ui.table_inventory.rect.bottom + 40
-        self.mouse_rect = pg.Rect.union(self.chest_inventory_ui.mouse_rect, self.player_inventory_ui.mouse_rect)
-        self.player_inventory_ui.mouse_rect = self.chest_inventory_ui.mouse_rect = self.mouse_rect
-        self.table_item_inhend = None
+        self.work_rect = pg.Rect.union(self.chest_inventory_ui.work_rect, self.player_inventory_ui.work_rect)
+        self.player_inventory_ui.work_rect = self.chest_inventory_ui.work_rect = self.work_rect
+        set_obj_mouse(None)
         self.opened = False
 
     def set_chest_inventory(self, chest_inventory):
@@ -656,19 +644,14 @@ class InventoryPlayerChestUI(SurfaceUI):
         self.chest_inventory_ui.redraw_table_inventory()
         self.player_inventory_ui.draw(surface)
         self.chest_inventory_ui.draw(surface)
-        if self.table_item_inhend:
+        if get_obj_mouse():
             mx, my = pg.mouse.get_pos()
-            self.blit(self.table_item_inhend.sprite, (mx, my))
+            self.blit(get_obj_mouse().sprite, (mx, my))
         self.opened = self.player_inventory_ui.opened_full_inventory
 
     def pg_event(self, event: pg.event.Event):
         res = self.player_inventory_ui.pg_event(event)
-        self.table_item_inhend = self.player_inventory_ui.table_item_inhend
-        self.chest_inventory_ui.table_item_inhend = self.table_item_inhend
-
         res = self.chest_inventory_ui.pg_event(event) or res
-        self.table_item_inhend = self.chest_inventory_ui.table_item_inhend
-        self.player_inventory_ui.table_item_inhend = self.table_item_inhend
         return res
 
 
@@ -711,8 +694,7 @@ class ScrollSurfaceRecipes(ScrollSurface):
         x = 0
         y = 0
         i = 0
-        cell_size = self.cell_size
-        cell_size_2 = cell_size // 2
+        cell_size_2 = self.cell_size // 2
         for i in range(len(RECIPES)):
             if i % 5 == 0 and i > 0:
                 y += cell_size
@@ -733,7 +715,7 @@ class ScrollSurfaceRecipes(ScrollSurface):
             self.scroll_surface.blit(text, (tx, ty))
             if cell[0] not in self.inventory.available_create_items:
                 self.scroll_surface.blit(gray_cell, (x, y))
-            x += cell_size
+            x += self.cell_size
 
     def draw(self, surface):
         self.main_scrolling()
@@ -758,8 +740,8 @@ class ScrollSurfaceRecipes(ScrollSurface):
                             event.pos[1] - self.rect.y) // self.cell_size * 5
                     if i < self.count_cells:
                         cnt = 1
-                        if event.button == pg.BUTTON_MIDDLE:
-                            cnt = 1000
+                        if self.inventory.owner.creative_mode and event.button == pg.BUTTON_MIDDLE:
+                            cnt = 999
                         self.creating_item_of_i(i, cnt=cnt)
                     return True
         elif event.type == pg.MOUSEWHEEL:

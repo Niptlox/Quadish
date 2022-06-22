@@ -13,7 +13,7 @@ class Items(PhysicalObject):
     width, height = HAND_SIZE, HAND_SIZE
     sprite = pg.Surface((width, height))
     sprite.fill("#FF00FF")
-    cell_size = 1000
+    cell_size = 999
 
     def __init__(self, game, index=None, pos=(0, 0), count: int or tuple = 1):
         self.index = index
