@@ -364,6 +364,7 @@ class Player(PhysicalObject):
     def set_game_mode(self, creative_mode=False):
         # global self.creative_mode
         self.creative_mode = creative_mode
+        self.game_map.creative_mode = creative_mode
         self.jump_count = 0
         if self.creative_mode:
             self.ui.new_sys_message("Режим создателя включен")

@@ -443,7 +443,7 @@ class InventoryUI(SurfaceUI):
                         if _item.count == 0:
                             self.inventory[i] = None
                         self.inventory.redraw()
-                    elif event.button == pg.BUTTON_MIDDLE and self.inventory.owner.creative_mode:
+                    elif event.button == pg.BUTTON_MIDDLE and self.inventory.game_map.creative_mode:
                         item = self.inventory.get_cell_from_inventory(i, del_in_inventory=False).copy()
                         item.count = item.cell_size
                     set_obj_mouse(item, place=(self, i))

@@ -26,6 +26,7 @@ class GameMap:
         self.base_generation = base_generation
         self.num_save_map = 0
         self.saved = False
+        self.creative_mode = CREATIVE_MODE
         if self.base_generation is None:
             self.new_base_generation()
 
