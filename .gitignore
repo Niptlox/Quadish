@@ -3,3 +3,4 @@ data/maps/*.pclv
 .idea
 *.aseprite
 __pycache__
+venv
