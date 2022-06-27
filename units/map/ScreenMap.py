@@ -94,21 +94,21 @@ class ScreenMap:
                                         img = tile_imgs[tile_type]
                                     if tile_type == 1:
                                         biome = self.game_map.get_tile_climate(tile_x, tile_y)[0]
-                                        if biome in grass_imgs:
-                                            img = grass_imgs[biome][0]
+                                        if biome in ground_imgs:
+                                            img = ground_imgs[biome][0]
                                             if static_tiles.get((tile_x - 1, tile_y), 0) == 0:
-                                                img = grass_imgs[biome][1]
+                                                img = ground_imgs[biome][1]
                                                 if self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
-                                                    img = grass_imgs[biome][3]
+                                                    img = ground_imgs[biome][3]
                                             elif self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
-                                                img = grass_imgs[biome][2]
+                                                img = ground_imgs[biome][2]
                                         else:
                                             if static_tiles.get((tile_x - 1, tile_y), 0) == 0:
-                                                img = grass_L_img
+                                                img = ground_L_img
                                                 if self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
-                                                    img = grass_LR_img
+                                                    img = ground_LR_img
                                             elif self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
-                                                img = grass_R_img
+                                                img = ground_R_img
                                     elif tile_type == 101:
                                         if tile[2] < 3:
                                             if tile[3] < tact:

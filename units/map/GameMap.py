@@ -334,7 +334,7 @@ class GameMap:
                         tile_type = 2  # dirt
                         if (y_pos > 0 and static_tiles[tile_index - self.chunk_arr_width] == 0) or \
                                 (y_pos == 0 and self.get_static_tile_type(tile_x, tile_y - 1, create_chunk=True) == 0):
-                            tile_type = 1  # grass
+                            tile_type = 1  # ground
                             if y_pos > 0:
                                 on_ground_tiles.add((tile_x, tile_y))
                                 plant_tile_type_state = random_plant_selection(biome_info[i][0])  # plant
@@ -436,9 +436,9 @@ class GameMap:
 
 
 def random_plant_selection(biome=None):
-    if random.randint(0, 5) == 0:
-        plants = {101: 0.1, 102: 0.1, 120: 0.05}
-        if biome == 0:
+    if random.randint(0, 2) == 0:
+        plants = {101: 0.1, 102: 0.1, 104: 0.5, 120: 0.05}
+        if biome == 0:  # desert
             plants = {101: 0.1, 103: 0.1}
         plant_tile_type = random.choices(list(plants.keys()), list(plants.values()), k=1)[0]
 

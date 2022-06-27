@@ -37,16 +37,17 @@ pygame.draw.rect(dig_rect_img, "#FDE047", ((0, 0), (TILE_SIZE - 1, TILE_SIZE - 1
 
 none_img = create_tile_image("#FFAAFF")
 
+grass_s_img = load_img("data/sprites/tiles/grass/grass_s.png")
 dirt_img = load_img("data/sprites/tiles/dirt.png")
-grass_img = (load_img("data/sprites/tiles/grass/grass.png"))
-grass_L_img = (load_img("data/sprites/tiles/grass/grass_L.png"))
-grass_R_img = (load_img("data/sprites/tiles/grass/grass_R.png"))
-grass_LR_img = (load_img("data/sprites/tiles/grass/grass_LR.png"))
+ground_img = (load_img("data/sprites/tiles/ground/ground.png"))
+ground_L_img = (load_img("data/sprites/tiles/ground/ground_L.png"))
+ground_R_img = (load_img("data/sprites/tiles/ground/ground_R.png"))
+ground_LR_img = (load_img("data/sprites/tiles/ground/ground_LR.png"))
 bioms = (0, 1, 2, 3)
-grass_imgs = {i: ((load_img(f"data/sprites/tiles/grass/grass_{i}.png")),
-                  (load_img(f"data/sprites/tiles/grass/grass_L_{i}.png")),
-                  (load_img(f"data/sprites/tiles/grass/grass_R_{i}.png")),
-                  (load_img(f"data/sprites/tiles/grass/grass_LR_{i}.png")),
+ground_imgs = {i: ((load_img(f"data/sprites/tiles/ground/ground_{i}.png")),
+                  (load_img(f"data/sprites/tiles/ground/ground_L_{i}.png")),
+                  (load_img(f"data/sprites/tiles/ground/ground_R_{i}.png")),
+                  (load_img(f"data/sprites/tiles/ground/ground_LR_{i}.png")),
                   ) for i in bioms}
 
 stone_img = load_img("data/sprites/tiles/stone.png")
@@ -128,7 +129,7 @@ pickaxe_77_img, pickaxe_77_imgs = load_round_tool_imgs("data/sprites/tools/picka
 
 tile_imgs = {None: none_img,
              0: none_img,
-             1: grass_img,
+             1: ground_img,
              2: dirt_img,
              3: stone_img,
              4: ore_img,
@@ -151,6 +152,7 @@ tile_imgs = {None: none_img,
              101: bush_img,
              102: smalltree_img,
              103: cactus_img,
+             104: grass_s_img,
              105: leave_img,
              110: wood_img,
              120: water_img,
@@ -215,7 +217,7 @@ tile_hand_imgs[130] = bedroll_of_pelts_item_img
 # INIT_TILES ====================================================
 tile_words = {None: "None",
               0: "None",
-              1: "Трава",
+              1: "Дёрн",
               2: "Земля",
               3: "Камень",
               4: "Блор",
@@ -238,6 +240,7 @@ tile_words = {None: "None",
               101: "Куст",
               102: "Маленькое дерево",
               103: "Кактус",
+              104: "Трава",
               105: "Листва",
               110: "Живое дерево",
               120: "Вода",

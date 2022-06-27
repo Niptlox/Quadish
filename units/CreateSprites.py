@@ -25,9 +25,9 @@ def replace_color(img, color, new_color):
                 img.putpixel((x, y), new_color)
 
 
-def create_grass():
-    path = "../data/sprites/tiles/grass/"
-    path_imgs = [path + "grass", path + "grass_L", path + "grass_LR", path + "grass_R"]
+def create_ground():
+    path = "../data/sprites/tiles/ground/"
+    path_imgs = [path + "ground", path + "ground_L", path + "ground_LR", path + "ground_R"]
     i = 0
     for color in biome_colors:
         for p in path_imgs:
@@ -39,4 +39,4 @@ def create_grass():
 
 
 if __name__ == "__main__":
-    create_grass()
+    create_ground()
