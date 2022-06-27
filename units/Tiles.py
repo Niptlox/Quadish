@@ -73,7 +73,7 @@ bush_img = load_img("data/sprites/tiles/bush/bush.png")  # куст
 bush_imgs = [load_img(f"data/sprites/tiles/bush/bush_{i}.png") for i in range(4)]  # кустs
 
 smalltree_img = load_img("data/sprites/tiles/small_tree.png")
-leave_img = load_img(f"data/sprites/tiles/bush/bush_0.png")
+leave_img = load_img(f"data/sprites/tiles/leave.png")
 
 door_img = load_img("data/sprites/tiles/door.png")
 close_door_img = load_img("data/sprites/tiles/close_door.png")

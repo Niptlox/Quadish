@@ -409,9 +409,11 @@ class InventoryUI(SurfaceUI):
 
     def convert_table_mpos_to_i(self, pos):
         offset = 20
-        i = (pos[0] - (self.table_inventory.rect.x + offset)) // self.cell_size + \
-            (pos[1] - (self.table_inventory.rect.y + offset)) // self.cell_size * self.inventory.size_table[0]
-        return i
+        if self.table_inventory.rect.collidepoint(pos):
+            i = (pos[0] - (self.table_inventory.rect.x + offset)) // self.cell_size + \
+                (pos[1] - (self.table_inventory.rect.y + offset)) // self.cell_size * self.inventory.size_table[0]
+            return i
+        return -1
 
     def pg_event(self, event: pg.event.Event) -> Union[bool, None]:
         if event.type == pg.MOUSEBUTTONDOWN:
@@ -437,6 +439,8 @@ class InventoryUI(SurfaceUI):
                         item = self.inventory.get_cell_from_inventory(i, del_in_inventory=True)
                     elif event.button == pg.BUTTON_RIGHT:
                         _item = self.inventory.get_cell_from_inventory(i, del_in_inventory=False)
+                        if _item is None:
+                            return True
                         item = _item.copy()
                         _item.count //= 2
                         item.count -= _item.count
@@ -444,7 +448,10 @@ class InventoryUI(SurfaceUI):
                             self.inventory[i] = None
                         self.inventory.redraw()
                     elif event.button == pg.BUTTON_MIDDLE and self.inventory.game_map.creative_mode:
-                        item = self.inventory.get_cell_from_inventory(i, del_in_inventory=False).copy()
+                        item = self.inventory.get_cell_from_inventory(i, del_in_inventory=False)
+                        if item is None:
+                            return True
+                        item = item.copy()
                         item.count = item.cell_size
                     set_obj_mouse(item, place=(self, i))
                 return True
@@ -573,6 +580,8 @@ class InventoryPlayerUI(InventoryUI):
         surface.blit(self, self.rect)
 
     def convert_table_mpos_to_i(self, pos):
+        if not self.table_inventory.rect.collidepoint(pos):
+            return -1
         offset = 20
         sy = (self.table_inventory.rect.y + offset + self.cell_size + 10)
         i = -1
