@@ -378,7 +378,7 @@ class GameMap:
         self.saved = True
         self.game.ui.new_sys_message(f"Сохранение", draw_now=True)
 
-        file_p = f'data/maps/game_map-{num}.pclv'
+        file_p = CWDIR + f'/data/maps/game_map-{num}.pclv'
         print(f"GamaMap: '{file_p}' - SAVING...")
         self.num_save_map = num
         # try:
@@ -400,7 +400,7 @@ class GameMap:
     def open_game_map(self, game, num=0):
         self.game.ui.new_sys_message(f"Загрузка карты #{num}", draw_now=True)
 
-        file_p = f'data/maps/game_map-{num}.pclv'
+        file_p = CWDIR + f'/data/maps/game_map-{num}.pclv'
         self.num_save_map = num
         print(f"GamaMap: '{file_p}' - LOADING...")
         # try:
@@ -425,13 +425,13 @@ class GameMap:
         return file_p
 
     def get_list_maps(self):
-        path = 'data/maps/'
+        path = CWDIR + '/data/maps/'
         files = glob.glob(path + '*.pclv', recursive=False)
         return files
 
     def get_list_num_maps(self):
         files = self.get_list_maps()
-        ar = [int(f.split("-")[1].split(".")[0]) for f in files if "None" not in f]
+        ar = [int(f.split("-")[-1].split(".")[0]) for f in files if "None" not in f]
         return ar
 
 
@@ -440,8 +440,11 @@ def random_plant_selection(biome=None):
         plants = {101: 0.1, 102: 0.1, 104: 0.5, 120: 0.05}
         if biome == 0:  # desert
             plants = {101: 0.1, 103: 0.1}
+        elif biome == 3:  # холод
+            plants = {101: 0.3, 102: 0.1, None: 0.5}
         plant_tile_type = random.choices(list(plants.keys()), list(plants.values()), k=1)[0]
-
+        if plant_tile_type is None:
+            return None
         if plant_tile_type == 101:
             return plant_tile_type, random.randint(0, 3)
         if plant_tile_type == 102:

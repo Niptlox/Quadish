@@ -2,9 +2,12 @@ from time import time
 
 from units.Tiles import *
 # rect для отрисовки
+from units.config import GameSettings
 from units.map.GameMap import GameMap, grow_tree
 
 srect_d = pg.Rect(-TSIZE, -TSIZE, WSIZE[0] + TSIZE, WSIZE[1] + TSIZE)
+
+PARALLAX = 0.4
 
 
 class ScreenMap:
@@ -22,6 +25,16 @@ class ScreenMap:
         self.dynamic_tiles = []
         self.group_handlers = {}
 
+        self.edges = [-20000, 20000, -20000, 20000]
+        width = self.edges[1] - self.edges[0]
+        height = self.edges[3] - self.edges[2]
+        area = width * height
+
+        self.clouds = []
+        for i in range(int(area // 1200000)):
+            self.clouds.append([random.randint(0, len(cloud_images) - 1), (random.random() *2+ 1) / 5, (self.edges[0] + random.random() * (width + display.get_width())) * PARALLAX, random.randint(self.edges[2], self.edges[3] - int(height * 0.3) + display.get_height()) * PARALLAX])
+        print("CLOUDS:", area // 1200000)
+
     def teleport_to_player(self):
         self.true_scroll[0] = self.player.rect.x - WSIZE[0] // 2
         self.true_scroll[1] = self.player.rect.y - WSIZE[1] // 2
@@ -35,13 +48,21 @@ class ScreenMap:
         # if climate:
         #     biome_color = biome_colors[climate[0]]
         #     self.display.fill(biome_color)
-        self.true_scroll[0] += (p.rect.x - self.true_scroll[0] - WSIZE[0] // 2) / 20
-        offset_y = (p.rect.y - self.true_scroll[1] - WSIZE[1] // 2)
+        self.true_scroll[0] += (p.rect.centerx - self.true_scroll[0] - WSIZE[0] // 2) / 20
+        offset_y = (p.rect.centery - self.true_scroll[1] - WSIZE[1] // 2)
         if abs(offset_y) > TSIZE * 3:
             offset_y *= min(abs(offset_y) / (2 * TSIZE), 10)
         self.true_scroll[1] += float(offset_y / 20)
 
         self.scroll = scroll = [int(self.true_scroll[0]), int(self.true_scroll[1])]
+
+        if GameSettings.clouds:
+            for cloud in self.clouds:
+                cloud[2] += cloud[1]
+                self.display.blit(cloud_images[cloud[0]],
+                                  (cloud[2] - scroll[0] * PARALLAX, cloud[3] - scroll[1] * PARALLAX))
+                if cloud[2] > (self.edges[1] + WSIZE[0]) * PARALLAX:
+                    cloud[2] = self.edges[0] * PARALLAX - cloud_images[cloud[0]].get_width()
 
         static_tiles = {}
         dynamic_tiles = []
@@ -86,7 +107,7 @@ class ScreenMap:
                             tile_type = tile[0]
                             if tile_type > 0:
                                 b_pos = (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1])
-                                if srect_d.collidepoint(*b_pos):
+                                if srect_d.collidepoint(*b_pos) or 1:
                                     # print(tile_xy)
                                     if tile_type in tile_many_imgs:
                                         img = tile_many_imgs[tile_type][tile[2]]

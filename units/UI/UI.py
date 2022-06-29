@@ -125,7 +125,11 @@ class GameUI(UI):
             f" pos: {self.app.player.rect.x // TSIZE, self.app.player.rect.y // TSIZE}", True, "white")
         text_ents = textfont_info.render(
             f"Ents: {len(self.app.screen_map.dynamic_tiles)}", True, "white")
-        chunk_ents = self.app.game_map.chunk(self.app.player.update_chunk_pos())[3][1]
+        chunk = self.app.game_map.chunk(self.app.player.update_chunk_pos())
+        if chunk:
+            chunk_ents = chunk[3][1]
+        else:
+            chunk_ents = None
         text_c_ents = textfont_info.render(
             f"CEnts: {chunk_ents}", True, "white")
         self.info_surface.blit(text_fps, (8, 5))

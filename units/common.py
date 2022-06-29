@@ -1,11 +1,24 @@
 import math
+import os
 
 import pygame
 import pygame as pg
 
+# используется в других модулях
 import units.config as config
 
-# используетсЯ ы других модулях
+# DEBUG ====================================================
+# DEBUG = True
+DEBUG = False
+show_chunk_grid = False or DEBUG
+show_entity_border = False or DEBUG
+show_group_obj = True or DEBUG
+show_info_menu = True or DEBUG
+
+CHUNK_BD_COLOR = (230, 20, 20)
+
+#  current working directory.
+CWDIR = os.getcwd()
 
 # INIT GAME ==============================================
 pygame.init()  # initiate pygame
@@ -26,10 +39,13 @@ WSIZE = WINDOW_SIZE
 
 # flags |= pygame.SCALED
 pygame.display.set_caption('Quadish')
+Icon = pg.image.load("data/sprites/icon.png")
+pygame.display.set_icon(Icon)
+
 screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags, vsync=1)
 display_ = pygame.Surface(WINDOW_SIZE)
 
-screen_.blit(pygame.font.SysFont(None, 40, ).render("Загрузка...", True, "white"), (35, WSIZE[1] - 50))
+screen_.blit(pygame.font.SysFont("", 40).render("Загрузка...", True, "white"), (35, WSIZE[1] - 50))
 pygame.display.flip()
 
 # TILE ==================================================
@@ -47,20 +63,11 @@ CSIZE = CHUNK_SIZE
 
 CHUNK_SIZE_PX = CHUNK_SIZE * TILE_SIZE
 CSIZEPX = CHUNK_SIZE_PX
-# колво чанков отрисываемых на экране
-WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 1, \
-                    math.ceil(WINDOW_SIZE[1] / (TILE_SIZE * CHUNK_SIZE)) + 1
+# колво чанков отрисовываемых на экране
+WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 2, \
+                    math.ceil(WINDOW_SIZE[1] / (TILE_SIZE * CHUNK_SIZE)) + 2
+print("WINDOW_CHUNK_SIZE", WINDOW_CHUNK_SIZE, WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE))
 WCSIZE = WINDOW_CHUNK_SIZE
-
-# DEBUG ====================================================
-# DEBUG = True
-DEBUG = False
-show_chunk_grid = False
-show_entity_border = False
-show_group_obj = True
-show_info_menu = True
-
-CHUNK_BD_COLOR = (230, 20, 20)
 
 # PhiscalObject ==================================================
 

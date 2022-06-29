@@ -1,6 +1,6 @@
+from units.common import *
 from pygame.locals import *
 
-from units.common import *
 
 EXIT = 0
 

@@ -1,10 +1,8 @@
 from random import randint
 
 from units.Entity import PhysicalObject, collision_test
-from units.Tiles import tile_hand_imgs
+from units.Tiles import tile_hand_imgs, EATS
 from units.common import *
-
-eats = {52: 10, 53: 2, 56: 8, 55: 100}
 
 
 class Items(PhysicalObject):
@@ -17,9 +15,9 @@ class Items(PhysicalObject):
 
     def __init__(self, game, index=None, pos=(0, 0), count: int or tuple = 1):
         self.index = index
-        if index in eats:
+        if index in EATS:
             self.class_item = CLS_EAT
-            self.recovery_lives = eats[index]
+            self.recovery_lives = EATS[index]
         if isinstance(count, tuple):
             count = randint(*count)
             if count <= 0:
@@ -42,7 +40,7 @@ class Items(PhysicalObject):
             for obj in dynamic:
                 if obj is not self and obj.class_obj == OBJ_ITEM:
                     if obj.alive and self.index == obj.index:
-                        # объеденение в один, двух рядом леж предметов одного типа
+                        #  объеденение в один, двух рядом леж предметов одного типа
                         free_place = self.cell_size - self.count
                         if obj.count > free_place:
                             self.count += free_place

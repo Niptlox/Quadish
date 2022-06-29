@@ -12,7 +12,7 @@ class ToolHand(ToolPickaxe):
     set_distance = 4 * TSIZE
     dig_distance2 = dig_distance ** 2
     set_distance2 = set_distance ** 2
-    capability = [1, 2, 11, 12, 101, 102, 103, 105, 110, 121, 122, 123, 124, 125, 126, 127, 128, 130]
+    capability = [1, 2, 11, 12, 101, 102, 103, 104, 105, 110, 121, 122, 123, 124, 125, 126, 127, 128, 130]
     Animation = AnimationHand
     discard_distance = 5
 

@@ -2,7 +2,7 @@ from time import time
 
 from units import Entities
 from units.Tiles import item_of_break_tile, item_of_right_click_tile, STANDING_TILES, ITEM_TILES, tile_imgs, \
-    tile_drops
+    tile_drops, ON_EARTHEN_PLANTS, MULTI_BLOCK_PLANTS
 from units.Tools.AnimationTool import *
 from units.common import *
 
@@ -166,9 +166,11 @@ def check_set_tile(game_map, x, y, inventory_cell):
         return tile
     if cell_ttile == bottom_ttile == 126:
         return tile
-    if cell_ttile in STANDING_TILES and bottom_ttile == 0:
+    if cell_ttile in MULTI_BLOCK_PLANTS and bottom_ttile == cell_ttile:
+        return tile
+    if cell_ttile in ON_EARTHEN_PLANTS and bottom_ttile != 1 and bottom_ttile != 2:
         return False
-    if cell_ttile == 101 and not bottom_ttile == 1:
+    if cell_ttile in STANDING_TILES and bottom_ttile == 0:
         return False
     if cell_ttile in ITEM_TILES:
         return False

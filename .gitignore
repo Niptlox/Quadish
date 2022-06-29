@@ -4,3 +4,9 @@ data/maps/*.pclv
 *.aseprite
 __pycache__
 venv
+toexe.bat
+dist
+build
+desktop.ini
+quadish.spec
+plan.txt
