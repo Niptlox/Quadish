@@ -1,3 +1,4 @@
+from units.Tiles import Pickaxes_capability
 from units.Tools.ToolsSword import *
 
 
@@ -13,7 +14,7 @@ class ToolPickaxe(ToolSword):
     sprite = tile_imgs[index]
     dig_distance = 3 * TSIZE
     dig_distance2 = dig_distance ** 2
-    capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 105, 110, 121, 122, 123, 124, 125, 126, 127, 128, 130]
+    capability = Pickaxes_capability[index]
 
     def __init__(self, owner):
         super().__init__(owner)
@@ -69,7 +70,7 @@ class ToolGoldPickaxe(ToolPickaxe):
     sprite = tile_imgs[index]
     dig_distance = 77 * TSIZE
     dig_distance2 = dig_distance ** 2
-    capability = None
+    capability = Pickaxes_capability[index]
 
 
 class ToolWoodPickaxe(ToolPickaxe):
@@ -80,7 +81,7 @@ class ToolWoodPickaxe(ToolPickaxe):
     discard_distance = 4  # отбрасывание
     index = 530
     sprite = tile_imgs[index]
-    #  capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 105, 110, 121, 122, 123, 124, 125, 126, 127, 128, 130]
+    capability = Pickaxes_capability[index]
 
 
 class ToolCopperPickaxe(ToolPickaxe):
@@ -91,5 +92,5 @@ class ToolCopperPickaxe(ToolPickaxe):
     discard_distance = 4  # отбрасывание
     index = 533
     sprite = tile_imgs[index]
-    #  capability = [1, 2, 3, 4, 9, 11, 12, 101, 102, 103, 105, 110, 121, 122, 123, 124, 125, 126, 127, 128, 130]
+    capability = Pickaxes_capability[index]
 

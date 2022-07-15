@@ -24,6 +24,7 @@ player_img = create_tile_image("#E7E5E4", size=(TSIZE - 10, TSIZE - 2), bd=2)
 live_imgs = load_imgs("data/sprites/player/lives_{}.png", 5, size=(20, 20))
 goldlive_imgs = load_imgs("data/sprites/player/goldherts_{}.png", 5, size=(20, 20))
 bg_live_img = load_img("data/sprites/player/bg_live.png", size=(20, 20))
+bg_livecreative_img = load_img("data/sprites/player/bg_livecreative.png", size=(20, 20))
 
 # hand_pass_img = pygame.transform.smoothscale(player_img, HAND_RECT)
 hand_pass_img = None
@@ -45,15 +46,18 @@ ground_R_img = (load_img("data/sprites/tiles/ground/ground_R.png"))
 ground_LR_img = (load_img("data/sprites/tiles/ground/ground_LR.png"))
 bioms = (0, 1, 2, 3)
 ground_imgs = {i: ((load_img(f"data/sprites/tiles/ground/ground_{i}.png")),
-                  (load_img(f"data/sprites/tiles/ground/ground_L_{i}.png")),
-                  (load_img(f"data/sprites/tiles/ground/ground_R_{i}.png")),
-                  (load_img(f"data/sprites/tiles/ground/ground_LR_{i}.png")),
-                  ) for i in bioms}
+                   (load_img(f"data/sprites/tiles/ground/ground_L_{i}.png")),
+                   (load_img(f"data/sprites/tiles/ground/ground_R_{i}.png")),
+                   (load_img(f"data/sprites/tiles/ground/ground_LR_{i}.png")),
+                   ) for i in bioms}
 
 stone_img = load_img("data/sprites/tiles/stone.png")
 # create_tile_image("#57534E")
 
 ore_img = (load_img("data/sprites/tiles/ore.png"))
+stone_brick_img = (load_img("data/sprites/tiles/blocksstoun0.png"))
+stone_brick_1_img = (load_img("data/sprites/tiles/blocksstoun1.png"))
+stone_brick_2_img = (load_img("data/sprites/tiles/blocksstoun2.png"))
 
 purore_img = create_tile_image("#9333EA")  # purple ore
 
@@ -69,6 +73,8 @@ wood_img = load_img("data/sprites/tiles/wood.png", colorkey=None)
 plank_img = load_img("data/sprites/tiles/plank.png", colorkey=None)
 
 cactus_img = load_img("data/sprites/tiles/cactus.png")
+
+lean_img = load_img("data/sprites/tiles/lean.png")
 
 bush_img = load_img("data/sprites/tiles/bush/bush.png")  # куст
 bush_imgs = [load_img(f"data/sprites/tiles/bush/bush_{i}.png") for i in range(4)]  # кустs
@@ -95,6 +101,8 @@ bedroll_of_pelts_img = load_img("data/sprites/tiles/bedroll_of_pelts.png")
 bedroll_of_pelts_item_img = load_img("data/sprites/tiles/bedroll_of_pelts_item.png", None)
 
 group_img = load_img("data/sprites/tiles/group.png")
+build_img = load_img("data/sprites/tiles/build.png")
+structure_pass_img = load_img("data/sprites/tiles/structure_pass.png")
 
 rain_img = load_img("data/sprites/tiles/rain.png")
 
@@ -122,6 +130,7 @@ summonerSlimeBoss_img = load_img(r"data/sprites/tools/SummonerSlimeBoss/Summoner
 sword_77_img, sword_77_imgs = load_round_tool_imgs("data/sprites/tools/sword_77/sword_77_{}.png", 4)
 
 sword_1_img, sword_1_imgs = load_round_tool_imgs("data/sprites/tools/sword_1/sword_1_{}.png", 4)
+sword_2_img, sword_2_imgs = load_round_tool_imgs("data/sprites/tools/sword_2/sword_2_{}.png", 4)
 pickaxe_0_img, pickaxe_0_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_0/pickaxe_0_{}.png", 4)
 pickaxe_1_img, pickaxe_1_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_1/pickaxe_1_{}.png", 4)
 pickaxe_3_img, pickaxe_3_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_3/pickaxe_3_{}.png", 4)
@@ -137,6 +146,9 @@ tile_imgs = {None: none_img,
              9: tnt_img,
              11: plank_img,
              12: wood_img,
+             31: stone_brick_img,
+             32: stone_brick_1_img,
+             33: stone_brick_2_img,
              51: slime_item_img,
              52: meet_cow_item_img,
              53: wildberry_item_img,
@@ -154,6 +166,7 @@ tile_imgs = {None: none_img,
              103: cactus_img,
              104: grass_s_img,
              105: leave_img,
+             106: lean_img,
              110: wood_img,
              120: water_img,
              121: table_img,
@@ -166,13 +179,16 @@ tile_imgs = {None: none_img,
              128: close_trapdoor_img,
              129: chest_img,
              130: bedroll_of_pelts_img,
+             150: structure_pass_img,
              151: group_img,
+             152: build_img,
              201: cloud_img,
              # 203: tnt_1_img,
              301: poison_item_img,
              401: meet_snake_item_img,
              501: sword_1_img,
              502: sword_77_img,
+             503: sword_2_img,
              530: pickaxe_0_img,
              531: pickaxe_1_img,
              532: pickaxe_77_img,
@@ -189,22 +205,42 @@ tile_many_imgs = {101: bush_imgs,
 
                   501: sword_1_imgs,
                   502: sword_77_imgs,
+                  503: sword_2_imgs,
                   530: pickaxe_0_imgs,
                   531: pickaxe_1_imgs,
                   532: pickaxe_77_imgs,
                   533: pickaxe_3_imgs,
                   }
 
-IDX_TOOLS = {501, 502, 530, 531, 532, 533, 610}
+IDX_TOOLS = {501, 502, 503, 530, 531, 532, 533, 610}
 
 # блоки через которые нельзя пройти
-PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 103, 124, 128}
+PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 31, 32, 33, 103, 124, 128}
 # полуфизические блоки например мебель листва вода
-SEMIPHYSBODY_TILES = {120, 127, 126, 125, 121, 122}
+SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 122}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
-STANDING_TILES = {0, 101, 102, 103, 110, 120, 121, 122, 123, 125, 126, 130, 129}
+STANDING_TILES = {0, 101, 102, 103, 104, 110, 120, 121, 122, 123, 125, 126, 130, 129}
 # предметы которые нельзя физически поставить
 ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 401, 801}
+
+# EAT ===================================================================
+
+Eats = {52: 10, 53: 2, 56: 8, 55: 100, 401: 8}
+
+# PICKAXE ===============================================================
+
+iron_capability = [1, 2, 3, 4, 9, 11, 12, 31, 32, 33, 101, 102, 103, 104, 105, 106, 110, 121, 122, 123, 124, 125, 126, 127,
+                   128, 130]
+
+Pickaxes_capability = {
+    530: iron_capability,
+    531: iron_capability,
+    532: None,
+    533: iron_capability,
+
+    # hand
+    -1: iron_capability
+}
 
 # специальные каринки предметов для инвентаря
 tile_hand_imgs = {k: tile_imgs[k] if k in ITEM_TILES else transform_hand(i) for k, i in tile_imgs.items()}
@@ -225,6 +261,9 @@ tile_words = {None: "None",
               9: "Динамит",
               11: "Доски",
               12: "Древесина",
+              31: "Каменный кирпич",
+              32: "Замшелый каменный кирпич",
+              33: "Старый каменный кирпич",
               51: "Слизь",
               52: "Мясо коровы",
               53: "Лесные ягоды",
@@ -242,6 +281,7 @@ tile_words = {None: "None",
               103: "Кактус",
               104: "Трава",
               105: "Листва",
+              106: "Лианы",
               110: "Живое дерево",
               120: "Вода",
               121: "Стол",
@@ -255,11 +295,13 @@ tile_words = {None: "None",
               129: "Сундук",
               130: "Спальный мешок из шкур",
               # 151: "Группа обектов",
+              150: "Структурная пустота",
               201: "Облако",
               301: "Ядовитая железа",
               401: "Мясо змеи",
               501: "Железный меч",
               502: "Золотой меч",
+              503: "Ядовитый меч",
               530: "Деревянная кирка",
               531: "Железная кирка",
               532: "Золотая кирка",
@@ -276,10 +318,13 @@ TILES_SOLIDITY = {
     2: 20,
     3: 35,
     4: 60,
-    5: 80,
+    5: 100,
     9: 60,
     11: 45,
     12: 45,
+    31: 75,
+    32: 70,
+    33: 60,
     101: 25,
     102: 25,
     103: 25,
@@ -358,9 +403,10 @@ def item_of_right_click_tile(tile, res=True):
     return items
 
 
-if DEBUG_DRAW_TILES:
+def debug_draw():
     clock = pg.time.Clock()
     screen_.fill("green")
+
     x, y = 5, 5
     for im in break_imgs:
         screen_.blit(im, (x, y))
@@ -373,3 +419,5 @@ if DEBUG_DRAW_TILES:
                 running = False
 
 
+if DEBUG_DRAW_TILES:
+    debug_draw()

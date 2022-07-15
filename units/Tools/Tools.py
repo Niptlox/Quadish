@@ -51,7 +51,9 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
     if tile is None:
         tile = game_map.get_static_tile(x, y)
     ttile = tile[0]
-    if ttile == 9:
+    if ttile == 0:
+        return False
+    elif ttile == 9:
         obj = Entities.Dynamite(game_map.game, x * TSIZE, y * TSIZE)
         game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), obj)
         game_map.set_static_tile(x, y, None)
@@ -89,19 +91,20 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
             game_map.add_item_of_index(*item, x, y)
             tile[2], tile[3] = 0, 0
             game_map.set_static_tile(x, y, tile)
-    # elif ttile == 130:
-    #     point = (x + 0.5) * TSIZE, (y + 0.5) * TSIZE
-    #     game_map.game.player.set_spawn_point(point)
+    elif ttile == 130:
+        point = (x + 0.5) * TSIZE, (y + 0.5) * TSIZE
+        game_map.game.player.set_spawn_point(point)
+    return True
 
 
 def check_dig_tile(game_map, x, y, tool):
     tile = game_map.get_static_tile(x, y)
     if tile is None:  # or tile[1] == -1:
         return
-    d_ttile = game_map.get_static_tile_type(x, y - 1)
-    if d_ttile in {101, 102, 103}:
-        return
     ttile = tile[0]
+    d_ttile = game_map.get_static_tile_type(x, y - 1)
+    if d_ttile in {101, 103, 110} and ttile != 110:
+        return
     count_items = 1
     if ttile == 0:
         return  # self.set_tile(x, y)
@@ -127,10 +130,12 @@ def dig_tile(game_map, x, y, tool, check=True):
         if tile[0] == 110 and tool.tool_cls & CLS_PICKAXE:
             dig_tree(game_map, x, y, tool)
         else:
-            res = item_of_break_tile(tile, game_map, (x, y))
-            for ttile, count_items in res:
-                game_map.add_item_of_index(ttile, count_items, x, y)
-            game_map.set_static_tile(x, y, None)
+            break_tile(game_map, x, y, tile)
+            tile_up = game_map.get_static_tile(x, y - 1)
+            if tile_up[0] in STANDING_TILES and tile_up[0] not in {0, None, 110}:
+                break_tile(game_map, x, y-1, tile_up)
+
+
     else:
         game_map.set_static_tile_solidity(x, y, sol)
     return True
@@ -140,16 +145,16 @@ def dig_tree(game_map, x, y, tool):
     ttile = game_map.get_static_tile_type(x, y)
     while ttile == 110:
         if game_map.get_static_tile_type(x + 1, y) == 105:
-            dig_tile(game_map, x + 1, y, None, check=True)
+            break_tile(game_map, x + 1, y, game_map.get_static_tile(x + 1, y))
         if game_map.get_static_tile_type(x - 1, y) == 105:
-            dig_tile(game_map, x - 1, y, None, check=True)
+            break_tile(game_map, x - 1, y, game_map.get_static_tile(x - 1, y))
         itm_ttile, itm_count_items, ch = tile_drops[ttile][0]
         game_map.add_item_of_index(itm_ttile, itm_count_items, x, y)
         game_map.set_static_tile(x, y, None)
         y -= 1
         ttile = game_map.get_static_tile_type(x, y)
     if ttile == 105:
-        dig_tile(game_map, x, y, None, check=True)
+        break_tile(game_map, x, y, game_map.get_static_tile(x, y))
 
 
 def check_set_tile(game_map, x, y, inventory_cell):
@@ -191,3 +196,10 @@ def set_tile(player, x, y, inventory_cell, check=True):
     if inventory_cell.count <= 0:
         return 0
     return inventory_cell.count
+
+
+def break_tile(game_map, x, y, tile):
+    res = item_of_break_tile(tile, game_map, (x, y))
+    for ttile, count_items in res:
+        game_map.add_item_of_index(ttile, count_items, x, y)
+    game_map.set_static_tile(x, y, None)

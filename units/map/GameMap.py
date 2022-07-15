@@ -9,6 +9,7 @@ from units.Items import ItemsTile
 from units.TilesClass import Chest
 from units.Tools import TOOLS
 from units.biomes import biome_of_pos
+from units.Structures import Structures, Structures_chance
 from ..Tiles import *
 
 
@@ -18,11 +19,15 @@ class GameMap:
     def __init__(self, game, generate_type, base_generation=None) -> None:
         self.game = game
         self.gen_type = generate_type
+        # tile - (tile_id, breaked state, state of image, state(obj_id, etd))
         self.tile_data_size = 4
         self.map_size = [-1, -1]
         self.chunk_arr_width = CHUNK_SIZE * self.tile_data_size
         self.chunk_arr_size = self.tile_data_size * CHUNK_SIZE ** 2
         self.game_map = {}
+        self.structures = {}
+        # build - (build_index, build_id, points)
+        self.structures_lst = []
         self.base_generation = base_generation
         self.num_save_map = 0
         self.saved = False
@@ -262,6 +267,75 @@ class GameMap:
             item = ItemsTile(self.game, index, npos, count_items)
         self.add_dinamic_obj(*self.to_chunk_xy(x, y), item)
 
+    def get_structure_dict(self, structure_x, structure_y):
+        # print("get structure", structure_x, structure_y)
+        structure = self.structures.get((structure_x, structure_y))
+        if structure is None:
+            structure = {}
+            pos_1 = structure_x * STRUCTURE_CHUNKS_SIZE * CHUNK_SIZE, \
+                    structure_y * STRUCTURE_CHUNKS_SIZE * CHUNK_SIZE
+            pos_2 = (structure_x + 1) * STRUCTURE_CHUNKS_SIZE * CHUNK_SIZE, \
+                    (structure_y + 1) * STRUCTURE_CHUNKS_SIZE * CHUNK_SIZE - CHUNK_SIZE
+            structure_rect = pg.Rect(pos_1, (STRUCTURE_CHUNKS_SIZE * CHUNK_SIZE, STRUCTURE_CHUNKS_SIZE * CHUNK_SIZE))
+            for i in range(CNT_BUILDS_OF_STRUCTURE_BLOCK):
+                pos = random.randint(pos_1[0], pos_2[0]), random.randint(pos_1[1], pos_2[1])
+                build_id = random.choices(Structures_chance[0], Structures_chance[1], k=1)[0]
+                build = Structures[build_id]
+                size, construction = build[2]
+
+                # left_top, right_top, left_bottom, right_bottom
+                points = [(pos[0], pos[1]), (pos[0] + size[0], pos[1]),
+                          (pos[0], pos[1] + size[0]), (pos[0] + size[0], pos[1] + size[1])]
+                # TODO: сделать смещение здания вместо пропуска итерации
+                if not all([structure_rect.collidepoint(point) for point in points]):
+                    continue
+                build_index = len(self.structures_lst)
+                # build - (build_index, build_id, points)
+                self.structures_lst.append((build_index, build_id, points))
+                for j in range(4):
+                    tile_x, tile_y = points[j]
+                    tile_chunk_pos = tile_x // CSIZE, tile_y // CSIZE
+                    structure.setdefault(tile_chunk_pos, {})
+                    # pos_point: (build_index(in_lst), build_id, num_of_point, state)
+                    structure[tile_chunk_pos][(tile_x, tile_y)] = [build_index, build_id, j, 0]
+            self.structures[(structure_x, structure_y)] = structure
+        return structure
+
+    def build_structure_of_chunk(self, chunk_x, chunk_y):
+        print("build_structure_of_chunk", chunk_x, chunk_y)
+        # (build_id, num_of_point)
+        structure_x, structure_y = chunk_x // STRUCTURE_CHUNKS_SIZE, chunk_y // STRUCTURE_CHUNKS_SIZE
+        structure = self.get_structure_dict(structure_x, structure_y)
+        schunk = structure.get((chunk_x, chunk_y))
+        if schunk is None:
+            return
+        # pos_point: (build_index(in_lst), build_id, num_of_point, state)
+        for pos_point, info in schunk.items():
+            # point
+            build_index, build_id, num_of_point, state = info
+            if state != 0:
+                continue
+            # build - (build_index, build_id, points)
+            points = self.structures_lst[build_index][2]
+            self.set_state_of_points_build(points, 1)  # building
+            pos = points[0]
+            size, arr = Structures[build_id][2]
+            for i_y in range(size[1]):
+                for i_x in range(size[0]):
+                    tile = arr[i_y * size[0] + i_x]
+                    # Если не структурная пустота
+                    if tile[0] != 150:
+                        self.set_static_tile(pos[0] + i_x, pos[1] + i_y, tile, create_chunk=True)
+            self.set_state_of_points_build(points, 2)  # builded
+
+    def set_state_of_points_build(self, points, state):
+        for point in points:
+            chunk_x, chunk_y = point[0] // CHUNK_SIZE, point[1] // CHUNK_SIZE
+            structure_x, structure_y = chunk_x // STRUCTURE_CHUNKS_SIZE, chunk_y // STRUCTURE_CHUNKS_SIZE
+            chunk = self.get_structure_dict(structure_x, structure_y).get((chunk_x, chunk_y))
+            # pos_point: (build_index(in_lst), build_id, num_of_point, state)
+            chunk[point][3] = state
+
     def convert_pos_to_i(self, x, y):
         # cx, cy = x % CHUNK_SIZE, y % CHUNK_SIZE
         # i = (cy * CHUNK_SIZE + cx) * self.tile_data_size
@@ -280,15 +354,17 @@ class GameMap:
 
     def create_pass_chunk(self, xy):
         """static tiles; dynamic object; tile object; creatures cash \
-        (on graund tiles, cnt creatures, last tact generate); climate"""
+        (on graund tiles, cnt creatures, last tact generate); climate, structure(builds)"""
         #                    0                          1   2   3              4
         self.game_map[xy] = [[0] * self.chunk_arr_size, [], {}, [set(), 0, 0], [0] * (CHUNK_SIZE ** 2)]
         return self.game_map[xy]
 
     def generate_chunk(self, x, y):
+        chunk = None
         if self.gen_type == TGENERATE_INFINITE_LANDS:
-            return self.generate_chunk_noise_island(x, y)
-        return
+            chunk = self.generate_chunk_noise_island(x, y)
+            self.build_structure_of_chunk(x, y)
+        return chunk
 
     def generate_chunk_noise_island(self, x, y):
         res = self.create_pass_chunk((x, y))
@@ -433,6 +509,14 @@ class GameMap:
         files = self.get_list_maps()
         ar = [int(f.split("-")[1].split(".")[0]) for f in files if "None" not in f]
         return ar
+
+    def get_choice_world(self, pos_1, pos_2):
+        size = pos_2[0] + 1 - pos_1[0], pos_2[1] + 1 - pos_1[1]
+        array = []
+        for y in range(size[1]):
+            for x in range(size[0]):
+                array.append(self.get_static_tile(x + pos_1[0], y + pos_1[1]))
+        return size, array
 
 
 def random_plant_selection(biome=None):

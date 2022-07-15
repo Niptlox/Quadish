@@ -60,3 +60,13 @@ class ToolGoldSword(ToolSword):
     discard_distance = 10
     index = 502
     sprite = tile_imgs[index]
+
+
+class ToolPoisonSword(ToolSword):
+    damage = 25
+    speed = 2.5
+    distance = 2 * TSIZE
+    Animation = AnimationSword
+    discard_distance = 5
+    index = 503
+    sprite = tile_imgs[index]

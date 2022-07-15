@@ -8,7 +8,8 @@ from units.Entity import PhysicalObject
 from units.Inventory import InventoryPlayer
 from units.Items import Items
 from units.Tiles import hand_pass_img, player_img, dig_rect_img
-from units.Tools import ToolHand, TOOLS, ItemTool  # ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe, ItemTool
+from units.Tools import ToolHand, TOOLS, ItemTool, \
+    ToolCreativeHand  # ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe, ItemTool
 from units.UI.UI import InventoryPlayerChestUI
 from units.common import *
 
@@ -38,7 +39,6 @@ class Player(PhysicalObject):
         self.on_wall = False
         self.moving_right = False
         self.moving_left = False
-        self.on_up = False
         self.sitting = False
         self.dig = False
         self.dig_pos = None
@@ -71,6 +71,10 @@ class Player(PhysicalObject):
         self.running = True
         self.air_timer = 0
         self.first_fall = True
+        self.fly_speed = 10
+        self.flying = False
+        self.on_up = False
+        self.on_down = False
 
         # INVENTORY ============================
         self.creative_mode = CREATIVE_MODE
@@ -80,6 +84,7 @@ class Player(PhysicalObject):
 
         self.flip = False
         self.toolHand = ToolHand(self)
+        self.toolCreativeHand = ToolCreativeHand(self)
         self.tool = None
         self.vector = Vector2(0)
 
@@ -123,9 +128,14 @@ class Player(PhysicalObject):
                 self.moving_left = True
             elif event.key in (K_UP, K_w, K_SPACE):
                 self.on_up = True
-                self.jump()
+                if pg.key.get_mods() & KMOD_ALT and self.creative_mode:
+                    self.flying = not self.flying
+                if not self.flying:
+                    self.jump()
                 # =========================================
-            elif event.key == K_j and self.on_up:
+            elif event.key in (K_DOWN, K_s) or pg.key.get_mods() & KMOD_SHIFT:
+                self.on_down = True
+            elif event.key == K_j and pg.key.get_mods() & KMOD_ALT:
                 self.set_game_mode(not self.creative_mode)
             elif event.key == K_t:
                 self.tp_to_home()
@@ -147,16 +157,18 @@ class Player(PhysicalObject):
                 self.moving_left = False
             elif event.key in (K_UP, K_w, K_SPACE):
                 self.on_up = False
+            elif event.key in (K_DOWN, K_s) or pg.key.get_mods() & KMOD_SHIFT:
+                self.on_down = False
                 # =========================================
         elif event.type == MOUSEBUTTONDOWN:
             if event.button in (1, 2):
                 self.dig = True
             if event.button == 3:
-                self.set = True
                 self.vector = Vector2(self.rect.center)
                 vector_player_display = self.vector - Vector2(self.game.screen_map.scroll)
                 vector_to_mouse = Vector2(event.pos) - vector_player_display
-                self.tool.right_button_click(vector_to_mouse)
+                if not self.tool.right_button_click(vector_to_mouse):
+                    self.set = True
 
         elif event.type == MOUSEBUTTONUP:
             if event.button == 1:
@@ -200,9 +212,10 @@ class Player(PhysicalObject):
             return False
         if not self.sitting:
             self.moving()
-
         self.draw(self.ui.display)
 
+        if not self.creative_mode:
+            self.flying = False
         # SHOW PLAYER HAND ===============================================
         if self.num_down != -1:
             self.choose_active_cell(self.num_down)
@@ -213,7 +226,10 @@ class Player(PhysicalObject):
 
         item: Union[Items, ItemTool] = self.inventory[self.inventory.active_cell]
         if item is None or item.class_item & CLS_TOOL == 0:
-            self.tool = self.toolHand
+            if self.creative_mode:
+                self.tool = self.toolCreativeHand
+            else:
+                self.tool = self.toolHand
         else:
             self.tool = item.tool
         self.tool.update(vector_to_mouse)
@@ -301,7 +317,17 @@ class Player(PhysicalObject):
             if self.speed == -1: self.speed = 0
         player_movement[0] += self.speed
         player_movement[1] += self.vertical_momentum
-        self.vertical_momentum += self.fall_speed
+        if self.flying:
+            if self.on_up:
+                self.vertical_momentum = -self.fly_speed
+            elif self.on_down:
+                self.vertical_momentum = self.fly_speed
+            else:
+                self.vertical_momentum = 0
+
+        else:
+            self.vertical_momentum += self.fall_speed
+
         # print(self.vertical_momentum)
 
         if self.vertical_momentum > self.max_fall_speed:
@@ -368,8 +394,5 @@ class Player(PhysicalObject):
         self.jump_count = 0
         if self.creative_mode:
             self.ui.new_sys_message("Режим создателя включен")
-            item = TOOLS[532](self.game)  # gold pickaxe
-            item.set_owner(self)
-            self.inventory.put_to_inventory(item)
         else:
             self.ui.new_sys_message("Режим создателя выключен")

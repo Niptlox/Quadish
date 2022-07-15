@@ -12,7 +12,7 @@ class ToolHand(ToolPickaxe):
     set_distance = 4 * TSIZE
     dig_distance2 = dig_distance ** 2
     set_distance2 = set_distance ** 2
-    capability = [1, 2, 11, 12, 101, 102, 103, 105, 110, 121, 122, 123, 124, 125, 126, 127, 128, 130]
+    capability = Pickaxes_capability[-1]
     Animation = AnimationHand
     discard_distance = 5
 
@@ -63,3 +63,18 @@ class ToolHand(ToolPickaxe):
     def update(self, vector_to_mouse: Vector2):
         self.vector_to_mouse = vector_to_mouse
         super().update(vector_to_mouse)
+
+
+class ToolCreativeHand(ToolHand):
+    dig_distance = 100 * TSIZE
+    dig_distance2 = dig_distance ** 2
+    set_distance = 100 * TSIZE
+    set_distance2 = set_distance ** 2
+    strength = 10000  # dig
+    speed = 100  # dig
+    speed_set = 100  # set tile
+    capability = None
+    discard_distance = 5
+
+    # damage = 777  # punch
+    # distance = 7 * TSIZE  # punch

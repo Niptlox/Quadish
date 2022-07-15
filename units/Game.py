@@ -9,7 +9,8 @@ from units.map.GameMap import GameMap
 from units.map.ScreenMap import ScreenMap
 
 set_cursor(CURSOR_NORMAL)
-
+choice_pos1 = None
+choice_pos2 = None
 
 class Game(App):
     def __init__(self) -> None:
@@ -52,8 +53,26 @@ class GameScene(Scene):
                     self.set_scene(self.app.pause_scene)
                 elif event.key == K_LCTRL:
                     self.ctrl_on = True
+                elif event.key == K_g and pg.key.get_mods() & KMOD_CTRL:
+                    global choice_pos1, choice_pos2
+                    print("Choice of world")
+                    if choice_pos1 is None:
+                        choice_pos1 = self.player.rect.x // TSIZE+1, self.player.rect.y // TSIZE+1
+                        print("choice_pos1", choice_pos1)
+                        self.ui.new_sys_message(f"Позиция 1: {choice_pos1}")
+
+                    elif choice_pos2 is None:
+                        choice_pos2 = self.player.rect.x // TSIZE-1, self.player.rect.y // TSIZE-1
+                        self.ui.new_sys_message(f"Позиция 2: {choice_pos2}")
+                        print("choice_pos2", choice_pos2)
+                        print("Creating array choice")
+                        out = self.game_map.get_choice_world(choice_pos1, choice_pos2)
+                        print(out)
+                        self.ui.new_sys_message(f"Структура: {(choice_pos1, out[0])}")
+                        choice_pos1 = choice_pos2 = None
                 if event.key == K_s and self.ctrl_on:
                     self.game_map.save_current_game_map()
+
             elif event.type == KEYUP:
                 if event.key == K_LCTRL:
                     self.ctrl_on = False

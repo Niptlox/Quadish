@@ -1,10 +1,9 @@
 from random import randint
 
 from units.Entity import PhysicalObject, collision_test
-from units.Tiles import tile_hand_imgs
+from units.Tiles import tile_hand_imgs, Eats
 from units.common import *
 
-eats = {52: 10, 53: 2, 56: 8, 55: 100}
 
 
 class Items(PhysicalObject):
@@ -17,9 +16,9 @@ class Items(PhysicalObject):
 
     def __init__(self, game, index=None, pos=(0, 0), count: int or tuple = 1):
         self.index = index
-        if index in eats:
+        if index in Eats:
             self.class_item = CLS_EAT
-            self.recovery_lives = eats[index]
+            self.recovery_lives = Eats[index]
         if isinstance(count, tuple):
             count = randint(*count)
             if count <= 0:

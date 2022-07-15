@@ -5,7 +5,7 @@ from pygame import Surface
 
 from units.Items import ItemsTile, Items
 from units.Texture import WHITE
-from units.Tiles import tile_imgs, sky, tile_words, live_imgs, bg_live_img, goldlive_imgs
+from units.Tiles import tile_imgs, sky, tile_words, live_imgs, bg_live_img, goldlive_imgs, bg_livecreative_img
 from units.Tools import TOOLS
 from units.UI.Button import createImagesButton, createVSteckButtons, Button
 from units.UI.ClassUI import SurfaceUI, UI, ScrollSurface
@@ -125,7 +125,9 @@ class GameUI(UI):
             f" pos: {self.app.player.rect.x // TSIZE, self.app.player.rect.y // TSIZE}", True, "white")
         text_ents = textfont_info.render(
             f"Ents: {len(self.app.screen_map.dynamic_tiles)}", True, "white")
-        chunk_ents = self.app.game_map.chunk(self.app.player.update_chunk_pos())[3][1]
+        chunk_ents = self.app.game_map.chunk(self.app.player.update_chunk_pos())
+        if chunk_ents is not None:
+            chunk_ents = chunk_ents[3][1]
         text_c_ents = textfont_info.render(
             f"CEnts: {chunk_ents}", True, "white")
         self.info_surface.blit(text_fps, (8, 5))
@@ -149,6 +151,8 @@ class GameUI(UI):
                 x, y = startx, starty
                 iy = 0
                 imgs = goldlive_imgs
+            if self.app.player.creative_mode:
+                self.playerui.blit(bg_livecreative_img, (x, y))
             if i < self.app.player.lives // lives_in_heart:
                 self.playerui.blit(imgs[0], (x, y))
             else:
