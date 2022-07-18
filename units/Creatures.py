@@ -153,7 +153,7 @@ class Slime(MovingCreature):
             self.reduction_step = 6
             self.jump_speed = 12
             self.move_speed = 4
-            self.drop_items = [(ItemsTile, (51, (10, 20))), (ItemsTile, (63, (0, 5))), (ItemsTile, (66, (1, 2)))]
+            self.drop_items = [(ItemsTile, (51, (10, 15))), (ItemsTile, (63, (0, 2))), (ItemsTile, (66, (0, 1)))]
             super().__init__(game, (x, y))
 
         self.sprites = slime_animation(self.color, self.rect.size, self.reduction_step)
@@ -310,8 +310,8 @@ class SlimeBigBoss(Slime):
     move_speed = 4
     height_of_abyss = 9
     width_of_abyss = 3
-    drop_items = [(ItemsTile, (51, (20, 30))), (ItemsTile, (63, (3, 8))), (ItemsTile, (66, (4, 7))),
-                  (ItemsTile, (55, (1, 2)))]
+    drop_items = [(ItemsTile, (51, (20, 30))), (ItemsTile, (63, (3, 5))), (ItemsTile, (66, (2, 3))),
+                  (ItemsTile, (55, (0, 1)))]
 
     # агриться ли сейчас на игрока
     angry = False

@@ -10,6 +10,7 @@ from units.TilesClass import Chest
 from units.Tools import TOOLS
 from units.biomes import biome_of_pos
 from units.Structures import Structures, Structures_chance
+from units.Trees import grow_tree
 from ..Tiles import *
 
 
@@ -344,7 +345,19 @@ class GameMap:
     @staticmethod
     def get_tile_ttile(ttile):
         """тип, прочность, состояние, переменная(таймер | ссылка на объект и тд)"""
-        return [ttile, TILES_SOLIDITY.get(ttile, -1), 0, 0]
+        state = {}
+        state_img = 0
+        if ttile in PLANT_WITH_RANDOM_SPRITE:
+            state_img = random.randint(0, PLANT_WITH_RANDOM_SPRITE[ttile])
+        if ttile in PLANT_WITH_RANDOM_LOCAL_POS:
+            img = tile_imgs[ttile]
+            state[TILE_LOCAL_POS] = (random.randint(0, TSIZE - img.get_width()),
+                                     TSIZE - img.get_height())
+        if ttile in PLANT_WITH_TIMER:
+            state[TILE_TIMER] = 0
+        if not state:
+            state = 0
+        return [ttile, TILES_SOLIDITY.get(ttile, -1), state_img, state]
 
     def get_tile_ttile_tpos(self, ttile, tpos):
         """тип, прочность, состояние, переменная"""
@@ -415,11 +428,12 @@ class GameMap:
                                 on_ground_tiles.add((tile_x, tile_y))
                                 plant_tile_type_state = random_plant_selection(biome_info[i][0])  # plant
                                 if plant_tile_type_state is not None:
-                                    plant_tile_type, state = plant_tile_type_state
+                                    plant_tile_type, state_img, state = plant_tile_type_state
                                     pl_i = tile_index - self.chunk_arr_width
                                     static_tiles[pl_i] = plant_tile_type
                                     static_tiles[pl_i + 1] = TILES_SOLIDITY.get(plant_tile_type, -1)
-                                    static_tiles[pl_i + 2] = state
+                                    static_tiles[pl_i + 2] = state_img
+                                    static_tiles[pl_i + 3] = state
                                     if cnt_creatures < CHUNK_CREATURE_LIMIT:
                                         Crt = random_creature_selection()
                                         if Crt is not None:
@@ -521,29 +535,36 @@ class GameMap:
 
 def random_plant_selection(biome=None):
     if random.randint(0, 2) == 0:
-        plants = {101: 0.1, 102: 0.1, 104: 0.5, 120: 0.05}
+
+        plants = plants_chance
         if biome == 0:  # desert
-            plants = {101: 0.1, 103: 0.1}
+            plants = desert_plants_chance
         plant_tile_type = random.choices(list(plants.keys()), list(plants.values()), k=1)[0]
+        if plant_tile_type is None:
+            return None
 
+        state_img = 0
+        state = {}
         if plant_tile_type == 101:
-            return plant_tile_type, random.randint(0, 3)
-        if plant_tile_type == 102:
+            # рандомная картинка только если ставиться при генерации карты
+            state_img = random.randint(0, 3)
+        elif plant_tile_type == 102:
             if random.randint(0, 10) < 9:
-                return plant_tile_type, 2  # вырастить мгновено дерево
-        return plant_tile_type, 0
+                state_img = 2  # вырастить мгновено дерево
+
+        if plant_tile_type in PLANT_WITH_RANDOM_SPRITE:
+            state_img = random.randint(0, PLANT_WITH_RANDOM_SPRITE[plant_tile_type])
+        if plant_tile_type in PLANT_WITH_RANDOM_LOCAL_POS:
+            img = tile_imgs[plant_tile_type]
+            state[TILE_LOCAL_POS] = (random.randint(0, TSIZE - img.get_width()),
+                                    TSIZE - img.get_height())
+        if plant_tile_type in PLANT_WITH_TIMER:
+            state[TILE_TIMER] = 0
+        if not state:
+            state = 0
+
+        return plant_tile_type, state_img, state
     return None
-
-
-def grow_tree(pos, game_map: GameMap):
-    woods = ((0, 0), (0, -1), (0, -2), (0, -3))
-    leaves = ((-1, -1), (1, -1), (1, -2), (-1, -2), (1, -3), (-1, -3), (0, -4))
-    x, y = pos
-    for ax, ay in woods:
-        game_map.set_static_tile(x + ax, y + ay, GameMap.get_tile_ttile(110))
-    for ax, ay in leaves:
-        if game_map.get_static_tile_type(x + ax, y + ay, default=0) == 0:
-            game_map.set_static_tile(x + ax, y + ay, GameMap.get_tile_ttile(105))
 
 
 def random_creature_selection():

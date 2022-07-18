@@ -4,3 +4,4 @@ data/maps/*.pclv
 *.aseprite
 __pycache__
 venv
+screenshot.png

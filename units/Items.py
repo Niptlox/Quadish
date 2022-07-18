@@ -5,7 +5,6 @@ from units.Tiles import tile_hand_imgs, Eats
 from units.common import *
 
 
-
 class Items(PhysicalObject):
     class_obj = OBJ_ITEM
     class_item = CLS_NONE
@@ -39,16 +38,22 @@ class Items(PhysicalObject):
         if self.physical_vector.xy != (0, 0):
             _, dynamic = collision_test(self.game_map, self.rect, {}, self.game.screen_map.dynamic_tiles)
             for obj in dynamic:
-                if obj is not self and obj.class_obj == OBJ_ITEM:
-                    if obj.alive and self.index == obj.index:
-                        # объеденение в один, двух рядом леж предметов одного типа
-                        free_place = self.cell_size - self.count
-                        if obj.count > free_place:
-                            self.count += free_place
-                            obj.count -= free_place
-                        else:
-                            self.count += obj.count
-                            obj.alive = False
+                # проверка объекта и если он такой же то сложение в один
+                self.add(obj)
+
+    def add(self, other):
+        if isinstance(other, Items) and self.index == other.index and other is not self:
+            last = self.cell_size - self.count
+            self.count = min(self.count + other.count, self.cell_size)
+            other.count -= last
+            if other.count <= 0:
+                other.count = 0
+                other.alive = False
+            return self
+        return
+
+    def __iadd__(self, other):
+        self.add(other)
 
 
 class ItemsTile(Items):

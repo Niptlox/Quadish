@@ -24,7 +24,7 @@ player_img = create_tile_image("#E7E5E4", size=(TSIZE - 10, TSIZE - 2), bd=2)
 live_imgs = load_imgs("data/sprites/player/lives_{}.png", 5, size=(20, 20))
 goldlive_imgs = load_imgs("data/sprites/player/goldherts_{}.png", 5, size=(20, 20))
 bg_live_img = load_img("data/sprites/player/bg_live.png", size=(20, 20))
-bg_livecreative_img = load_img("data/sprites/player/bg_livecreative.png", size=(20, 20))
+bg_livecreative_img = load_img("data/sprites/player/bg_livecreative.png", size=(22, 22))
 
 # hand_pass_img = pygame.transform.smoothscale(player_img, HAND_RECT)
 hand_pass_img = None
@@ -73,13 +73,15 @@ wood_img = load_img("data/sprites/tiles/wood.png", colorkey=None)
 plank_img = load_img("data/sprites/tiles/plank.png", colorkey=None)
 
 cactus_img = load_img("data/sprites/tiles/cactus.png")
+watermelon_img = load_img("data/sprites/tiles/watermelon/watermelon_0.png", SIZE_2X)
+watermelon_imgs = load_imgs("data/sprites/tiles/watermelon/watermelon_{}.png", 5, SIZE_2X)
 
 lean_img = load_img("data/sprites/tiles/lean.png")
 
 bush_img = load_img("data/sprites/tiles/bush/bush.png")  # куст
 bush_imgs = [load_img(f"data/sprites/tiles/bush/bush_{i}.png") for i in range(4)]  # кустs
 
-smalltree_img = load_img("data/sprites/tiles/small_tree.png")
+smalltree_img = load_img("data/sprites/tiles/oak_saginer.png", SIZE_2X)
 leave_img = load_img(f"data/sprites/tiles/leave.png")
 
 door_img = load_img("data/sprites/tiles/door.png")
@@ -183,6 +185,7 @@ tile_imgs = {None: none_img,
              151: group_img,
              152: build_img,
              201: cloud_img,
+             251: watermelon_img,
              # 203: tnt_1_img,
              301: poison_item_img,
              401: meet_snake_item_img,
@@ -202,7 +205,7 @@ count_tiles = len(tile_imgs)
 tile_many_imgs = {101: bush_imgs,
                   201: cloud_imgs,
                   203: tnt_imgs,
-
+                  251: watermelon_imgs,
                   501: sword_1_imgs,
                   502: sword_77_imgs,
                   503: sword_2_imgs,
@@ -215,22 +218,32 @@ tile_many_imgs = {101: bush_imgs,
 IDX_TOOLS = {501, 502, 503, 530, 531, 532, 533, 610}
 
 # блоки через которые нельзя пройти
-PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 31, 32, 33, 103, 124, 128}
+PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 31, 32, 33, 103, 124, 128, 251}
 # полуфизические блоки например мебель листва вода
 SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 122}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
-STANDING_TILES = {0, 101, 102, 103, 104, 110, 120, 121, 122, 123, 125, 126, 130, 129}
+STANDING_TILES = {0, 101, 102, 103, 104, 110, 120, 121, 122, 123, 125, 126, 130, 129, 251}
 # предметы которые нельзя физически поставить
 ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 401, 801}
 
+# Растения у которых есть таймер
+PLANT_WITH_TIMER = {101, 102}
+# растетет только на земле
+PLANT_STAND_ON_DIRT = {101, 102, 103, 104, 251}
+# растет в высоту например кактус
+PLANT_STAND_ON_PLANT = {103}
+PLANT_WITH_RANDOM_SPRITE = {251: 4}
+PLANT_WITH_RANDOM_LOCAL_POS = {251, 102}
+TILE_WITH_LOCAL_POS = {251, } | PLANT_WITH_RANDOM_LOCAL_POS
 # EAT ===================================================================
 
-Eats = {52: 10, 53: 2, 56: 8, 55: 100, 401: 8}
+Eats = {52: 10, 53: 2, 56: 8, 55: 100, 401: 8, 251: 7}
 
 # PICKAXE ===============================================================
 
-iron_capability = [1, 2, 3, 4, 9, 11, 12, 31, 32, 33, 101, 102, 103, 104, 105, 106, 110, 121, 122, 123, 124, 125, 126, 127,
-                   128, 130]
+iron_capability = {1, 2, 3, 4, 9, 11, 12, 31, 32, 33, 101, 102, 103, 104, 105, 106, 110, 121, 122, 123, 124, 125, 126,
+                   127, 251,
+                   128, 130}
 
 Pickaxes_capability = {
     530: iron_capability,
@@ -242,10 +255,15 @@ Pickaxes_capability = {
     -1: iron_capability
 }
 
+# PLANTS ===================================================================
+
+plants_chance = {101: 0.1, 102: 0.2, 104: 1, 120: 0.05, 251: 0.005}
+desert_plants_chance = {101: 0.1, 103: 0.2, 104: 0.2, None: 0.5}
+
 # специальные каринки предметов для инвентаря
 tile_hand_imgs = {k: tile_imgs[k] if k in ITEM_TILES else transform_hand(i) for k, i in tile_imgs.items()}
-tile_hand_imgs[102] = load_img("data/sprites/tiles/small_tree_item.png",
-                               HAND_RECT)  # тк есть прозрачность создана собственная картинка
+# tile_hand_imgs[102] = load_img("data/sprites/tiles/small_tree_item.png",
+#                                HAND_RECT)  # тк есть прозрачность создана собственная картинка
 tile_hand_imgs[121] = load_img("data/sprites/tiles/table_item.png", HAND_RECT)  # тк есть прозрачность
 tile_hand_imgs[122] = load_img("data/sprites/tiles/chear_item.png", HAND_RECT)  # тк есть прозрачность
 tile_hand_imgs[130] = bedroll_of_pelts_item_img
@@ -277,7 +295,7 @@ tile_words = {None: "None",
               65: "Серебряная руда",
               66: "Рубин",
               101: "Куст",
-              102: "Маленькое дерево",
+              102: "Саженец дуба",
               103: "Кактус",
               104: "Трава",
               105: "Листва",
@@ -294,9 +312,10 @@ tile_words = {None: "None",
               128: "Закрытый люк",
               129: "Сундук",
               130: "Спальный мешок из шкур",
-              # 151: "Группа обектов",
+              151: "Группа обектов",
               150: "Структурная пустота",
               201: "Облако",
+              251: "арбуз",
               301: "Ядовитая железа",
               401: "Мясо змеи",
               501: "Железный меч",
@@ -339,6 +358,7 @@ TILES_SOLIDITY = {
     127: 45,
     128: 45,
     130: 80,
+    251: 45,
 }
 
 DYNAMITE_NOT_BREAK = {5, 120}  # granite water

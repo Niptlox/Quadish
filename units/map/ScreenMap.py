@@ -85,7 +85,8 @@ class ScreenMap:
                             tile = chunk[0][index:index + self.game_map.tile_data_size]
                             tile_type = tile[0]
                             if tile_type > 0:
-                                b_pos = (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1])
+                                b_pos = [tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1]]
+                                sprite_pos = b_pos
                                 if srect_d.collidepoint(*b_pos):
                                     # print(tile_xy)
                                     if tile_type in tile_many_imgs:
@@ -109,30 +110,7 @@ class ScreenMap:
                                                     img = ground_LR_img
                                             elif self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
                                                 img = ground_R_img
-                                    elif tile_type == 101:
-                                        if tile[2] < 3:
-                                            if tile[3] < tact:
-                                                if tile[3] != 0:
-                                                    chunk[0][index + 2] += 1
-                                                else:
-                                                    chunk[0][index + 3] = tact
-                                                # tile[3] = tact --> тк срез
-                                                chunk[0][index + 3] += random.randint(FPS * 60, FPS * 120)
-                                    elif tile_type == 102:
-                                        # дерево
-                                        if tile[2] == 0:
-                                            # посажено дерево
-                                            chunk[0][index + 3] = tact + random.randint(FPS * 240, FPS * 660)
-                                            chunk[0][index + 2] = 1  # растет
-                                        elif tile[2] == 2:
-                                            # вырастить мгновено
-                                            grow_tree((tile_x, tile_y), game_map=self.game_map)
-                                        elif tile[2] == 1:
-                                            # растет дерево
-                                            if tile[3] <= tact:
-                                                if tile[3] != 0:
-                                                    # проращиваем дерево
-                                                    grow_tree((tile_x, tile_y), game_map=self.game_map)
+
                                     elif tile_type == 126:  # шкаф
                                         img = tile_imgs[tile_type].copy()
                                         step = TSIZE // 2
@@ -145,7 +123,14 @@ class ScreenMap:
                                                                  pg.transform.scale(tile_hand_imgs[item[0]],
                                                                                     (TSIZE//2-1, TSIZE//2-1)),
                                                                  (itx * step + 1, ity * step + 1))
-                                    self.display.blit(img, b_pos)
+                                    else:
+                                        self.update_tile(chunk, tile, tile_type, index, tile_x, tile_y, tact)
+
+                                    if tile_type in TILE_WITH_LOCAL_POS:
+                                        local_pos = tile[3][TILE_LOCAL_POS]
+                                        sprite_pos[0] += local_pos[0]
+                                        sprite_pos[1] += local_pos[1]
+                                    self.display.blit(img, sprite_pos)
                                     sol = tile[1]
                                     if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
                                         br_i = (break_imgs_cnt - 1) - int(
@@ -186,8 +171,35 @@ class ScreenMap:
             dtile.draw(self.display, pos)
             i += 1
 
+    def update_tile(self, chunk, tile, tile_type, index, tile_x, tile_y, tact):
+        if tile_type == 101:
+            if tile[2] < 3:
+                if tile[3][TILE_TIMER] < tact:
+                    if tile[3][TILE_TIMER] != 0:
+                        chunk[0][index + 2] += 1
+                    else:
+                        chunk[0][index + 3][TILE_TIMER] = tact
+                    # tile[3] = tact --> тк срез
+                    chunk[0][index + 3][TILE_TIMER] += random.randint(FPS * 60, FPS * 120)
 
-'''
+        elif tile_type == 102:
+            # дерево
+            if tile[2] == 0:
+                # посажено дерево
+                chunk[0][index + 3][TILE_TIMER] = tact + random.randint(FPS * 240, FPS * 660)
+                chunk[0][index + 2] = 1  # растет
+            elif tile[2] == 2:
+                # вырастить мгновено
+                grow_tree((tile_x, tile_y), game_map=self.game_map)
+            elif tile[2] == 1:
+                # растет дерево
+                if tile[3][TILE_TIMER] <= tact:
+                    if tile[3][TILE_TIMER] != 0:
+                        # проращиваем дерево
+                        grow_tree((tile_x, tile_y), game_map=self.game_map)
+
+
+    '''
     def chunk_thread(self, idx=0):
         """idx - индекс потока"""
         while True:

@@ -53,9 +53,9 @@ class ToolSword(Tool):
 
 
 class ToolGoldSword(ToolSword):
-    damage = 7 * 7
+    damage = 777
     speed = 7
-    distance = 3 * TSIZE
+    distance = 7 * TSIZE
     Animation = AnimationSword
     discard_distance = 10
     index = 502

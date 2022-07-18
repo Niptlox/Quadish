@@ -101,6 +101,7 @@ class Player(PhysicalObject):
         # d.pop("inventory")
         d["inventory"] = self.inventory.get_vars()
         d.pop("toolHand")
+        d.pop("toolCreativeHand")
         d.pop("tool")
         d.pop("chest_ui")
         print(d)
@@ -137,9 +138,9 @@ class Player(PhysicalObject):
                 self.on_down = True
             elif event.key == K_j and pg.key.get_mods() & KMOD_ALT:
                 self.set_game_mode(not self.creative_mode)
-            elif event.key == K_t:
+            elif event.key == K_t and pg.key.get_mods() & KMOD_CTRL:
                 self.tp_to_home()
-            elif event.key == K_r:
+            elif event.key == K_r and pg.key.get_mods() & KMOD_CTRL:
                 self.tp_random()
             elif event.key == K_q:  # выкинуть все предметы в текущей ячейке инвентаря
                 self.inventory.discard_item(self.inventory.active_cell,

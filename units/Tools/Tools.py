@@ -2,7 +2,7 @@ from time import time
 
 from units import Entities
 from units.Tiles import item_of_break_tile, item_of_right_click_tile, STANDING_TILES, ITEM_TILES, tile_imgs, \
-    tile_drops
+    tile_drops, PLANT_STAND_ON_DIRT, PLANT_STAND_ON_PLANT
 from units.Tools.AnimationTool import *
 from units.common import *
 
@@ -89,7 +89,7 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
         if tile[2] > 0:
             item = item_of_right_click_tile(tile)[0]
             game_map.add_item_of_index(*item, x, y)
-            tile[2], tile[3] = 0, 0
+            tile[2], tile[3][TILE_TIMER] = 0, 0
             game_map.set_static_tile(x, y, tile)
     elif ttile == 130:
         point = (x + 0.5) * TSIZE, (y + 0.5) * TSIZE
@@ -167,13 +167,11 @@ def check_set_tile(game_map, x, y, inventory_cell):
     cell_ttile = inventory_cell.index
     # id блока под местом куда ставим
     bottom_ttile = game_map.get_static_tile_type(x, y + 1, 0)
-    if cell_ttile == bottom_ttile == 110:
-        return tile
-    if cell_ttile == bottom_ttile == 126:
+    if cell_ttile in PLANT_STAND_ON_PLANT and cell_ttile == bottom_ttile:
         return tile
     if cell_ttile in STANDING_TILES and bottom_ttile == 0:
         return False
-    if cell_ttile == 101 and not bottom_ttile == 1:
+    if cell_ttile in PLANT_STAND_ON_DIRT and bottom_ttile != 1 and bottom_ttile != 2:
         return False
     if cell_ttile in ITEM_TILES:
         return False

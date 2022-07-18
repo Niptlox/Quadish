@@ -10,7 +10,6 @@ import units.config as config
 # INIT GAME ==============================================
 pygame.init()  # initiate pygame
 FPS = 30
-
 flags = 0
 desktop_size = pygame.display.get_desktop_sizes()[0]
 print("INIT GAME VARS")
@@ -20,17 +19,22 @@ WINDOW_SIZE = config.Window.size
 FULLSCREEN = config.Window.fullscreen
 if FULLSCREEN:
     WINDOW_SIZE = desktop_size
+    # flags |= pygame.FULLSCREEN
+
+# WINDOW_SIZE = WINDOW_SIZE[0] * 2, WINDOW_SIZE[1] - 10
 WSIZE = WINDOW_SIZE
 # WINDOW_SIZE = (1920, 1080)
 
 
-# flags |= pygame.SCALED
+flags |= pygame.SCALED
 pygame.display.set_caption('Quadish')
 screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags, vsync=1)
 display_ = pygame.Surface(WINDOW_SIZE)
 
-screen_.blit(pygame.font.SysFont(None, 40, ).render("Загрузка...", True, "white"), (35, WSIZE[1] - 50))
+screen_.blit(pygame.font.SysFont("", 40, ).render("Загрузка...", True, "white"), (35, WSIZE[1] - 50))
 pygame.display.flip()
+
+print(pg.display.get_allow_screensaver())
 
 # TILE ==================================================
 
@@ -46,7 +50,7 @@ CHUNK_SIZE = 32
 CSIZE = CHUNK_SIZE
 
 STRUCTURE_CHUNKS_SIZE = 100  # чанков
-CNT_BUILDS_OF_STRUCTURE_BLOCK = 10000
+CNT_BUILDS_OF_STRUCTURE_BLOCK = 1000
 SCSIZE = STRUCTURE_CHUNKS_SIZE
 
 CHUNK_SIZE_PX = CHUNK_SIZE * TILE_SIZE
@@ -84,6 +88,11 @@ CLS_SWORD = 16
 CLS_PICKAXE = 32
 CLS_EAT = 64
 CLS_COMMON = 128
+
+# STATES OF TILE ================================================
+
+TILE_TIMER = "t"
+TILE_LOCAL_POS = "p"
 
 # GENERATING MAP OR CHANK ========================================
 

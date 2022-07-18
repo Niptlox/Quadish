@@ -12,6 +12,7 @@ set_cursor(CURSOR_NORMAL)
 choice_pos1 = None
 choice_pos2 = None
 
+
 class Game(App):
     def __init__(self) -> None:
         self.game_scene = GameScene(self)
@@ -53,16 +54,23 @@ class GameScene(Scene):
                     self.set_scene(self.app.pause_scene)
                 elif event.key == K_LCTRL:
                     self.ctrl_on = True
+                elif event.key == K_c and pg.key.get_mods() & KMOD_ALT:
+                    make_screenshot(self.screen)
+                    self.ui.new_sys_message("Скриншот сохранён")
+                elif event.key == K_x and pg.key.get_mods() & KMOD_ALT and self.player.creative_mode:
+                    self.tact += FPS * 60
+                elif event.key == K_z and pg.key.get_mods() & KMOD_ALT and self.player.creative_mode:
+                    self.tact += FPS * 60 * 10
                 elif event.key == K_g and pg.key.get_mods() & KMOD_CTRL:
                     global choice_pos1, choice_pos2
                     print("Choice of world")
                     if choice_pos1 is None:
-                        choice_pos1 = self.player.rect.x // TSIZE+1, self.player.rect.y // TSIZE+1
+                        choice_pos1 = self.player.rect.x // TSIZE + 1, self.player.rect.y // TSIZE + 1
                         print("choice_pos1", choice_pos1)
                         self.ui.new_sys_message(f"Позиция 1: {choice_pos1}")
 
                     elif choice_pos2 is None:
-                        choice_pos2 = self.player.rect.x // TSIZE-1, self.player.rect.y // TSIZE-1
+                        choice_pos2 = self.player.rect.x // TSIZE - 1, self.player.rect.y // TSIZE - 1
                         self.ui.new_sys_message(f"Позиция 2: {choice_pos2}")
                         print("choice_pos2", choice_pos2)
                         print("Creating array choice")
@@ -171,3 +179,5 @@ class PauseSceneUI(SceneUI):
     def editfullscreen(self):
         Window.set_fullscreen(not FULLSCREEN)
         self.app.game_scene.ui.new_sys_message("Перезапустите игру", draw_now=True)
+        print("toggle_fullscreen")
+        # pygame.display.toggle_fullscreen()

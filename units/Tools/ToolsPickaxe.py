@@ -62,13 +62,13 @@ class ToolPickaxe(ToolSword):
 
 class ToolGoldPickaxe(ToolPickaxe):
     strength = 777  # dig
-    damage = 777  # punch
+    damage = 17   # punch
     speed = 7
-    distance = 7 * TSIZE  # punch
-    discard_distance = 17  # отбрасывание
+    distance = 1.5 * TSIZE  # punch
+    discard_distance = 7  # отбрасывание
     index = 532
     sprite = tile_imgs[index]
-    dig_distance = 77 * TSIZE
+    dig_distance = 777 * TSIZE
     dig_distance2 = dig_distance ** 2
     capability = Pickaxes_capability[index]
 

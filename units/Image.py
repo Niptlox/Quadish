@@ -17,11 +17,15 @@ def create_border(surface, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
 
 COLORKEY = (0, 255, 0)
 
+SIZE_2X = "2x"
+
 
 def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None):
     print(path)
     img = pygame.image.load(path)
-    if size:
+    if size == SIZE_2X:
+        img = pygame.transform.scale2x(img)
+    elif size:
         img = pygame.transform.scale(img, size)
     if colorkey:
         img.set_colorkey(colorkey)

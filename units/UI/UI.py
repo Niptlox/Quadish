@@ -152,7 +152,7 @@ class GameUI(UI):
                 iy = 0
                 imgs = goldlive_imgs
             if self.app.player.creative_mode:
-                self.playerui.blit(bg_livecreative_img, (x, y))
+                self.playerui.blit(bg_livecreative_img, (x-1, y-1))
             if i < self.app.player.lives // lives_in_heart:
                 self.playerui.blit(imgs[0], (x, y))
             else:
@@ -312,7 +312,7 @@ class PauseUI(UI):
             ("Телепорт домой", lambda _: self.app.tp_to_home()),
             ("Сохранить и выйти", lambda _: self.app.save_and_exit()),
             ("Выйти", lambda _: self.app.exit()),
-            ("1400x800" if FULLSCREEN else "Полный экран", lambda _: self.app.editfullscreen()),
+            ("Оконный режим" if FULLSCREEN else "Полный экран", lambda _: self.app.editfullscreen()),
         ]
 
         self.img_btns = [createImagesButton(btn_rect.size, t, font=textfont_btn)
@@ -431,13 +431,32 @@ class InventoryUI(SurfaceUI):
             if 0 <= i < self.inventory.inventory_size:
 
                 if get_obj_mouse():
-                    # PUT OBJ
+                    # положить объект из мыши
+                    put_item = get_obj_mouse()
+                    if event.button == pg.BUTTON_RIGHT:
+                        # положить один предмет при нажатии првой кнопкой мыши
+                        put_item = put_item.copy()
+                        put_item.count = 1
+                        get_obj_mouse().count -= 1
+                        if get_obj_mouse().count <= 0:
+                            set_obj_mouse(None)
+                    else:
+                        set_obj_mouse(None)
                     item = self.inventory.get_cell_from_inventory(i)
-                    self.inventory.set_cell(i, get_obj_mouse())
+                    if item and item.index == put_item.index and item.count < item.cell_size:
+                        put_item.add(item)
+                        if item.count <= 0:
+                            item = get_obj_mouse()
+                    elif item is None:
+                        item = get_obj_mouse()
+                    else:
+                        if get_obj_mouse():
+                            put_item.add(get_obj_mouse())
+                    self.inventory.set_cell(i, put_item)
                     set_obj_mouse(item)
                     self.inventory.redraw()
                 else:
-                    # GET OBJ
+                    # взять объект в мышь
                     item = None
                     if event.button == pg.BUTTON_LEFT:
                         item = self.inventory.get_cell_from_inventory(i, del_in_inventory=True)

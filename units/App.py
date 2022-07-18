@@ -87,3 +87,7 @@ class SceneUI(Scene):
 
     def update(self):
         self.ui.draw()
+
+
+def make_screenshot(screen: pg.Surface):
+    pg.image.save(screen, "screenshot.png")
