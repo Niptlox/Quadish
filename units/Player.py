@@ -62,7 +62,7 @@ class Player(PhysicalObject):
         self.vertical_momentum = 0
         self.jump_speed = 10
         self.jump_count = 0
-        self.max_jump_count = 4
+        self.max_jump_count = 2
         self.fall_speed = FALL_SPEED
         self.max_fall_speed = MAX_FALL_SPEED
         self.speed = 0
@@ -188,11 +188,13 @@ class Player(PhysicalObject):
 
     def tp_random(self):
         self.tp_to((random.randint(-1e9, 1e9), random.randint(-1e9, 1e9)))
+        self.tp_to((random.randint(-1e9, 1e9), random.randint(-TSIZE*10000, TSIZE*10000)))
         # self.tp_to((2 ** 31 - 1500, 2 ** 31 - 1500))
 
     def tp_to(self, pos):
         self.rect.center = pos
         self.game.screen_map.teleport_to_player()
+        self.vertical_momentum = 0
 
     def relive(self):
         self.alive = True
@@ -209,11 +211,12 @@ class Player(PhysicalObject):
 
     def update(self, tact):
         self.tact = tact
+        self.draw(self.ui.display)
+
         if not self.alive:
             return False
         if not self.sitting:
             self.moving()
-        self.draw(self.ui.display)
 
         if not self.creative_mode:
             self.flying = False
@@ -242,6 +245,9 @@ class Player(PhysicalObject):
         if self.eat and item and item.class_item == CLS_EAT:
             if item.index == 55:
                 self.max_lives += 20
+            elif item.index == 351:
+                if self.max_jump_count < 5:
+                    self.max_jump_count += 1
             self.lives = min(self.lives + item.recovery_lives, self.max_lives)
             item.count -= 1
             if item.count <= 0:

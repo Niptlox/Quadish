@@ -50,7 +50,10 @@ ground_imgs = {i: ((load_img(f"data/sprites/tiles/ground/ground_{i}.png")),
                    (load_img(f"data/sprites/tiles/ground/ground_R_{i}.png")),
                    (load_img(f"data/sprites/tiles/ground/ground_LR_{i}.png")),
                    ) for i in bioms}
-
+ground_imgs[None] = (ground_img,
+                     ground_L_img,
+                     ground_R_img,
+                     ground_LR_img)
 stone_img = load_img("data/sprites/tiles/stone.png")
 # create_tile_image("#57534E")
 
@@ -114,6 +117,7 @@ meet_wolf_item_img = load_img("data/sprites/tiles/meet_wolf_item.png", None)
 meet_snake_item_img = load_img("data/sprites/items/meet_snake_item.png", None)
 poison_item_img = load_img("data/sprites/items/poison_item.png", None)
 potion_life_item_img = load_img("data/sprites/tiles/potion_life_item.png", None)
+potion_jump_item_img = load_img("data/sprites/tiles/potion_jump_item.png", None)
 
 slime_item_img = load_img("data/sprites/tiles/slime_item.png", None)
 pelt_wolf_item_img = load_img("data/sprites/tiles/pelt_wolf_item.png", None)
@@ -188,6 +192,7 @@ tile_imgs = {None: none_img,
              251: watermelon_img,
              # 203: tnt_1_img,
              301: poison_item_img,
+             351: potion_jump_item_img,
              401: meet_snake_item_img,
              501: sword_1_img,
              502: sword_77_img,
@@ -201,7 +206,7 @@ tile_imgs = {None: none_img,
              801: stick_img,
              }
 count_tiles = len(tile_imgs)
-
+print("Count_tiles imgs", count_tiles)
 tile_many_imgs = {101: bush_imgs,
                   201: cloud_imgs,
                   203: tnt_imgs,
@@ -224,8 +229,10 @@ SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 122}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
 STANDING_TILES = {0, 101, 102, 103, 104, 110, 120, 121, 122, 123, 125, 126, 130, 129, 251}
 # предметы которые нельзя физически поставить
-ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 401, 801}
+ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 351, 401, 801}
 
+# Блоки у которых state это массив
+ITEM_WITH_STATE_IS_LIST = {126}
 # Растения у которых есть таймер
 PLANT_WITH_TIMER = {101, 102}
 # растетет только на земле
@@ -237,7 +244,7 @@ PLANT_WITH_RANDOM_LOCAL_POS = {251, 102}
 TILE_WITH_LOCAL_POS = {251, } | PLANT_WITH_RANDOM_LOCAL_POS
 # EAT ===================================================================
 
-Eats = {52: 10, 53: 2, 56: 8, 55: 100, 401: 8, 251: 7}
+Eats = {52: 10, 53: 2, 56: 8, 55: 100, 401: 8, 251: 7, 351: 1}
 
 # PICKAXE ===============================================================
 
@@ -254,7 +261,6 @@ Pickaxes_capability = {
     # hand
     -1: iron_capability
 }
-
 # PLANTS ===================================================================
 
 plants_chance = {101: 0.1, 102: 0.2, 104: 1, 120: 0.05, 251: 0.005}
@@ -317,6 +323,7 @@ tile_words = {None: "None",
               201: "Облако",
               251: "арбуз",
               301: "Ядовитая железа",
+              351: "Зелье нового прыжка",
               401: "Мясо змеи",
               501: "Железный меч",
               502: "Золотой меч",
@@ -403,7 +410,7 @@ def item_of_break_tile(tile, game_map, tile_xy):
     if ttile == 101:  # куст с ягодами
         items += item_of_right_click_tile(tile, res=False)
     res = [(i, cnt) for i, cnt, ch in items if ch == 1 or random.randint(0, 100 * 100) <= ch * 100 * 100]
-    if ttile == 126:  # куст с ягодами
+    if ttile == 126:  # шкаф
         res += [i for i in tile[3] if i]
     elif ttile == 129:
         tile_obj = game_map.get_tile_obj(tile_xy[0] // CHUNK_SIZE, tile_xy[1] // CHUNK_SIZE, tile[3])

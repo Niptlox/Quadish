@@ -5,3 +5,4 @@ data/maps/*.pclv
 __pycache__
 venv
 screenshot.png
+plan.txt

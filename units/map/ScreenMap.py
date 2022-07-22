@@ -1,7 +1,9 @@
 from time import time
 
+from units.Texture import get_color_of_gradient
 from units.Tiles import *
 # rect для отрисовки
+from units.biomes import biome_colors, biome_tiles
 from units.map.GameMap import GameMap, grow_tree
 
 srect_d = pg.Rect(-TSIZE, -TSIZE, WSIZE[0] + TSIZE, WSIZE[1] + TSIZE)
@@ -26,6 +28,25 @@ class ScreenMap:
         self.true_scroll[0] = self.player.rect.x - WSIZE[0] // 2
         self.true_scroll[1] = self.player.rect.y - WSIZE[1] // 2
 
+    def draw_sky(self):
+        # self.display.blit(self.sky_surface, (0, 0))
+        height = TSIZE * 10000
+        sky_night = (15, 23, 42, 255)
+        sky_center = (165, 243, 252, 255)
+        sky_red = (135, 0, 0, 255)
+        i = self.player.rect.y
+        if TSIZE * TOP_MIDDLE_WORLD < i < TSIZE * BOTTOM_MIDDLE_WORLD:
+            color = sky_center
+        elif i > 0:
+            # ад
+            color = get_color_of_gradient((START_HELL_Y - BOTTOM_MIDDLE_WORLD)*TSIZE,
+                                          sky_center, sky_red, i - TSIZE * BOTTOM_MIDDLE_WORLD)
+        else:
+            # космос
+            color = get_color_of_gradient(abs(START_SPACE_Y - TOP_MIDDLE_WORLD)*TSIZE,
+                                          sky_center, sky_night, -i + TSIZE * TOP_MIDDLE_WORLD)
+        self.display.fill(color)
+
     def update(self, tact):
         self.tact = tact
         tt = time()
@@ -35,12 +56,14 @@ class ScreenMap:
         # if climate:
         #     biome_color = biome_colors[climate[0]]
         #     self.display.fill(biome_color)
-        self.true_scroll[0] += (p.rect.x - self.true_scroll[0] - WSIZE[0] // 2) / 20
-        offset_y = (p.rect.y - self.true_scroll[1] - WSIZE[1] // 2)
-        if abs(offset_y) > TSIZE * 3:
-            offset_y *= min(abs(offset_y) / (2 * TSIZE), 10)
-        self.true_scroll[1] += float(offset_y / 20)
 
+        self.true_scroll[0] += (p.rect.x - self.true_scroll[0] - WSIZE[0] // 2) / 15
+
+        offset_y = abs(p.rect.y - self.true_scroll[1] - WSIZE[1] // 2)
+        div = max(1, 32 / max(1, offset_y ** 0.5))
+        self.true_scroll[1] += (p.rect.y - self.true_scroll[1] - WSIZE[1] // 2) / div
+
+        # self.true_scroll[1] = self.player.rect.y - WSIZE[1] // 2
         self.scroll = scroll = [int(self.true_scroll[0]), int(self.true_scroll[1])]
 
         static_tiles = {}
@@ -95,22 +118,15 @@ class ScreenMap:
                                         img = tile_imgs[tile_type]
                                     if tile_type == 1:
                                         biome = self.game_map.get_tile_climate(tile_x, tile_y)[0]
-                                        if biome in ground_imgs:
-                                            img = ground_imgs[biome][0]
-                                            if static_tiles.get((tile_x - 1, tile_y), 0) == 0:
-                                                img = ground_imgs[biome][1]
-                                                if self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
-                                                    img = ground_imgs[biome][3]
-                                            elif self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
-                                                img = ground_imgs[biome][2]
-                                        else:
-                                            if static_tiles.get((tile_x - 1, tile_y), 0) == 0:
-                                                img = ground_L_img
-                                                if self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
-                                                    img = ground_LR_img
-                                            elif self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
-                                                img = ground_R_img
-
+                                        if biome not in ground_imgs:
+                                            biome = None
+                                        img = ground_imgs[biome][0]
+                                        if static_tiles.get((tile_x - 1, tile_y), 0) == 0:
+                                            img = ground_imgs[biome][1]
+                                            if self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
+                                                img = ground_imgs[biome][3]
+                                        elif self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
+                                            img = ground_imgs[biome][2]
                                     elif tile_type == 126:  # шкаф
                                         img = tile_imgs[tile_type].copy()
                                         step = TSIZE // 2
@@ -120,9 +136,9 @@ class ScreenMap:
                                                     item = tile[3][ity * 2 + itx]
                                                     if item:
                                                         img.blit(
-                                                                 pg.transform.scale(tile_hand_imgs[item[0]],
-                                                                                    (TSIZE//2-1, TSIZE//2-1)),
-                                                                 (itx * step + 1, ity * step + 1))
+                                                            pg.transform.scale(tile_hand_imgs[item[0]],
+                                                                               (TSIZE // 2 - 1, TSIZE // 2 - 1)),
+                                                            (itx * step + 1, ity * step + 1))
                                     else:
                                         self.update_tile(chunk, tile, tile_type, index, tile_x, tile_y, tact)
 
@@ -137,10 +153,10 @@ class ScreenMap:
                                             sol * (break_imgs_cnt - 1) / TILES_SOLIDITY[tile_type])
                                         self.display.blit(break_imgs[br_i], b_pos)
 
-                            # else:
-                            #     b_pos = (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1])
-                            #     img = biome_tiles[chunk[4][i][0]]
-                            #     self.display.blit(img, b_pos)
+                            elif show_biomes:
+                                b_pos = (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1])
+                                img = biome_tiles[chunk[4][i][0]]
+                                self.display.blit(img, b_pos)
                             # if tile_type in PHYSBODY_TILES:
                             if tile_type != 0:
                                 static_tiles[(tile_x, tile_y)] = tile_type
@@ -197,7 +213,6 @@ class ScreenMap:
                     if tile[3][TILE_TIMER] != 0:
                         # проращиваем дерево
                         grow_tree((tile_x, tile_y), game_map=self.game_map)
-
 
     '''
     def chunk_thread(self, idx=0):

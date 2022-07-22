@@ -81,6 +81,10 @@ class GameUI(UI):
 
     def draw_sky(self):
         # self.display.blit(self.sky_surface, (0, 0))
+        sky_night = (15,23,42, 255)
+        sky = (165, 243, 252, 255)
+        sky_red = (135, 0, 0, 255)
+        # if self.
         self.display.fill(sky)
 
     def draw(self):

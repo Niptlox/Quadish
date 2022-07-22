@@ -93,7 +93,8 @@ class GameScene(Scene):
             self.first_start = False
 
     def update(self):
-        self.ui.draw_sky()
+        # self.ui.draw_sky()
+        self.screen_map.draw_sky()
 
         self.screen_map.update(self.tact)
         if not self.player.update(self.tact):

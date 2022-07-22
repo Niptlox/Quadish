@@ -22,11 +22,26 @@ TEXTFONT_BTN = pygame.font.SysFont('Roboto', 40)
 FPSFONT = pygame.font.SysFont('Roboto', 15)
 
 
-
 def isColor(arg):
     if type(arg) is pygame.Color or (type(arg) in (tuple, list) and 3 <= len(arg) <= 4):
         return True
     return False
+
+
+def get_color_of_gradient(width, startcolor, endcolor, x):
+    x = min(x, width)
+    dd = 1.0 / width
+    sr, sg, sb, sa = startcolor
+    er, eg, eb, ea = endcolor
+    rm = (er - sr) * dd
+    gm = (eg - sg) * dd
+    bm = (eb - sb) * dd
+    am = (ea - sa) * dd
+    return (int(sr + rm * x),
+            int(sg + gm * x),
+            int(sb + bm * x),
+            int(sa + am * x))
+
 
 
 def vertical_gradient(size, startcolor, endcolor):

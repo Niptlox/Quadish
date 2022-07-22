@@ -60,6 +60,7 @@ WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 1, \
                     math.ceil(WINDOW_SIZE[1] / (TILE_SIZE * CHUNK_SIZE)) + 1
 WCSIZE = WINDOW_CHUNK_SIZE
 
+
 # DEBUG ====================================================
 # DEBUG = True
 DEBUG = False
@@ -67,6 +68,7 @@ show_chunk_grid = False
 show_entity_border = False
 show_group_obj = True
 show_info_menu = True
+show_biomes = False
 
 CHUNK_BD_COLOR = (230, 20, 20)
 
@@ -103,6 +105,12 @@ Generate_type = 2  # 0:load map,1: autogenerate
 
 CHUNK_CREATURE_LIMIT = 4
 CHUNK_CREATURE_CHANCE = 0.2
+
+TOP_MIDDLE_WORLD = -500 / 10
+BOTTOM_MIDDLE_WORLD = 2000 / 10
+
+START_SPACE_Y = -5000 / 10
+START_HELL_Y = 5000 / 10
 # Player ===========================================================
 
 NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9, pg.K_0]

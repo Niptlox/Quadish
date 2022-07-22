@@ -14,6 +14,9 @@ class Tool:
     index = 0
     sprite = tile_imgs[index]
 
+    click_tile_distance = 5 * TSIZE
+    click_tile_distance2 = click_tile_distance ** 2
+
     def __init__(self, owner):
         self.owner = owner
         self.last_action_time = 0
@@ -40,11 +43,14 @@ class Tool:
 
     def right_button_click(self, vector_to_mouse):
         vtm = vector_to_mouse
-        vp: Vector2 = self.owner.vector  # player
-        v_tile = (vtm + vp) // TSIZE
-        v_local_pos_tile = (vtm + vp) - v_tile * TSIZE
-        x, y = int(v_tile.x), int(v_tile.y)
-        return tile_click(self.owner.game_map, None, x, y, v_local_pos_tile, self.owner)
+        dist2 = vtm.length_squared()
+        if dist2 < self.click_tile_distance2:
+            vp: Vector2 = self.owner.vector  # player
+            v_tile = (vtm + vp) // TSIZE
+            v_local_pos_tile = (vtm + vp) - v_tile * TSIZE
+            x, y = int(v_tile.x), int(v_tile.y)
+            return tile_click(self.owner.game_map, None, x, y, v_local_pos_tile, self.owner)
+        return False
 
 
 def tile_click(game_map, tile, x, y, local_pos_tile, player):
@@ -59,7 +65,7 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
         game_map.set_static_tile(x, y, None)
     elif ttile == 126:
         tile = game_map.get_static_tile(x, y)
-        if tile[3] == 0:
+        if not tile[3]:
             tile[3] = [None] * 4
         items = tile[3]
         i = int((local_pos_tile[0] // 16) + (local_pos_tile[1] // 16) * 2)

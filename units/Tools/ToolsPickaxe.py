@@ -14,6 +14,7 @@ class ToolPickaxe(ToolSword):
     sprite = tile_imgs[index]
     dig_distance = 3 * TSIZE
     dig_distance2 = dig_distance ** 2
+    dig_level = 10
     capability = Pickaxes_capability[index]
 
     def __init__(self, owner):

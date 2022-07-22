@@ -1,7 +1,7 @@
 import glob
 import pickle
 
-from noise import snoise2 as pnoise2
+from noise import snoise2 as noise2
 
 from units.Creatures import Slime, Cow, Wolf, SlimeBigBoss, Snake
 from units.Entity import PhysicalObject
@@ -32,6 +32,8 @@ class GameMap:
         self.base_generation = base_generation
         self.num_save_map = 0
         self.saved = False
+        self.start_space_y = START_SPACE_Y
+        self.start_hell_y = START_HELL_Y
         self.creative_mode = CREATIVE_MODE
         if self.base_generation is None:
             self.new_base_generation()
@@ -303,10 +305,11 @@ class GameMap:
         return structure
 
     def build_structure_of_chunk(self, chunk_x, chunk_y):
-        print("build_structure_of_chunk", chunk_x, chunk_y)
+        # print("build_structure_of_chunk", chunk_x, chunk_y)
         # (build_id, num_of_point)
         structure_x, structure_y = chunk_x // STRUCTURE_CHUNKS_SIZE, chunk_y // STRUCTURE_CHUNKS_SIZE
         structure = self.get_structure_dict(structure_x, structure_y)
+        # chunk os structures (100x100 real chu nks)
         schunk = structure.get((chunk_x, chunk_y))
         if schunk is None:
             return
@@ -355,7 +358,9 @@ class GameMap:
                                      TSIZE - img.get_height())
         if ttile in PLANT_WITH_TIMER:
             state[TILE_TIMER] = 0
-        if not state:
+        elif ttile in ITEM_WITH_STATE_IS_LIST:
+            state = []
+        if state is {}:
             state = 0
         return [ttile, TILES_SOLIDITY.get(ttile, -1), state_img, state]
 
@@ -396,30 +401,31 @@ class GameMap:
         base_y = y * CHUNK_SIZE
         tile_y = base_y  # global tile y (not px)
         i = 0
+        standart_noise2_bool = lambda tx, ty: noise2(tx / freq_x, ty / freq_y, octaves, persistence=0.35, base=base,
+                                                     lacunarity=lacunarity) < threshold and \
+                                              (noise2(tx / freq_x, ty / freq_y) * 20 + ty) > START_SPACE_Y
+        print("noise", (noise2(base_x / freq_x, base_y / freq_y) * 20 + base_y) > START_SPACE_Y)
         for y_pos in range(CHUNK_SIZE):  # local tile y in chunk (not px)
             tile_x = base_x  # global tile x (not px)
             for x_pos in range(CHUNK_SIZE):  # local tile x in chunk (not px)
                 biome_info[i] = biome_of_pos(tile_x, tile_y)
                 tile_type = None
-                v = pnoise2(tile_x / freq_x, tile_y / freq_y, octaves, persistence=0.35, base=base,
-                            lacunarity=lacunarity)
-                if v < threshold:
-                    v3 = pnoise2(tile_x / freq_x, (tile_y - 2 - random.randint(0, 1)) / freq_y, octaves,
-                                 persistence=0.35, base=base, lacunarity=lacunarity)
-                    if v3 < threshold:
+                if tile_x in (-2, -1, 0, 1):
+                    tile_type = 0
+                # if (noise2(tile_x / freq_x, tile_y / freq_y) * 20 + tile_y) > START_SPACE_Y:
+                #     tile_type = 2
+                if standart_noise2_bool(tile_x, tile_y) and tile_type is None:
+                    if standart_noise2_bool(tile_x, tile_y - 2 - random.randint(0, 1)):
                         tile_type = 3  # stone
-                        v4 = pnoise2(tile_x / 10, tile_y / 10, 2, persistence=0.55, base=base, lacunarity=1)
+                        v4 = noise2(tile_x / 10, tile_y / 10, 2, persistence=0.55, base=base + 1, lacunarity=1)
                         if v4 < -0.7:
                             tile_type = 4  # blore
                         else:
-                            v5 = pnoise2(tile_x / 16 + 100, tile_y / 16 + 100, 2, persistence=0.35, base=base + 1,
-                                         lacunarity=1)
+                            v5 = noise2(tile_x / 16 + 100, tile_y / 16 + 100, 2, persistence=0.35, base=base + 2,
+                                        lacunarity=1)
                             if v5 < -0.88:
                                 tile_type = 5  # granite
                     else:
-                        # v2 = pnoise2((tile_x + 1) / freq_x, (tile_y - 2 - random.randint(0, 1)) / freq_y, octaves,
-                        #              persistence=0.35, base=base, lacunarity=lacunarity)
-                        # if v2 < threshold:
                         tile_type = 2  # dirt
                         if (y_pos > 0 and static_tiles[tile_index - self.chunk_arr_width] == 0) or \
                                 (y_pos == 0 and self.get_static_tile_type(tile_x, tile_y - 1, create_chunk=True) == 0):
@@ -557,7 +563,7 @@ def random_plant_selection(biome=None):
         if plant_tile_type in PLANT_WITH_RANDOM_LOCAL_POS:
             img = tile_imgs[plant_tile_type]
             state[TILE_LOCAL_POS] = (random.randint(0, TSIZE - img.get_width()),
-                                    TSIZE - img.get_height())
+                                     TSIZE - img.get_height())
         if plant_tile_type in PLANT_WITH_TIMER:
             state[TILE_TIMER] = 0
         if not state:
