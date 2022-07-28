@@ -2,7 +2,8 @@ from time import time
 
 from units import Entities
 from units.Tiles import item_of_break_tile, item_of_right_click_tile, STANDING_TILES, ITEM_TILES, tile_imgs, \
-    tile_drops, PLANT_STAND_ON_DIRT, PLANT_STAND_ON_PLANT
+    tile_drops, ON_EARTHEN_PLANTS, MULTI_BLOCK_PLANTS,\
+     PLANT_STAND_ON_DIRT, PLANT_STAND_ON_PLANT
 from units.Tools.AnimationTool import *
 from units.common import *
 
@@ -175,6 +176,10 @@ def check_set_tile(game_map, x, y, inventory_cell):
     bottom_ttile = game_map.get_static_tile_type(x, y + 1, 0)
     if cell_ttile in PLANT_STAND_ON_PLANT and cell_ttile == bottom_ttile:
         return tile
+    if cell_ttile in MULTI_BLOCK_PLANTS and bottom_ttile == cell_ttile:
+        return tile
+    if cell_ttile in ON_EARTHEN_PLANTS and bottom_ttile != 1 and bottom_ttile != 2:
+        return False
     if cell_ttile in STANDING_TILES and bottom_ttile == 0:
         return False
     if cell_ttile in PLANT_STAND_ON_DIRT and bottom_ttile != 1 and bottom_ttile != 2:

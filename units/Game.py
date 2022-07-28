@@ -1,5 +1,4 @@
-import subprocess
-
+from units.common import *
 from units.App import *
 from units.Cursor import set_cursor, CURSOR_NORMAL
 from units.Player import Player
@@ -7,6 +6,8 @@ from units.UI.UI import GameUI, SwitchMapUI, EndUI, PauseUI
 from units.config import Window
 from units.map.GameMap import GameMap
 from units.map.ScreenMap import ScreenMap
+
+import subprocess
 
 set_cursor(CURSOR_NORMAL)
 choice_pos1 = None
@@ -24,7 +25,7 @@ class Game(App):
 
     @classmethod
     def open_help(cls):
-        subprocess.Popen(('start', 'help.txt'), shell=True)
+        subprocess.Popen(('start', CWDIR + '/help.txt'), shell=True)
 
 
 class GameScene(Scene):

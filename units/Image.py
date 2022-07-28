@@ -20,7 +20,7 @@ COLORKEY = (0, 255, 0)
 SIZE_2X = "2x"
 
 
-def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None):
+def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1):
     print(path)
     img = pygame.image.load(path)
     if size == SIZE_2X:
@@ -29,14 +29,16 @@ def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None):
         img = pygame.transform.scale(img, size)
     if colorkey:
         img.set_colorkey(colorkey)
+    if scale == 2:
+        img = pygame.transform.scale2x(img)
     if alpha:
         img.convert_alpha()
         img.set_alpha(alpha)
     return img
 
 
-def load_imgs(path, count, size=TILE_RECT, colorkey=COLORKEY, alpha=None):
-    return [load_img(path.format(i), size, colorkey, alpha) for i in range(count)]
+def load_imgs(path, count, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1):
+    return [load_img(path.format(i), size, colorkey, alpha, scale=scale) for i in range(count)]
 
 
 def load_round_tool_imgs(path, count=4, colorkey=COLORKEY, alpha=None, rotate_imgs=True):
@@ -44,4 +46,5 @@ def load_round_tool_imgs(path, count=4, colorkey=COLORKEY, alpha=None, rotate_im
     imgs = load_imgs(path, count, None, colorkey, alpha)
     if rotate_imgs:
         imgs = imgs + [pg.transform.rotate(im, -90 * i) for i in range(1, 4) for im in imgs]
+
     return cell_img, imgs
