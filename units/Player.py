@@ -71,7 +71,7 @@ class Player(PhysicalObject):
         self.running = True
         self.air_timer = 0
         self.first_fall = True
-        self.fly_speed = 10
+        self.fly_speed = 60
         self.flying = False
         self.on_up = False
         self.on_down = False

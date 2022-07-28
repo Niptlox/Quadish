@@ -106,11 +106,11 @@ Generate_type = 2  # 0:load map,1: autogenerate
 CHUNK_CREATURE_LIMIT = 4
 CHUNK_CREATURE_CHANCE = 0.2
 
-TOP_MIDDLE_WORLD = -500 / 10
-BOTTOM_MIDDLE_WORLD = 2000 / 10
-
-START_SPACE_Y = -5000 / 10
-START_HELL_Y = 5000 / 10
+START_SPACE_Y = -1000
+START_ATMO_Y = START_SPACE_Y + 200
+TOP_MIDDLE_WORLD = START_ATMO_Y + 150
+BOTTOM_MIDDLE_WORLD = 2000
+START_HELL_Y = BOTTOM_MIDDLE_WORLD + 500
 # Player ===========================================================
 
 NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9, pg.K_0]

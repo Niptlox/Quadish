@@ -31,20 +31,26 @@ class ScreenMap:
     def draw_sky(self):
         # self.display.blit(self.sky_surface, (0, 0))
         height = TSIZE * 10000
-        sky_night = (15, 23, 42, 255)
+        sky_cosmos = (5, 7, 14, 255)
+        sky_atmo = (10, 15, 28, 255)
         sky_center = (165, 243, 252, 255)
         sky_red = (135, 0, 0, 255)
         i = self.player.rect.y
-        if TSIZE * TOP_MIDDLE_WORLD < i < TSIZE * BOTTOM_MIDDLE_WORLD:
-            color = sky_center
-        elif i > 0:
+        if i > TSIZE * BOTTOM_MIDDLE_WORLD:
             # ад
-            color = get_color_of_gradient((START_HELL_Y - BOTTOM_MIDDLE_WORLD)*TSIZE,
+            color = get_color_of_gradient((START_HELL_Y - BOTTOM_MIDDLE_WORLD) * TSIZE,
                                           sky_center, sky_red, i - TSIZE * BOTTOM_MIDDLE_WORLD)
-        else:
+        elif i < TSIZE * START_ATMO_Y:
             # космос
-            color = get_color_of_gradient(abs(START_SPACE_Y - TOP_MIDDLE_WORLD)*TSIZE,
-                                          sky_center, sky_night, -i + TSIZE * TOP_MIDDLE_WORLD)
+            color = get_color_of_gradient(abs(START_SPACE_Y - START_ATMO_Y) * TSIZE,
+                                          sky_atmo, sky_cosmos, -i + TSIZE * START_ATMO_Y)
+        elif i < TSIZE * TOP_MIDDLE_WORLD:
+            # верхняя атмосфера
+            color = get_color_of_gradient(abs(START_ATMO_Y - TOP_MIDDLE_WORLD) * TSIZE,
+                                          sky_center, sky_atmo, -i + TSIZE * TOP_MIDDLE_WORLD)
+        else:
+            color = sky_center
+        print("COLOR SKY", color)
         self.display.fill(color)
 
     def update(self, tact):
