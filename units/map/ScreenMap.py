@@ -10,6 +10,7 @@ from units.map.GameMap import GameMap, grow_tree
 srect_d = pg.Rect(-TSIZE, -TSIZE, WSIZE[0] + TSIZE, WSIZE[1] + TSIZE)
 
 PARALLAX = 0.4
+PARALLAX_SPACE = 0.04
 
 
 class ScreenMap:
@@ -27,15 +28,33 @@ class ScreenMap:
         self.dynamic_tiles = []
         self.group_handlers = {}
 
-        self.edges = [-20000, 20000, -20000, 20000]
+        self.edges = [-20000, 20000, START_ATMO_Y * TSIZE, 20000]
         width = self.edges[1] - self.edges[0]
         height = self.edges[3] - self.edges[2]
         area = width * height
 
         self.clouds = []
         for i in range(int(area // 1200000)):
-            self.clouds.append([random.randint(0, len(cloud_images) - 1), (random.random() *2+ 1) / 5, (self.edges[0] + random.random() * (width + display.get_width())) * PARALLAX, random.randint(self.edges[2], self.edges[3] - int(height * 0.3) + display.get_height()) * PARALLAX])
+            self.clouds.append([random.randint(0, len(cloud_images) - 1), (random.random() * 2 + 1) / 5,
+                                (self.edges[0] + random.random() * (width + display.get_width())) * PARALLAX,
+                                random.randint(self.edges[2],
+                                               self.edges[3] - int(height * 0.3) + display.get_height()) * PARALLAX])
         print("CLOUDS:", area // 1200000)
+
+        self.edges_for_stars = [-20000, 20000, START_SPACE_Y * TSIZE - 15000, TOP_MIDDLE_WORLD * TSIZE]
+        print("edges_for_stars", self.edges_for_stars)
+        width = self.edges_for_stars[1] - self.edges_for_stars[0]
+        height = self.edges_for_stars[3] - self.edges_for_stars[2]
+        area = width * height
+        cnt = int(area // 120000)
+        self.sky_stars = []
+        for i in range(cnt):
+            self.sky_stars.append([random.choices(star_chances[0], star_chances[1], k=1)[0],
+                                   (self.edges_for_stars[0] + random.random() * (width + display.get_width())),
+                                   random.randint(self.edges_for_stars[2],
+                                                  self.edges_for_stars[3] - int(height * 0.3) + display.get_height())])
+        print(self.sky_stars)
+        print("STARS:", cnt)
 
     def teleport_to_player(self):
         self.true_scroll[0] = self.player.rect.x - WSIZE[0] // 2
@@ -61,6 +80,7 @@ class ScreenMap:
             # верхняя атмосфера
             color = get_color_of_gradient(abs(START_ATMO_Y - TOP_MIDDLE_WORLD) * TSIZE,
                                           sky_center, sky_atmo, -i + TSIZE * TOP_MIDDLE_WORLD)
+            # print("верхняя атмосфера", color)
         else:
             color = sky_center
         # print("COLOR SKY", color)
@@ -89,7 +109,15 @@ class ScreenMap:
 
         # self.true_scroll[1] = self.player.rect.y - WSIZE[1] // 2
         self.scroll = scroll = [int(self.true_scroll[0]), int(self.true_scroll[1])]
-
+        if self.scroll[1] < TOP_MIDDLE_WORLD * TSIZE:
+            for star in self.sky_stars:
+                pos = (star[1] - scroll[0] * PARALLAX_SPACE,
+                       star[2] - scroll[1] * PARALLAX_SPACE - (TOP_MIDDLE_WORLD * TSIZE - 6200))
+                # if 0 < pos[1] < WSIZE[1]:
+                # print(star)
+                # input("...")
+                self.display.blit(star_images[star[0]], pos)
+                # print(pos)
         if GameSettings.clouds:
             for cloud in self.clouds:
                 cloud[2] += cloud[1]

@@ -21,6 +21,9 @@ def transform_hand(surf, size=HAND_RECT, colorkey=COLORKEY):
 sky = "#A5F3FC"
 
 cloud_images = load_imgs("data/sprites/clouds/cloud-{}.png", 7, size=None, scale=2)
+star_images = load_imgs("data/sprites/stars/star-{}.png", 5, size=None, scale=2)
+star_chances = [i for i in range(len(star_images))], [(i + 1) / 10 for i in range(len(star_images))]
+
 
 player_img = create_tile_image("#E7E5E4", size=(TSIZE - 10, TSIZE - 2), bd=2)
 live_imgs = load_imgs("data/sprites/player/lives_{}.png", 5, size=(20, 20))
@@ -78,15 +81,15 @@ wood_img = load_img("data/sprites/tiles/wood.png", colorkey=None)
 plank_img = load_img("data/sprites/tiles/plank.png", colorkey=None)
 
 cactus_img = load_img("data/sprites/tiles/cactus.png")
-watermelon_img = load_img("data/sprites/tiles/watermelon/watermelon_0.png", SIZE_2X)
-watermelon_imgs = load_imgs("data/sprites/tiles/watermelon/watermelon_{}.png", 5, SIZE_2X)
+watermelon_img = load_img("data/sprites/tiles/watermelon/watermelon_0.png", SIZE_2X, is_tile=True)
+watermelon_imgs = load_imgs("data/sprites/tiles/watermelon/watermelon_{}.png", 5, SIZE_2X, is_tile=True)
 
 lean_img = load_img("data/sprites/tiles/lean.png")
 
 bush_img = load_img("data/sprites/tiles/bush/bush.png")  # куст
 bush_imgs = [load_img(f"data/sprites/tiles/bush/bush_{i}.png") for i in range(4)]  # кустs
 
-smalltree_img = load_img("data/sprites/tiles/oak_saginer.png", SIZE_2X)
+smalltree_img = load_img("data/sprites/tiles/oak_saginer.png", SIZE_2X, is_tile=True)
 leave_img = load_img(f"data/sprites/tiles/leave.png")
 
 door_img = load_img("data/sprites/tiles/door.png")

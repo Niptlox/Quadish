@@ -79,6 +79,7 @@ class GameUI(UI):
         self.playerui.rect.bottom = self.rect.bottom
         self.new_sys_message("Привет игрок")
 
+
     def draw_sky(self):
         # self.display.blit(self.sky_surface, (0, 0))
         sky_night = (15,23,42, 255)
@@ -103,6 +104,8 @@ class GameUI(UI):
         self.redraw_playerui()
         self.playerui.draw(self.display)
         # pygame.transform.scale(display,(WINDOW_SIZE[0]//1.8, WINDOW_SIZE[1]//1.8)), (100, 100)
+
+    def flip(self):
         self.screen.blit(self.display, (0, 0))
         pygame.display.flip()
 

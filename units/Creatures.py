@@ -107,6 +107,8 @@ class MovingCreature(Creature):
 
 
 def slime_animation(color, size, reduction_step, count_sprites=3):
+    size = max(size[0], 1), max(size[1], 1)
+
     sprites = [pg.Surface((size[0], size[1] + i)).convert_alpha() for i in
                range(0, reduction_step * count_sprites, reduction_step)]
     [spr.fill(color + "AA") for spr in sprites]
@@ -116,7 +118,7 @@ def slime_animation(color, size, reduction_step, count_sprites=3):
 
 
 class Slime(MovingCreature):
-    width, height = TSIZE // 1.3, TSIZE // 1.3 - 6
+    width, height = max(1, TSIZE // 1.3), max(1, TSIZE // 1.3 - 6)
     reduction_step = 3
     count_sprites = 3
     colors = ['#ADFF2F', '#7FFF00', '#7CFC00', '#00FF00', '#32CD32', '#98FB98', '#90EE90', '#00FA9A', '#00FF7F',

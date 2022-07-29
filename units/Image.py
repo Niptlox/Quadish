@@ -4,6 +4,7 @@ BORDER_COLOR = "#1C1917"
 
 
 def create_tile_image(color, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
+    size = max(size[0], 1), max(size[1], 1)
     img = pygame.Surface(size)
     img.fill(bd_color)
     pygame.draw.rect(img, color, ((bd, bd), (size[0] - bd * 2, size[0] - bd * 2)), border_radius=bd * 2)
@@ -20,13 +21,15 @@ COLORKEY = (0, 255, 0)
 SIZE_2X = "2x"
 
 
-def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1):
+def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_tile=False):
     print(path)
     img = pygame.image.load(path)
     if size == SIZE_2X:
         img = pygame.transform.scale2x(img)
     elif size:
         img = pygame.transform.scale(img, size)
+    if img.get_width() > TSIZE and is_tile:
+        img = pygame.transform.scale(img, TILE_RECT)
     if colorkey:
         img.set_colorkey(colorkey)
     if scale == 2:
@@ -37,8 +40,8 @@ def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1):
     return img
 
 
-def load_imgs(path, count, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1):
-    return [load_img(path.format(i), size, colorkey, alpha, scale=scale) for i in range(count)]
+def load_imgs(path, count, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_tile=False):
+    return [load_img(path.format(i), size, colorkey, alpha, scale=scale, is_tile=is_tile) for i in range(count)]
 
 
 def load_round_tool_imgs(path, count=4, colorkey=COLORKEY, alpha=None, rotate_imgs=True):

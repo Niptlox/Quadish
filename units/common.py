@@ -26,7 +26,8 @@ FPS = 30
 flags = 0
 desktop_size = pygame.display.get_desktop_sizes()[0]
 print("INIT GAME VARS")
-GAME_VERSION = "0.9.1"
+last_versions = ["0.9.1"]
+GAME_VERSION = "0.1.3-alpha"
 
 WINDOW_SIZE = config.Window.size
 FULLSCREEN = config.Window.fullscreen
@@ -55,7 +56,7 @@ print(pg.display.get_allow_screensaver())
 # TILE ==================================================
 
 TILE_SIZE = 32
-# TILE_SIZE = 10
+# TILE_SIZE = 2
 TSIZE = TILE_SIZE
 
 # TILE_SIZE = 16

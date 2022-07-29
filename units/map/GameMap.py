@@ -82,22 +82,23 @@ class GameMap:
         return res
 
     def update_chunk(self, chunk):
-        crt_cash = chunk[3]
-        if self.game.tact > crt_cash[2] + FPS * 300:
-            if crt_cash[1] < CHUNK_CREATURE_LIMIT:
-                crt_cash[2] = self.game.tact
-                dynamic_tiles = chunk[1]
-                scroll = self.game.screen_map.scroll
-                # if not self.game.screen_map.display_rect.collidepoint(x - scroll[0], y - scroll[1]):
-                crt_cnt = min(len(crt_cash[0]), random.randint(0, CHUNK_CREATURE_LIMIT - crt_cash[1]))
-                tiles_xy = random.choices(tuple(crt_cash[0]), k=crt_cnt)
-                for tile_xy in tiles_xy:
-                    # if random.random() < 0.005:
-                    x, y = tile_xy[0] * TSIZE, tile_xy[1] * TSIZE
-                    Crt = random_creature_selection()
-                    if Crt is not None:
-                        dynamic_tiles.append(Crt(self.game, (x, y)))
-                        crt_cash[1] += 1
+        if config.GameSettings.creatures:
+            crt_cash = chunk[3]
+            if self.game.tact > crt_cash[2] + FPS * 300:
+                if crt_cash[1] < CHUNK_CREATURE_LIMIT:
+                    crt_cash[2] = self.game.tact
+                    dynamic_tiles = chunk[1]
+                    scroll = self.game.screen_map.scroll
+                    # if not self.game.screen_map.display_rect.collidepoint(x - scroll[0], y - scroll[1]):
+                    crt_cnt = min(len(crt_cash[0]), random.randint(0, CHUNK_CREATURE_LIMIT - crt_cash[1]))
+                    tiles_xy = random.choices(tuple(crt_cash[0]), k=crt_cnt)
+                    for tile_xy in tiles_xy:
+                        # if random.random() < 0.005:
+                        x, y = tile_xy[0] * TSIZE, tile_xy[1] * TSIZE
+                        Crt = random_creature_selection()
+                        if Crt is not None:
+                            dynamic_tiles.append(Crt(self.game, (x, y)))
+                            crt_cash[1] += 1
 
     def chunk_gen(self, xy):
         index = 0
@@ -410,7 +411,7 @@ class GameMap:
             for x_pos in range(CHUNK_SIZE):  # local tile x in chunk (not px)
                 biome_info[i] = biome_of_pos(tile_x, tile_y)
                 tile_type = None
-                if tile_x in (-2, -1, 0, 1):
+                if config.GameSettings.vertical_tunel and tile_x in (-2, -1, 0, 1):
                     tile_type = 0
                 # if (noise2(tile_x / freq_x, tile_y / freq_y) * 20 + tile_y) > START_SPACE_Y:
                 #     tile_type = 2
@@ -440,7 +441,7 @@ class GameMap:
                                     static_tiles[pl_i + 1] = TILES_SOLIDITY.get(plant_tile_type, -1)
                                     static_tiles[pl_i + 2] = state_img
                                     static_tiles[pl_i + 3] = state
-                                    if cnt_creatures < CHUNK_CREATURE_LIMIT:
+                                    if config.GameSettings.creatures and cnt_creatures < CHUNK_CREATURE_LIMIT:
                                         Crt = random_creature_selection()
                                         if Crt is not None:
                                             dynamic_tiles.append(Crt(self.game, (tile_x * TSIZE, tile_y * TSIZE)))
@@ -562,8 +563,8 @@ def random_plant_selection(biome=None):
             state_img = random.randint(0, PLANT_WITH_RANDOM_SPRITE[plant_tile_type])
         if plant_tile_type in PLANT_WITH_RANDOM_LOCAL_POS:
             img = tile_imgs[plant_tile_type]
-            state[TILE_LOCAL_POS] = (random.randint(0, TSIZE - img.get_width()),
-                                     TSIZE - img.get_height())
+            lx, ly = random.randint(0, max(0, TSIZE - img.get_width())), TSIZE - img.get_height()
+            state[TILE_LOCAL_POS] = [max(0, lx), max(0, ly)]
         if plant_tile_type in PLANT_WITH_TIMER:
             state[TILE_TIMER] = 0
         if not state:
@@ -574,6 +575,8 @@ def random_plant_selection(biome=None):
 
 
 def random_creature_selection():
+    if not config.GameSettings.creatures:
+        return None
     r = random.random()
     if r >= CHUNK_CREATURE_CHANCE:
         return None
