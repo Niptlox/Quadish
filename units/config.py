@@ -1,9 +1,11 @@
+import os
+
 try:
     from configparser import ConfigParser
 except ImportError:
     from ConfigParser import ConfigParser  # ver. < 3.0
 
-config_filename = 'settings.ini'
+config_filename = os.getcwd()+'settings.ini'
 
 config = ConfigParser()
 config.read(config_filename)
