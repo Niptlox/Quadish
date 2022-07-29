@@ -63,7 +63,7 @@ class ScreenMap:
                                           sky_center, sky_atmo, -i + TSIZE * TOP_MIDDLE_WORLD)
         else:
             color = sky_center
-        print("COLOR SKY", color)
+        # print("COLOR SKY", color)
         self.display.fill(color)
 
     def update(self, tact):

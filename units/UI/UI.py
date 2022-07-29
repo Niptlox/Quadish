@@ -156,7 +156,7 @@ class GameUI(UI):
                 iy = 0
                 imgs = goldlive_imgs
             if self.app.player.creative_mode:
-                self.playerui.blit(bg_livecreative_img, (x-1, y-1))
+                self.playerui.blit(bg_livecreative_img, (x-2, y-2))
             if i < self.app.player.lives // lives_in_heart:
                 self.playerui.blit(imgs[0], (x, y))
             else:

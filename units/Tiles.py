@@ -26,7 +26,7 @@ player_img = create_tile_image("#E7E5E4", size=(TSIZE - 10, TSIZE - 2), bd=2)
 live_imgs = load_imgs("data/sprites/player/lives_{}.png", 5, size=(20, 20))
 goldlive_imgs = load_imgs("data/sprites/player/goldherts_{}.png", 5, size=(20, 20))
 bg_live_img = load_img("data/sprites/player/bg_live.png", size=(20, 20))
-bg_livecreative_img = load_img("data/sprites/player/bg_livecreative.png", size=(22, 22))
+bg_livecreative_img = load_img("data/sprites/player/bg_livecreative.png", size=(24, 24))
 
 # hand_pass_img = pygame.transform.smoothscale(player_img, HAND_RECT)
 hand_pass_img = None
@@ -224,7 +224,7 @@ tile_many_imgs = {101: bush_imgs,
 
 IDX_TOOLS = {501, 502, 503, 530, 531, 532, 533, 610}
 
-EATS = {52: 10, 53: 2, 56: 8, 55: 100, 401: 8}
+# EATS = {52: 10, 53: 2, 56: 8, 55: 100, 401: 8}
 
 # растения растущее друг на друге например кактус
 MULTI_BLOCK_PLANTS = {103, }
@@ -273,8 +273,17 @@ Pickaxes_capability = {
 }
 # PLANTS ===================================================================
 
-plants_chance = {101: 0.1, 102: 0.2, 104: 1, 120: 0.05, 251: 0.005}
-desert_plants_chance = {101: 0.1, 103: 0.2, 104: 0.2, None: 0.5}
+
+# plants_chance = {101: 0.1, 102: 0.2, 104: 1, 120: 0.05, 251: 0.005}
+biomes_plants_chance = {
+    None: {101: 0.1, 102: 0.2, 104: 1, 120: 0.05, 251: 0.005},
+    #     desert
+    0: {101: 0.1, 103: 0.2, 104: 0.2, None: 0.5},
+    #     winter
+    3: {101: 0.3, 102: 0.1, None: 0.5}
+}
+# desert_plants_chance = {101: 0.1, 103: 0.2, 104: 0.2, None: 0.5}
+# winter_plants_chance = {101: 0.3, 102: 0.1, None: 0.5}
 
 # специальные каринки предметов для инвентаря
 tile_hand_imgs = {k: tile_imgs[k] if k in ITEM_TILES else transform_hand(i) for k, i in tile_imgs.items()}

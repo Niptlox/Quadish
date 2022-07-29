@@ -22,7 +22,8 @@ class Player(PhysicalObject):
     player_img = player_img
     dig_rect_img = dig_rect_img
     hand_img = hand_pass_img
-    start_max_lives = 20
+    start_max_lives = 30
+    max_max_lives = 600
 
     def __init__(self, game, x, y) -> None:
         super().__init__(game, x, y, self.width, self.height, use_physics=True)
@@ -245,6 +246,8 @@ class Player(PhysicalObject):
         if self.eat and item and item.class_item == CLS_EAT:
             if item.index == 55:
                 self.max_lives += 20
+            if self.max_lives > self.max_max_lives:
+                self.max_lives = self.max_max_lives
             elif item.index == 351:
                 if self.max_jump_count < 5:
                     self.max_jump_count += 1

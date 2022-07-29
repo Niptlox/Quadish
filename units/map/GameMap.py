@@ -404,7 +404,7 @@ class GameMap:
         standart_noise2_bool = lambda tx, ty: noise2(tx / freq_x, ty / freq_y, octaves, persistence=0.35, base=base,
                                                      lacunarity=lacunarity) < threshold and \
                                               (noise2(tx / freq_x, ty / freq_y) * 20 + ty) > START_SPACE_Y
-        print("noise", (noise2(base_x / freq_x, base_y / freq_y) * 20 + base_y) > START_SPACE_Y)
+        # print("noise", (noise2(base_x / freq_x, base_y / freq_y) * 20 + base_y) > START_SPACE_Y)
         for y_pos in range(CHUNK_SIZE):  # local tile y in chunk (not px)
             tile_x = base_x  # global tile x (not px)
             for x_pos in range(CHUNK_SIZE):  # local tile x in chunk (not px)
@@ -542,12 +542,7 @@ class GameMap:
 def random_plant_selection(biome=None):
     if random.randint(0, 2) == 0:
 
-        plants = plants_chance
-        if biome == 0:  # desert
-            plants = {101: 0.1, 103: 0.1}
-        elif biome == 3:  # холод
-            plants = {101: 0.3, 102: 0.1, None: 0.5}
-            plants = desert_plants_chance
+        plants = biomes_plants_chance.get(biome, biomes_plants_chance[None])
         plant_tile_type = random.choices(list(plants.keys()), list(plants.values()), k=1)[0]
         if plant_tile_type is None:
             return None
