@@ -42,7 +42,6 @@ class ScreenMap:
         print("CLOUDS:", area // 1200000)
 
         self.edges_for_stars = [-20000, 20000, START_SPACE_Y * TSIZE - 15000, TOP_MIDDLE_WORLD * TSIZE]
-        print("edges_for_stars", self.edges_for_stars)
         width = self.edges_for_stars[1] - self.edges_for_stars[0]
         height = self.edges_for_stars[3] - self.edges_for_stars[2]
         area = width * height
@@ -53,7 +52,6 @@ class ScreenMap:
                                    (self.edges_for_stars[0] + random.random() * (width + display.get_width())),
                                    random.randint(self.edges_for_stars[2],
                                                   self.edges_for_stars[3] - int(height * 0.3) + display.get_height())])
-        print(self.sky_stars)
         print("STARS:", cnt)
 
     def teleport_to_player(self):
