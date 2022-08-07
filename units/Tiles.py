@@ -283,7 +283,8 @@ biomes_plants_chance = {
     #     desert
     0: {101: 0.1, 103: 0.2, 104: 0.2, None: 0.5},
     #     winter
-    3: {101: 0.3, 102: 0.1, None: 0.5}
+    3: {101: 0.3, 102: 0.1, None: 0.5},
+    9: {},
 }
 # desert_plants_chance = {101: 0.1, 103: 0.2, 104: 0.2, None: 0.5}
 # winter_plants_chance = {101: 0.3, 102: 0.1, None: 0.5}

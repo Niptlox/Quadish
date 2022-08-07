@@ -107,15 +107,12 @@ class ScreenMap:
 
         # self.true_scroll[1] = self.player.rect.y - WSIZE[1] // 2
         self.scroll = scroll = [int(self.true_scroll[0]), int(self.true_scroll[1])]
-        if self.scroll[1] < TOP_MIDDLE_WORLD * TSIZE:
+        if GameSettings.stars and self.scroll[1] < TOP_MIDDLE_WORLD * TSIZE:
             for star in self.sky_stars:
                 pos = (star[1] - scroll[0] * PARALLAX_SPACE,
-                       star[2] - scroll[1] * PARALLAX_SPACE - (TOP_MIDDLE_WORLD * TSIZE - 6200))
-                # if 0 < pos[1] < WSIZE[1]:
-                # print(star)
-                # input("...")
+                       star[2] - scroll[1] * PARALLAX_SPACE - (TOP_MIDDLE_WORLD * TSIZE - 7000))
+                        # star[2] - scroll[1] * PARALLAX_SPACE - (TOP_MIDDLE_WORLD * TSIZE - 6200))
                 self.display.blit(star_images[star[0]], pos)
-                # print(pos)
         if GameSettings.clouds:
             for cloud in self.clouds:
                 cloud[2] += cloud[1]
@@ -211,7 +208,7 @@ class ScreenMap:
                                             sol * (break_imgs_cnt - 1) / TILES_SOLIDITY[tile_type])
                                         self.display.blit(break_imgs[br_i], b_pos)
 
-                            elif show_biomes:
+                            elif GameSettings.show_biomes:
                                 b_pos = (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1])
                                 img = biome_tiles[chunk[4][i][0]]
                                 self.display.blit(img, b_pos)

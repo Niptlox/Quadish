@@ -32,6 +32,8 @@ class GameSettings:
     config = config
     section = 'game'
     clouds = config.getboolean(section, 'clouds')
+    show_biomes = config.getboolean(section, 'show_biomes')
+    stars = config.getboolean(section, 'stars')
     creatures = config.getboolean(section, 'creatures')
     vertical_tunel = config.getboolean(section, 'vertical_tunel')
     start_pos = tuple(map(int, config.get(section, 'start_pos').split(",")))

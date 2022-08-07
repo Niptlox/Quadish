@@ -9,7 +9,8 @@ from units.Items import ItemsTile
 from units.TilesClass import Chest
 from units.Tools import TOOLS
 from units.biomes import biome_of_pos
-from units.Structures import Structures, Structures_chance
+from units.Structures import Structures_middleworld, Structures_chance_middleworld, Structures_chance_space, \
+    Structures_chance, Structures, Structures_all
 from units.Trees import grow_tree
 from ..Tiles import *
 
@@ -283,8 +284,16 @@ class GameMap:
             structure_rect = pg.Rect(pos_1, (STRUCTURE_CHUNKS_SIZE * CHUNK_SIZE, STRUCTURE_CHUNKS_SIZE * CHUNK_SIZE))
             for i in range(CNT_BUILDS_OF_STRUCTURE_BLOCK):
                 pos = random.randint(pos_1[0], pos_2[0]), random.randint(pos_1[1], pos_2[1])
-                build_id = random.choices(Structures_chance[0], Structures_chance[1], k=1)[0]
-                build = Structures[build_id]
+                if pos[1] < START_SPACE_Y:
+                    structures_area = "space"
+                elif pos[1] < START_HELL_Y:
+                    structures_area = "middleworld"
+                elif pos[1] > START_HELL_Y:
+                    structures_area = "hell"
+
+                build_id = random.choices(Structures_chance[structures_area][0],
+                                          Structures_chance[structures_area][1], k=1)[0]
+                build = Structures[structures_area][build_id]
                 size, construction = build[2]
 
                 # left_top, right_top, left_bottom, right_bottom
@@ -324,7 +333,7 @@ class GameMap:
             points = self.structures_lst[build_index][2]
             self.set_state_of_points_build(points, 1)  # building
             pos = points[0]
-            size, arr = Structures[build_id][2]
+            size, arr = Structures_all[build_id][2]
             for i_y in range(size[1]):
                 for i_x in range(size[0]):
                     tile = arr[i_y * size[0] + i_x]
@@ -391,9 +400,6 @@ class GameMap:
         on_ground_tiles, cnt_creatures = creature_cash[0], creature_cash[1]
         tile_index = 0
         octaves = 6
-        cof = 4.5
-        freq_x = 49 * cof
-        freq_y = 14 * cof
         base = self.base_generation
         threshold = -0.3
         threshold = -0.2
@@ -403,8 +409,12 @@ class GameMap:
         tile_y = base_y  # global tile y (not px)
         i = 0
         standart_noise2_bool = lambda tx, ty: noise2(tx / freq_x, ty / freq_y, octaves, persistence=0.35, base=base,
-                                                     lacunarity=lacunarity) < threshold and \
-                                              (noise2(tx / freq_x, ty / freq_y) * 20 + ty) > START_SPACE_Y
+                                                     lacunarity=lacunarity) < threshold and (
+                                                      noise2(tx / freq_x, ty / freq_y) * 20 + ty) > START_ATMO_Y and (
+                                                      (noise2(tx / freq_x, ty / freq_y) * 20 + ty) < START_HELL_Y or (
+                                                          noise2(tx / freq_x, ty / freq_y) * 20 + ty) > (
+                                                                  START_HELL_Y + 50))
+
         # print("noise", (noise2(base_x / freq_x, base_y / freq_y) * 20 + base_y) > START_SPACE_Y)
         for y_pos in range(CHUNK_SIZE):  # local tile y in chunk (not px)
             tile_x = base_x  # global tile x (not px)
@@ -426,11 +436,17 @@ class GameMap:
                                         lacunarity=1)
                             if v5 < -0.88:
                                 tile_type = 5  # granite
+                            else:
+                                v6 = noise2(tile_x / 10, tile_y / 10, 2, persistence=0.55, base=base + 3, lacunarity=1)
+                                if v6 < -0.7:
+                                    tile_type = 2  # dirt
                     else:
                         tile_type = 2  # dirt
                         if (y_pos > 0 and static_tiles[tile_index - self.chunk_arr_width] == 0) or \
                                 (y_pos == 0 and self.get_static_tile_type(tile_x, tile_y - 1, create_chunk=True) == 0):
                             tile_type = 1  # ground
+                            if biome_info[i][0] == 9:  # HELL
+                                tile_type = 2
                             if y_pos > 0:
                                 on_ground_tiles.add((tile_x, tile_y))
                                 plant_tile_type_state = random_plant_selection(biome_info[i][0])  # plant
@@ -447,8 +463,8 @@ class GameMap:
                                             dynamic_tiles.append(Crt(self.game, (tile_x * TSIZE, tile_y * TSIZE)))
                                             cnt_creatures += 1
                 else:
-                    # пусто  
-                    # ставим растение     
+                    # пусто
+                    # ставим растение
                     if y_pos == CHUNK_SIZE - 1 and \
                             self.get_static_tile(tile_x, tile_y + 1, default=0) == 1:
                         on_ground_tiles.add((tile_x, tile_y))
@@ -544,6 +560,8 @@ def random_plant_selection(biome=None):
     if random.randint(0, 2) == 0:
 
         plants = biomes_plants_chance.get(biome, biomes_plants_chance[None])
+        if not plants:
+            return None
         plant_tile_type = random.choices(list(plants.keys()), list(plants.values()), k=1)[0]
         if plant_tile_type is None:
             return None

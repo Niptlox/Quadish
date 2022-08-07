@@ -86,7 +86,6 @@ show_chunk_grid = False
 show_entity_border = False
 show_group_obj = True
 show_info_menu = True
-show_biomes = False
 
 CHUNK_BD_COLOR = (230, 20, 20)
 
@@ -121,14 +120,18 @@ TGENERATE_INFINITE = 1
 TGENERATE_INFINITE_LANDS = 2
 Generate_type = 2  # 0:load map,1: autogenerate
 
+cof = 4.5
+freq_x = 49 * cof
+freq_y = 14 * cof
+
 CHUNK_CREATURE_LIMIT = 4
 CHUNK_CREATURE_CHANCE = 0.2
 
 START_SPACE_Y = -1000
 START_ATMO_Y = START_SPACE_Y + 200
 TOP_MIDDLE_WORLD = START_ATMO_Y + 150
-BOTTOM_MIDDLE_WORLD = 2000
-START_HELL_Y = BOTTOM_MIDDLE_WORLD + 500
+BOTTOM_MIDDLE_WORLD = 1000
+START_HELL_Y = BOTTOM_MIDDLE_WORLD + 350
 # Player ===========================================================
 
 NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9, pg.K_0]
