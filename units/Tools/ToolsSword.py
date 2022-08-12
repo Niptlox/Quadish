@@ -40,7 +40,9 @@ class ToolSword(Tool):
         for tile in self.owner.game.screen_map.dynamic_tiles:
             if tile.class_obj == OBJ_CREATURE:
                 if self.action_rect.colliderect(tile):
-                    tile.damage(self.damage)
+                    # if obj killed
+                    if not tile.damage(self.damage) and self.owner.class_obj & OBJ_PLAYER:
+                        self.owner.achievements.add_murder(tile)
                     disc_vector = [0, 0]
                     if tile.rect.x != self.owner.rect.x:
                         disc_vector[0] += self.discard_distance * (-1 if self.flip else 1)

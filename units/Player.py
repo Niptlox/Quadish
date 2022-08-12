@@ -4,6 +4,7 @@ from typing import Union
 from pygame import Vector2
 from pygame.locals import *
 
+from units.Acievements import Achievements
 from units.Entity import PhysicalObject
 from units.Inventory import InventoryPlayer
 from units.Items import Items
@@ -15,6 +16,7 @@ from units.common import *
 
 
 # from units.Cursor import set_cursor, cursor_add_img, CURSOR_DIG, CURSOR_NORMAL, CURSOR_SET
+
 
 class Player(PhysicalObject):
     class_obj = OBJ_PLAYER
@@ -76,6 +78,9 @@ class Player(PhysicalObject):
         self.flying = False
         self.on_up = False
         self.on_down = False
+
+        self.achievements = Achievements(self)
+        self.killer = ""
 
         # INVENTORY ============================
         self.creative_mode = CREATIVE_MODE
@@ -189,7 +194,7 @@ class Player(PhysicalObject):
 
     def tp_random(self):
         self.tp_to((random.randint(-1e9, 1e9), random.randint(-1e9, 1e9)))
-        self.tp_to((random.randint(-1e9, 1e9), random.randint(-TSIZE*10000, TSIZE*10000)))
+        self.tp_to((random.randint(-1e9, 1e9), random.randint(-TSIZE * 10000, TSIZE * 10000)))
         # self.tp_to((2 ** 31 - 1500, 2 ** 31 - 1500))
 
     def tp_to(self, pos):
@@ -268,6 +273,10 @@ class Player(PhysicalObject):
                         tile.alive = False
                     else:
                         tile.count = cnt
+        if not self.achievements.is_completed("hell") and self.rect.y >= START_HELL_Y * TSIZE:
+            self.achievements.new_completed("hell")
+        if not self.achievements.is_completed("space") and self.rect.y <= START_SPACE_Y * TSIZE:
+            self.achievements.new_completed("space")
 
         return True
 
@@ -377,7 +386,7 @@ class Player(PhysicalObject):
         # if self.lives != self.max_lives:
         self.draw_lives(surface, player_display_pos)
 
-    def damage(self, lives):
+    def damage(self, lives, owner="Unknown"):
         if self.creative_mode:
             return True
         if self.max_lives == -1:
@@ -388,8 +397,9 @@ class Player(PhysicalObject):
             return False
         return True
 
-    def kill(self):
+    def kill(self, owner="Unknown"):
         self.alive = False
+        self.killer = owner
         self.inventory.ui.opened_full_inventory = False
 
     def discard(self, vector):
