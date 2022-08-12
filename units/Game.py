@@ -34,12 +34,14 @@ class GameScene(Scene):
         self.game_map = GameMap(self, Generate_type)
 
         self.ui = GameUI(self)
-        self.player = Player(self, 0, 0)
+        self.player = Player(self, *config.GameSettings.start_pos)
         self.screen_map = ScreenMap(self.display, self.game_map, self.player)
+        self.screen_map.teleport_to_player()
         self.ui.init_ui()
         self.tact = 0
         self.ctrl_on = False
         self.first_start = False
+        self.hided_ui = False
 
     def pg_events(self):
         for event in pygame.event.get():
@@ -102,11 +104,13 @@ class GameScene(Scene):
             self.running = False
             self.new_scene = self.app.end_scene
 
-        if self.player.chest_ui.opened:
-            self.player.chest_ui.draw(self.display)
-        else:
-            self.player.inventory.ui.draw(self.display)
-        self.ui.draw()
+        if not self.hided_ui:
+            if self.player.chest_ui.opened:
+                self.player.chest_ui.draw(self.display)
+            else:
+                self.player.inventory.ui.draw(self.display)
+            self.ui.draw()
+        self.ui.flip()
         self.tact += 1
 
 

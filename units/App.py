@@ -90,4 +90,4 @@ class SceneUI(Scene):
 
 
 def make_screenshot(screen: pg.Surface):
-    pg.image.save(screen, "screenshot.png")
+    pg.image.save(screen, CWDIR+"/screenshot.png")

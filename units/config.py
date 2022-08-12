@@ -1,9 +1,11 @@
+import os
+
 try:
     from configparser import ConfigParser
 except ImportError:
     from ConfigParser import ConfigParser  # ver. < 3.0
 
-config_filename = 'settings.ini'
+config_filename = os.getcwd()+'\settings.ini'
 
 config = ConfigParser()
 config.read(config_filename)
@@ -30,6 +32,11 @@ class GameSettings:
     config = config
     section = 'game'
     clouds = config.getboolean(section, 'clouds')
+    show_biomes = config.getboolean(section, 'show_biomes')
+    stars = config.getboolean(section, 'stars')
+    creatures = config.getboolean(section, 'creatures')
+    vertical_tunel = config.getboolean(section, 'vertical_tunel')
+    start_pos = tuple(map(int, config.get(section, 'start_pos').split(",")))
 
     @classmethod
     def set_clouds_state(cls, state):

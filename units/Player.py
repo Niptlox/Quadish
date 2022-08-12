@@ -20,7 +20,7 @@ from units.common import *
 
 class Player(PhysicalObject):
     class_obj = OBJ_PLAYER
-    width, height = TSIZE - 10, TSIZE - 2
+    width, height = max(1, TSIZE - 10), max(1, TSIZE - 2)
     player_img = player_img
     dig_rect_img = dig_rect_img
     hand_img = hand_pass_img
@@ -28,6 +28,10 @@ class Player(PhysicalObject):
     max_max_lives = 600
 
     def __init__(self, game, x, y) -> None:
+        if x == 777:
+            x = random.randint(-1000 * TSIZE, 1000 * TSIZE)
+        if y == 777:
+            y = random.randint(-100 * TSIZE, 100 * TSIZE)
         super().__init__(game, x, y, self.width, self.height, use_physics=True)
         self.game = game
         self.ui = game.ui
