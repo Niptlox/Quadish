@@ -19,6 +19,10 @@ def checking_abyss(pos, game_map, height_of_abyss=3, convert_to_tile_pos=False):
 
 
 class Creature(PhysicalObject):
+    not_save_vars = PhysicalObject.not_save_vars | {"lives_surface", }
+    bio_kingdom = KINGDOM_CREATURAE
+    bio_species = "creature"
+    bio_subspecies = "ordinary creature"
     class_obj = OBJ_CREATURE
     width, height = TSIZE, TSIZE
     sprite = pg.Surface((width, height))
@@ -36,10 +40,6 @@ class Creature(PhysicalObject):
         self.lives_surface = pg.Surface((self.rect.w, 6)).convert_alpha()
         self.punch_reload_time = 1 / self.punch_speed
         self.last_punch_time = 0
-
-    def get_vars(self):
-        d = super().get_vars()
-        return d
 
     def update(self, tact):
         self.update_physics()
@@ -118,7 +118,11 @@ def slime_animation(color, size, reduction_step, count_sprites=3):
 
 
 class Slime(MovingCreature):
+    not_save_vars = MovingCreature.not_save_vars | {"sprites", "sprite", "lives_surface"}
     width, height = max(1, TSIZE // 1.3), max(1, TSIZE // 1.3 - 6)
+    bio_kingdom = KINGDOM_CREATURAE
+    bio_species = "slime"
+    bio_subspecies = "ordinary slime"
     reduction_step = 3
     count_sprites = 3
     colors = ['#ADFF2F', '#7FFF00', '#7CFC00', '#00FF00', '#32CD32', '#98FB98', '#90EE90', '#00FA9A', '#00FF7F',
@@ -152,8 +156,8 @@ class Slime(MovingCreature):
             self.lives = self.max_lives_hard
             self.punch_damage = self.punch_damage_hard
             self.width, self.height = TSIZE * 2, TSIZE * 2 - 8
-            self.reduction_step = 6
             self.jump_speed = 12
+            self.reduction_step = 6
             self.move_speed = 4
             self.drop_items = [(ItemsTile, (51, (10, 15))), (ItemsTile, (63, (0, 2))), (ItemsTile, (66, (0, 1)))]
             super().__init__(game, (x, y))
@@ -199,6 +203,9 @@ class Slime(MovingCreature):
 
 
 class Cow(MovingCreature):
+    bio_kingdom = KINGDOM_ANIMALIA
+    bio_species = "cow"
+    bio_subspecies = "white cow"
     width, height = int(TSIZE * 1), int(TSIZE * 0.8)
     colors = ["#FFFAFA", "#FAEBD7", "#FDF4E3", "#FAF0E6"]
     max_lives = 20
@@ -227,6 +234,10 @@ class Cow(MovingCreature):
 
 
 class Wolf(MovingCreature):
+    not_save_vars = MovingCreature.not_save_vars | {"angry_player", "angry"}
+    bio_kingdom = KINGDOM_ANIMALIA
+    bio_species = "wolf"
+    bio_subspecies = "gray wolf"
     width, height = int(TSIZE * 1), int(TSIZE * 0.9)
 
     color = "#708090"
@@ -253,12 +264,6 @@ class Wolf(MovingCreature):
         self.angry = False
 
         self.angry_player = None
-
-    def get_vars(self):
-        d = super(Wolf, self).get_vars()
-        d.pop("angry_player")
-        d.pop("angry")
-        return d
 
     def update(self, tact):
         super().update(tact)
@@ -296,12 +301,16 @@ class Wolf(MovingCreature):
 
 
 class Snake(Wolf):
+    bio_kingdom = KINGDOM_ANIMALIA
+    bio_species = "snake"
+    bio_subspecies = "green snake"
     width, height = int(TSIZE * 1), int(TSIZE * 0.1)
     color = "#4d7c0f"
     drop_items = [(ItemsTile, (401, (1, 2))), (ItemsTile, (301, (0, 1)))]
 
 
 class SlimeBigBoss(Slime):
+    bio_subspecies = "huge slime"
     colors = ["#ff9d00"]
     max_lives = 250
     lives = 250

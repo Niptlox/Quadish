@@ -49,7 +49,8 @@ def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic
     return hit_static_lst, hit_dynamic_lst
 
 
-class PhysicalObject:
+class PhysicalObject(SavedObject):
+    not_save_vars = SavedObject.not_save_vars | {"game_map", "game", "sprite"}
     class_obj = OBJ_NONE
     sprite = None
     max_lives = -1
@@ -62,8 +63,7 @@ class PhysicalObject:
         self.update_chunk_pos()
         self.game = game
         self.game_map = game.game_map
-        if self.sprite is None or sprite is not None:
-            self.sprite = sprite
+        self.sprite = sprite
         self.lives = self.max_lives
         self.alive = True
         self.use_physics = use_physics
@@ -75,19 +75,15 @@ class PhysicalObject:
             self.physical_vector = pg.Vector2(0, 0)
             self.collisions = {}
 
-    def set_vars(self, vrs):
-        for k, i in vrs.items():
-            self.__dict__[k] = i
-
-    def get_vars(self):
-        d = self.__dict__.copy()
-        d.pop("game_map")
-        d.pop("game")
-        # dell all Surfaces
-        for k in [k for k, i in d.items() if
-                  type(i) in {pg.Surface, PhysicalObject} or (type(i) is list and i and type(i[0]) is pg.Surface)]:
-            d.pop(k)
-        return d
+    # def get_vars(self):
+    #     d = self.__dict__.copy()
+    #     d.pop("game_map")
+    #     d.pop("game")
+    #     # dell all Surfaces
+    #     for k in [k for k, i in d.items() if
+    #               type(i) in {pg.Surface, PhysicalObject} or (type(i) is list and i and type(i[0]) is pg.Surface)]:
+    #         d.pop(k)
+    #     return d
 
     def move(self, movement, static_tiles: dict, dynamic_tiles: list = [], first_tile_pos=(0, 0)):
         collision_types = {'top': [], 'bottom': [], 'right': [], 'left': [], 'semiphysbody': []}

@@ -10,7 +10,7 @@ from units.TilesClass import Chest
 from units.Tools import TOOLS
 from units.biomes import biome_of_pos
 from units.Structures import Structures_middleworld, Structures_chance_middleworld, Structures_chance_space, \
-    Structures_chance, Structures, Structures_all
+    Structures_chance, Structures, Structures_all, structure_start
 from units.Trees import grow_tree
 from ..Tiles import *
 
@@ -38,6 +38,7 @@ class GameMap:
         self.creative_mode = CREATIVE_MODE
         if self.base_generation is None:
             self.new_base_generation()
+
 
     def new_base_generation(self):
         self.base_generation = random.randint(-1e5, 1e5)
@@ -333,14 +334,17 @@ class GameMap:
             points = self.structures_lst[build_index][2]
             self.set_state_of_points_build(points, 1)  # building
             pos = points[0]
-            size, arr = Structures_all[build_id][2]
-            for i_y in range(size[1]):
-                for i_x in range(size[0]):
-                    tile = arr[i_y * size[0] + i_x]
-                    # Если не структурная пустота
-                    if tile[0] != 150:
-                        self.set_static_tile(pos[0] + i_x, pos[1] + i_y, tile, create_chunk=True)
+            self.set_structure(pos, Structures_all[build_id][2])
             self.set_state_of_points_build(points, 2)  # builded
+
+    def set_structure(self, pos, build):
+        size, array = build
+        for i_y in range(size[1]):
+            for i_x in range(size[0]):
+                tile = array[i_y * size[0] + i_x]
+                # Если не структурная пустота
+                if tile[0] != 150:
+                    self.set_static_tile(pos[0] + i_x, pos[1] + i_y, tile, create_chunk=True)
 
     def set_state_of_points_build(self, points, state):
         for point in points:

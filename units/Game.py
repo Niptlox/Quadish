@@ -2,7 +2,7 @@ from units.common import *
 from units.App import *
 from units.Cursor import set_cursor, CURSOR_NORMAL
 from units.Player import Player
-from units.UI.UI import GameUI, SwitchMapUI, EndUI, PauseUI
+from units.UI.UI import GameUI, SwitchMapUI, EndUI, PauseUI, AchievementsUI
 from units.config import Window
 from units.map.GameMap import GameMap
 from units.map.ScreenMap import ScreenMap
@@ -21,6 +21,7 @@ class Game(App):
         self.savem_scene = SaveMapSceneUI(self)
         self.pause_scene = PauseSceneUI(self)
         self.end_scene = EndSceneUI(self)
+        self.achievements_scene = AchievementsSceneUI(self)
         super().__init__(self.game_scene)
 
     @classmethod
@@ -187,3 +188,9 @@ class PauseSceneUI(SceneUI):
         self.app.game_scene.ui.new_sys_message("Перезапустите игру", draw_now=True)
         print("toggle_fullscreen")
         # pygame.display.toggle_fullscreen()
+
+
+class AchievementsSceneUI(SceneUI):
+    def __init__(self, app: Game) -> None:
+        self.game = app.game_scene
+        super().__init__(app, lambda app: AchievementsUI(app, self.game.player.achievements))

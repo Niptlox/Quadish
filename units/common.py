@@ -1,5 +1,7 @@
 import math
 import os
+import pickle
+from logging import warning, debug
 
 import pygame
 import pygame as pg
@@ -26,8 +28,8 @@ FPS = 30
 flags = 0
 desktop_size = pygame.display.get_desktop_sizes()[0]
 print("INIT GAME VARS")
-last_versions = ["0.9.1"]
-GAME_VERSION = "0.1.3-alpha"
+last_versions = ["0.9.1", "0.1.3-alpha"]
+GAME_VERSION = "0.1.5-alpha"
 
 WINDOW_SIZE = config.Window.size
 FULLSCREEN = config.Window.fullscreen
@@ -77,7 +79,6 @@ WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 2, \
                     math.ceil(WINDOW_SIZE[1] / (TILE_SIZE * CHUNK_SIZE)) + 2
 print("WINDOW_CHUNK_SIZE", WINDOW_CHUNK_SIZE, WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE))
 WCSIZE = WINDOW_CHUNK_SIZE
-
 
 # DEBUG ====================================================
 # DEBUG = True
@@ -149,6 +150,13 @@ CREATIVE_MODE = False
 EVENT_100_MSEC = pg.USEREVENT + 1
 pygame.time.set_timer(EVENT_100_MSEC, 100, False)
 
+# CREATURES ===============================================================
+
+KINGDOM_CREATURAE = "Creaturae"
+KINGDOM_ANIMALIA = "Animalia"
+KINGDOM_PLANTAE = "Plantae"
+KINGDOMS = (KINGDOM_CREATURAE, KINGDOM_ANIMALIA, KINGDOM_PLANTAE)
+
 # COLORS ==================================================================
 colors = ['#CD5C5C', '#F08080', '#FA8072', '#E9967A', '#FFA07A', '#DC143C', '#FF0000', '#B22222', '#8B0000', '#FFC0CB',
           '#FFB6C1', '#FF69B4', '#FF1493', '#C71585', '#DB7093', '#FFA07A', '#FF7F50', '#FF6347', '#FF4500', '#FF8C00',
@@ -169,3 +177,33 @@ colors = ['#CD5C5C', '#F08080', '#FA8072', '#E9967A', '#FFA07A', '#DC143C', '#FF
           '#708090', '#2F4F4F', '#2F4F4F', '#000000']
 
 Chest_size_table = 5, 4
+
+
+# CLASSES ===================================================================
+
+class SavedObject:
+    not_save_vars = {"", }
+
+    def get_vars(self):
+        # print(self.not_save_vars)
+        d = self.__dict__.copy()
+        d["__class__"] = self.__class__
+        for key, value in list(d.items()):
+            if key in self.not_save_vars:
+                d.pop(key)
+            elif isinstance(value, SavedObject):
+                d[key] = value.get_vars()
+            elif isinstance(value, pg.Surface) or (isinstance(value, (list, tuple)) and value and isinstance(value[0], pg.Surface)):
+                warning(f"Не контроллируемый {key}: {value}, удален из сохранения!")
+                d.pop(key)
+        # print(self.__class__, d)
+        # pickle.dumps(d)
+        return d
+
+    def set_vars(self, vrs):
+        vrs.pop("__class__")
+        for var_name, var_value in vrs.items():
+            if isinstance(var_value, dict) and var_value.get("__class__"):
+                self.__dict__[var_name].set_vars(var_value)
+            else:
+                self.__dict__[var_name] = var_value

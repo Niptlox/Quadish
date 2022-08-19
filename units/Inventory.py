@@ -7,7 +7,8 @@ from units.common import *
 from units.creating_items import RECIPES
 
 
-class Inventory:
+class Inventory(SavedObject):
+    not_save_vars = SavedObject.not_save_vars | {"owner", "game_map", }
     # cell_size = 1000
 
     def __init__(self, game_map, owner, size_table=(10, 5)):
@@ -20,12 +21,12 @@ class Inventory:
         self.active_cell = 0
 
     def set_vars(self, vrs):
-        self.__init__(self.game_map, self.owner, vrs.pop("size_table"))
-        self.update_inventory_from_lst(vrs.pop("_inventory"))
+        self.update_inventory_from_lst(vrs.pop("inventory"))
+        super(Inventory, self).set_vars(vrs)
 
     def get_vars(self):
-        d = {"size_table": self.size_table}
-        d["_inventory"] = [(type(i), i.get_vars()) if i else None for i in self.inventory]
+        d = super(Inventory, self).get_vars()
+        d["inventory"] = [(type(i), i.get_vars()) if i else None for i in self.inventory]
         return d
 
     def __getitem__(self, pos):
@@ -167,20 +168,13 @@ class Inventory:
 
 
 class InventoryPlayer(Inventory):
+    not_save_vars = Inventory.not_save_vars | {"ui", }
+
     def __init__(self, owner):
         super(InventoryPlayer, self).__init__(owner.game_map, owner=owner, size_table=(10, 5))
         self.ui = InventoryPlayerUI(self)
         self.active_cell = 0
         self.available_create_items = []
-
-    def set_vars(self, vrs):
-        self.update_inventory_from_lst(vrs.pop("_inventory"))
-        self.active_cell = vrs["active_cell"]
-
-    def get_vars(self):
-        d = super(InventoryPlayer, self).get_vars()
-        d["active_cell"] = self.active_cell
-        return d
 
     def pg_event(self, event):
         if self.ui.pg_event(event):

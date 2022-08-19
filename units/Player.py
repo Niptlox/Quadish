@@ -4,10 +4,11 @@ from typing import Union
 from pygame import Vector2
 from pygame.locals import *
 
-from units.Acievements import Achievements
+from units.Achievements import Achievements
 from units.Entity import PhysicalObject
 from units.Inventory import InventoryPlayer
 from units.Items import Items
+from units.Structures import structure_start
 from units.Tiles import hand_pass_img, player_img, dig_rect_img
 from units.Tools import ToolHand, TOOLS, ItemTool, \
     ToolCreativeHand  # ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe, ItemTool
@@ -19,6 +20,8 @@ from units.common import *
 
 
 class Player(PhysicalObject):
+    not_save_vars = PhysicalObject.not_save_vars | {"game_map", "game", "ui", "hand_img", "lives_surface", "toolHand",
+                                                    "toolCreativeHand", "tool", "chest_ui"}
     class_obj = OBJ_PLAYER
     width, height = max(1, TSIZE - 10), max(1, TSIZE - 2)
     player_img = player_img
@@ -34,6 +37,8 @@ class Player(PhysicalObject):
             y = random.randint(-100 * TSIZE, 100 * TSIZE)
         super().__init__(game, x, y, self.width, self.height, use_physics=True)
         self.game = game
+        game.game_map.set_structure((-10, -13), structure_start)
+
         self.ui = game.ui
 
         self.alive = True
@@ -101,24 +106,8 @@ class Player(PhysicalObject):
         self.chest_ui = InventoryPlayerChestUI(self.inventory)
         self.tile_ui = None
 
-    def get_vars(self):
-        d = self.__dict__.copy()
-        d.pop("game_map")
-        d.pop("game")
-        d.pop("ui")
-        d.pop("hand_img")
-        d.pop("lives_surface")
-        # d.pop("inventory")
-        d["inventory"] = self.inventory.get_vars()
-        d.pop("toolHand")
-        d.pop("toolCreativeHand")
-        d.pop("tool")
-        d.pop("chest_ui")
-        print(d)
-        return d
-
     def set_vars(self, vrs):
-        self.inventory.set_vars(vrs.pop("inventory"))
+        # self.inventory.set_vars(vrs.pop("inventory"))
         self.chest_ui = InventoryPlayerChestUI(self.inventory)
         # vrs["max_fall_speed"] = self.max_fall_speed
         vrs["rect"].size = self.rect.size

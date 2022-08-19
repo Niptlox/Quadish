@@ -3,6 +3,7 @@ from typing import Union
 
 from pygame import Surface
 
+from units.Achievements import achievements
 from units.Items import ItemsTile, Items
 from units.Texture import WHITE
 from units.Tiles import tile_imgs, sky, tile_words, live_imgs, bg_live_img, goldlive_imgs, bg_livecreative_img
@@ -55,6 +56,53 @@ def get_place_obj_mouse() -> tuple:
     return __place_of_object_in_mouse
 
 
+class SysMessege:
+    bg = (82, 82, 91, 150)
+    rect = pg.Rect((WSIZE[0] - 330, WSIZE[1] - 45), (300, 32))
+
+    def __init__(self):
+        self.left_tact = 0
+        self.count_tact = 0
+        self.surface = pg.Surface(self.rect.size).convert_alpha()
+
+    def new(self, text, count_tact=FPS * 3):
+        self.left_tact = count_tact
+        self.count_tact = count_tact
+        self.surface.set_alpha(255)
+        self.surface.fill(self.bg)
+        text_msg = textfont_sys_msg.render(text, True, "#FDE047")
+        self.surface.blit(text_msg, (5, 5))
+
+    def draw(self, surface):
+        if self.left_tact > 0:
+            self.left_tact -= 1
+            if self.left_tact < 32:
+                self.surface.set_alpha(self.left_tact * 8)
+            elif (self.count_tact - self.left_tact) < 8:
+                self.surface.set_alpha((self.count_tact - self.left_tact) * 32)
+
+            surface.blit(self.surface, self.rect)
+
+
+class AchievementMessege(SysMessege):
+    rect = pg.Rect((WSIZE[0] - 330, WSIZE[1] - 75), (300, 62))
+    font_title = pygame.font.SysFont("Fenix", 28, )  # yes rus
+    font_text = pygame.font.SysFont("Fenix", 24, )  # yes rus
+
+    def new(self, id_name):
+        count_tact = FPS * 3
+        self.left_tact = count_tact
+        self.count_tact = count_tact
+        self.surface.set_alpha(255)
+        self.surface.fill(self.bg)
+        ach = achievements[id_name]
+        title = self.font_title.render(ach["title"], True, "#FDE047")
+        self.surface.blit(title, (5, 5))
+
+        text = self.font_text.render(ach["description"], True, "#FFFFFF")
+        self.surface.blit(text, (10, title.get_height() + 10))
+
+
 # =============================================================
 
 class GameUI(UI):
@@ -68,21 +116,16 @@ class GameUI(UI):
 
         self.info_surface = SurfaceUI((0, 0, 250, 100)).convert_alpha()
 
-        self.sys_message_rect = pg.Rect((WSIZE[0] - 330, WSIZE[1] - 45), (300, 32))
-        self.sys_message_text = ""
-        self.sys_message_left_tact = 0
-        self.sys_message_count_tact = 0
-        self.sys_message_surface = pg.Surface(self.sys_message_rect.size).convert_alpha()
-
+        self.sys_message = SysMessege()
+        self.achievement_message = AchievementMessege()
         # self.playerui = SurfaceAlphaUI((0, 0, 280, 120))
         self.playerui = SurfaceUI((0, 0, 450, 420)).convert_alpha()
         self.playerui.rect.bottom = self.rect.bottom
         self.new_sys_message("Привет игрок")
 
-
     def draw_sky(self):
         # self.display.blit(self.sky_surface, (0, 0))
-        sky_night = (15,23,42, 255)
+        sky_night = (15, 23, 42, 255)
         sky = (165, 243, 252, 255)
         sky_red = (135, 0, 0, 255)
         # if self.
@@ -92,15 +135,9 @@ class GameUI(UI):
         # DRAW DISPLAY GAME TO WINDOW ========================================
         if show_info_menu:
             self.display.blit(self.info_surface, (WINDOW_SIZE[0] - 250, 0))
-        if self.sys_message_left_tact > 0:
-            self.sys_message_left_tact -= 1
-            if self.sys_message_left_tact < 32:
-                self.sys_message_surface.set_alpha(self.sys_message_left_tact * 8)
-            elif (self.sys_message_count_tact - self.sys_message_left_tact) < 8:
-                self.sys_message_surface.set_alpha((self.sys_message_count_tact - self.sys_message_left_tact) * 32)
 
-            self.display.blit(self.sys_message_surface, self.sys_message_rect)
-
+        self.sys_message.draw(self.display)
+        self.achievement_message.draw(self.display)
         self.redraw_playerui()
         self.playerui.draw(self.display)
         # pygame.transform.scale(display,(WINDOW_SIZE[0]//1.8, WINDOW_SIZE[1]//1.8)), (100, 100)
@@ -110,16 +147,12 @@ class GameUI(UI):
         pygame.display.flip()
 
     def new_sys_message(self, text, count_tact=FPS * 3, draw_now=False):
-        self.sys_message_text = text
-        self.sys_message_left_tact = count_tact
-        self.sys_message_count_tact = count_tact
-        self.sys_message_surface.set_alpha(255)
-        self.sys_message_surface.fill(sys_message_bg)
-        text_msg = textfont_sys_msg.render(text, True, "#FDE047")
-        self.sys_message_surface.blit(text_msg, (5, 5))
+        self.sys_message.new(text, count_tact)
         if draw_now:
-            self.sys_message_left_tact -= 8
             self.draw()
+
+    def new_achievement_completed(self, id_name):
+        self.achievement_message.new(id_name)
 
     def redraw_info(self):
         true_fps = self.app.clock.get_fps()
@@ -159,7 +192,7 @@ class GameUI(UI):
                 iy = 0
                 imgs = goldlive_imgs
             if self.app.player.creative_mode:
-                self.playerui.blit(bg_livecreative_img, (x-2, y-2))
+                self.playerui.blit(bg_livecreative_img, (x - 2, y - 2))
             if i < self.app.player.lives // lives_in_heart:
                 self.playerui.blit(imgs[0], (x, y))
             else:
@@ -296,7 +329,7 @@ def center_pos_2rects(len1, big_len):
 
 class PauseUI(UI):
     def init_ui(self):
-        self.rect = pg.Rect((0, 0, 320, 400))
+        self.rect = pg.Rect((0, 0, 320, 450))
         w, h = self.screen.get_size()
         self.rect.center = w // 2, h // 2
         self.surface = pg.Surface(self.rect.size).convert_alpha()
@@ -315,6 +348,7 @@ class PauseUI(UI):
         btns = [
             ("Сохранить карту", lambda _: self.app.set_scene(self.app.app.savem_scene)),
             ("Открыть карту", lambda _: self.app.set_scene(self.app.app.openm_scene)),
+            ("Достижения", lambda _: self.app.set_scene(self.app.app.achievements_scene)),
             ("Справка по игре", lambda _: self.app.app.open_help()),
             ("Телепорт домой", lambda _: self.app.tp_to_home()),
             ("Сохранить и выйти", lambda _: self.app.save_and_exit()),
@@ -342,6 +376,59 @@ class PauseUI(UI):
     def pg_event(self, event: pg.event.Event):
         for btn in self.btns:
             btn.pg_event(event)
+
+
+class AchievementsUI(UI):
+    bg = (82, 82, 91, 150)
+    font_title = pygame.font.SysFont("Fenix", 28, )  # yes rus
+    font_text = pygame.font.SysFont("Fenix", 24, )  # yes rus
+    font_action = pygame.font.SysFont("Fenix", 20, )  # yes rus
+
+    def __init__(self, app, player_achievements):
+        super(AchievementsUI, self).__init__(app)
+        self.achievements = player_achievements
+        self.rect = pg.Rect((0, 0, 320, 400))
+        w, h = self.screen.get_size()
+        self.rect.center = w // 2, h // 2
+        self.surface = pg.Surface(self.rect.size).convert_alpha()
+        self.surface.fill((82, 82, 91, 150))
+        self.surface_achievements = pg.Surface((1, 1))
+
+    def redraw_achievements(self):
+        height = 85 * len(self.achievements.completed) + 20
+        self.surface_achievements = pg.Surface((self.rect.w, height)).convert_alpha()
+        self.surface_achievements.fill(color_none)
+
+        y = 10
+
+        for id_name in self.achievements.completed:
+            ach = achievements[id_name]
+            surface = pg.Surface((self.surface_achievements.get_width()-20, 75))
+            surface.fill("#27272A")
+            title = self.font_title.render(ach["title"], True, "#FDE047")
+            surface.blit(title, (5, 5))
+
+            text = self.font_text.render(ach["description"], True, "#FFFFFF")
+            surface.blit(text, (10, title.get_height() + 10))
+
+            text = self.font_action.render(ach["action"], True, "#FFFFFF")
+            surface.blit(text, (surface.get_width()//2 - text.get_width()//2,
+                                title.get_height() * 2 + 14))
+
+            self.surface_achievements.blit(surface, (10, y))
+            y += 85
+
+    def draw(self):
+        self.redraw_achievements()
+        self.screen.blit(self.display, (0, 0))
+        self.surface.fill(self.bg)
+        title = textfont_btn.render("Достижения", True, "#FFFFFF")
+        self.surface.blit(title, (10, 10))
+
+        self.surface.blit(self.surface_achievements, (0, 35))
+
+        self.screen.blit(self.surface, self.rect)
+        pg.display.flip()
 
 
 cell_size = int(TSIZE * 1.5)  # in interface

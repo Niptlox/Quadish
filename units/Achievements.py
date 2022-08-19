@@ -1,7 +1,9 @@
 from units.common import *
 
 
-class Achievements:
+class Achievements(SavedObject):
+    not_save_vars = {"owner", }
+
     def __init__(self, owner):
         self.owner = owner
         self.completed = []
@@ -21,6 +23,8 @@ class Achievements:
 
     def add_murder(self, obj):
         if obj.class_obj & OBJ_CREATURE:
+            self.murder_statistic.setdefault("creature", 0)
+            self.murder_statistic["creature"] += 1
             self.murder_statistic.setdefault(obj.bio_kingdom, 0)
             self.murder_statistic[obj.bio_kingdom] += 1
             self.murder_statistic.setdefault(obj.bio_species, 0)
@@ -31,12 +35,17 @@ class Achievements:
             self.murder_statistic.setdefault(type(obj), 0)
             self.murder_statistic[type(obj)] += 1
 
-        if not self.is_completed("slimeI") and self.murder_statistic["slime"] == 10:
+        if not self.is_completed("killer") and self.murder_statistic.get("creature", 0) == 1:
+            self.new_completed("killer")
+        if not self.is_completed("slimeI") and self.murder_statistic.get("slime", 0) == 10:
             self.new_completed("slimeI")
-        elif not self.is_completed("slimeII") and self.murder_statistic["slime"] == 100:
+        elif not self.is_completed("slimeII") and self.murder_statistic.get("slime", 0) == 100:
             self.new_completed("slimeII")
-        elif not self.is_completed("slimeIII") and self.murder_statistic["slime"] == 1000:
+        elif not self.is_completed("slimeIII") and self.murder_statistic.get("slime", 0) == 1000:
             self.new_completed("slimeIII")
+
+        if not self.is_completed("wolfI") and self.murder_statistic.get("wolf", 0) == 10:
+            self.new_completed("wolfI")
 
 
 achievements = {
@@ -51,5 +60,7 @@ achievements = {
                 "action": "Вы должны убить 100 слаймов"},
     "slimeIII": {"title": "Уничтожитель слаймов III", "description": "Вы убили 1000 слаймов",
                  "action": "Вы должны убить 1000 слаймов"},
+    "wolfI": {"title": "Уничтожитель волков I", "description": "Вы убили 10 волков",
+              "action": "Вы должны убить 10 волков"},
 
 }
