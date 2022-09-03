@@ -42,9 +42,9 @@ class ToolPickaxe(ToolSword):
             v_tile = (vtm + vp) // TSIZE
             x, y = int(v_tile.x), int(v_tile.y)
             check = check_dig_tile(self.owner.game_map, x, y, self)
-            if check:
+            if check[0] or check[1]:
                 if time() > self.reload_time + self.last_action_time:
-                    dig_tile(self.owner.game_map, x, y, self, True)
+                    dig_tile(self.owner.game_map, x, y, self, check)
                     result = True
                     self.owner.choose_active_cell()
                 self.stroke_rect.x = x * TSIZE - vp.x
@@ -59,6 +59,11 @@ class ToolPickaxe(ToolSword):
             self.animation.start()
             self.last_action_time = time()
         return result
+
+    def can_dig_this_tile(self, ttile):
+        if self.capability is None or ttile in self.capability:
+            return True
+        return False
 
 
 class ToolGoldPickaxe(ToolPickaxe):

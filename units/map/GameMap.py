@@ -39,7 +39,6 @@ class GameMap:
         if self.base_generation is None:
             self.new_base_generation()
 
-
     def new_base_generation(self):
         self.base_generation = random.randint(-1e5, 1e5)
         print("base_generation", self.base_generation)
@@ -182,6 +181,18 @@ class GameMap:
             chunk[0][i + 2] = state
             return True
         return False
+
+    def get_backtile(self, x, y, create_chunk=True):
+        chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE), create_chunk=create_chunk)
+        if not chunk:
+            return
+        i = (y % CHUNK_SIZE) * CHUNK_SIZE + (x % CHUNK_SIZE)
+        return chunk[5][i]
+
+    def set_backtile(self, x, y, backtile_type, create_chunk=True):
+        chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE), create_chunk=create_chunk)
+        i = (y % CHUNK_SIZE) * CHUNK_SIZE + (x % CHUNK_SIZE)
+        chunk[5][i] = backtile_type
 
     def move_tile_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
         chunk = self.chunk((new_chunk_x, new_chunk_y))
@@ -338,12 +349,20 @@ class GameMap:
             self.set_state_of_points_build(points, 2)  # builded
 
     def set_structure(self, pos, build):
-        size, array = build
+        if len(build) == 2:
+            backtiles = []
+            size, array = build
+        else:
+            size, array, backtiles = build
+        backtile = 0
         for i_y in range(size[1]):
             for i_x in range(size[0]):
                 tile = array[i_y * size[0] + i_x]
+                if backtiles:
+                    backtile = backtiles[i_y * size[0] + i_x]
                 # Если не структурная пустота
                 if tile[0] != 150:
+                    self.set_backtile(pos[0] + i_x, pos[1] + i_y, backtile, create_chunk=True)
                     self.set_static_tile(pos[0] + i_x, pos[1] + i_y, tile, create_chunk=True)
 
     def set_state_of_points_build(self, points, state):
@@ -385,10 +404,12 @@ class GameMap:
         return tile
 
     def create_pass_chunk(self, xy):
-        """static tiles; dynamic object; tile object; creatures cash \
-        (on graund tiles, cnt creatures, last tact generate); climate, structure(builds)"""
+        """0:static tiles; 1:dynamic object; 2:tile object; 3:creatures cash \
+        (on graund tiles, cnt creatures, last tact generate); 4:climate;
+        5:back static tile"""
         #                    0                          1   2   3              4
-        self.game_map[xy] = [[0] * self.chunk_arr_size, [], {}, [set(), 0, 0], [0] * (CHUNK_SIZE ** 2)]
+        self.game_map[xy] = [[0] * self.chunk_arr_size, [], {}, [set(), 0, 0], [0] * (CHUNK_SIZE ** 2),
+                             [0] * (CHUNK_SIZE ** 2)]
         return self.game_map[xy]
 
     def generate_chunk(self, x, y):
@@ -400,9 +421,10 @@ class GameMap:
 
     def generate_chunk_noise_island(self, x, y):
         res = self.create_pass_chunk((x, y))
-        static_tiles, dynamic_tiles, tile_objs, creature_cash, biome_info = res
+        static_tiles, dynamic_tiles, tile_objs, creature_cash, biome_info, back_tiles = res
         on_ground_tiles, cnt_creatures = creature_cash[0], creature_cash[1]
         tile_index = 0
+        backtile_index = 0
         octaves = 6
         base = self.base_generation
         threshold = -0.3
@@ -416,8 +438,8 @@ class GameMap:
                                                      lacunarity=lacunarity) < threshold and (
                                                       noise2(tx / freq_x, ty / freq_y) * 20 + ty) > START_ATMO_Y and (
                                                       (noise2(tx / freq_x, ty / freq_y) * 20 + ty) < START_HELL_Y or (
-                                                          noise2(tx / freq_x, ty / freq_y) * 20 + ty) > (
-                                                                  START_HELL_Y + 50))
+                                                      noise2(tx / freq_x, ty / freq_y) * 20 + ty) > (
+                                                              START_HELL_Y + 50))
 
         # print("noise", (noise2(base_x / freq_x, base_y / freq_y) * 20 + base_y) > START_SPACE_Y)
         for y_pos in range(CHUNK_SIZE):  # local tile y in chunk (not px)
@@ -425,6 +447,7 @@ class GameMap:
             for x_pos in range(CHUNK_SIZE):  # local tile x in chunk (not px)
                 biome_info[i] = biome_of_pos(tile_x, tile_y)
                 tile_type = None
+                backtile_type = None
                 if config.GameSettings.vertical_tunel and tile_x in (-2, -1, 0, 1):
                     tile_type = 0
                 # if (noise2(tile_x / freq_x, tile_y / freq_y) * 20 + tile_y) > START_SPACE_Y:
@@ -432,6 +455,8 @@ class GameMap:
                 if standart_noise2_bool(tile_x, tile_y) and tile_type is None:
                     if standart_noise2_bool(tile_x, tile_y - 2 - random.randint(0, 1)):
                         tile_type = 3  # stone
+                        if standart_noise2_bool(tile_x, tile_y +1+random.randint(0, 1)) and standart_noise2_bool(tile_x+1, tile_y) and standart_noise2_bool(tile_x-1, tile_y):
+                            backtile_type = 1003  # backstone
                         v4 = noise2(tile_x / 10, tile_y / 10, 2, persistence=0.55, base=base + 1, lacunarity=1)
                         if v4 < -0.7:
                             tile_type = 4  # blore
@@ -481,8 +506,11 @@ class GameMap:
                 if tile_type is not None:
                     static_tiles[tile_index] = tile_type
                     static_tiles[tile_index + 1] = TILES_SOLIDITY.get(tile_type, -1)
+                if backtile_type:
+                    back_tiles[backtile_index] = backtile_type
                 tile_x += 1  # v28557
                 tile_index += self.tile_data_size
+                backtile_index += 1
                 i += 1
             tile_y += 1
         creature_cash[1] = cnt_creatures
@@ -525,6 +553,8 @@ class GameMap:
             data = pickle.load(f)
         version = data.get("game_version", "0.4")
         if version != GAME_VERSION:
+            self.game.ui.new_sys_message(f"Конфликт версий с картой", draw_now=True)
+
             return
         game_map = data["game_map_vars"]
         game.game_map.set_vars(game_map)
@@ -558,6 +588,10 @@ class GameMap:
             for x in range(size[0]):
                 array.append(self.get_static_tile(x + pos_1[0], y + pos_1[1]))
         return size, array
+
+    def new_world(self, base_generation=None):
+        self.__init__(self.game, self.gen_type, base_generation)
+        self.game.player.__init__(self.game, *config.GameSettings.start_pos)
 
 
 def random_plant_selection(biome=None):

@@ -24,7 +24,6 @@ cloud_images = load_imgs("data/sprites/clouds/cloud-{}.png", 7, size=None, scale
 star_images = load_imgs("data/sprites/stars/star-{}.png", 5, size=None, scale=2)
 star_chances = [i for i in range(len(star_images))], [(i + 1) / 10 for i in range(len(star_images))]
 
-
 player_img = create_tile_image("#E7E5E4", size=(TSIZE - 10, TSIZE - 2), bd=2)
 live_imgs = load_imgs("data/sprites/player/lives_{}.png", 5, size=(20, 20))
 goldlive_imgs = load_imgs("data/sprites/player/goldherts_{}.png", 5, size=(20, 20))
@@ -60,6 +59,7 @@ ground_imgs[None] = (ground_img,
                      ground_R_img,
                      ground_LR_img)
 stone_img = load_img("data/sprites/tiles/stone.png")
+back_stone_img = load_img("data/sprites/backtiles/BackStone2.png")
 # create_tile_image("#57534E")
 
 ore_img = (load_img("data/sprites/tiles/ore.png"))
@@ -147,6 +147,8 @@ pickaxe_1_img, pickaxe_1_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe
 pickaxe_3_img, pickaxe_3_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_3/pickaxe_3_{}.png", 4)
 pickaxe_77_img, pickaxe_77_imgs = load_round_tool_imgs("data/sprites/tools/pickaxe_77/pickaxe_77_{}.png", 4)
 
+spatula_1_img, spatula_1_imgs = load_round_tool_imgs("data/sprites/tools/spatula_1/pickaxe_1_{}.png", 4)
+
 tile_imgs = {None: none_img,
              0: none_img,
              1: ground_img,
@@ -206,9 +208,12 @@ tile_imgs = {None: none_img,
              531: pickaxe_1_img,
              532: pickaxe_77_img,
              533: pickaxe_3_img,
+             581: spatula_1_img,
              610: summonerSlimeBoss_img,
 
              801: stick_img,
+
+             1003: back_stone_img,
              }
 count_tiles = len(tile_imgs)
 print("Count_tiles imgs", count_tiles)
@@ -223,9 +228,10 @@ tile_many_imgs = {101: bush_imgs,
                   531: pickaxe_1_imgs,
                   532: pickaxe_77_imgs,
                   533: pickaxe_3_imgs,
+                  581: spatula_1_imgs,
                   }
 
-IDX_TOOLS = {501, 502, 503, 530, 531, 532, 533, 610}
+IDX_TOOLS = {501, 502, 503, 530, 531, 532, 533, 581, 610}
 
 # EATS = {52: 10, 53: 2, 56: 8, 55: 100, 401: 8}
 
@@ -241,6 +247,8 @@ SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 122}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
 # STANDING_TILES = {0, 101, 102, 103, 104, 110, 120, 121, 122, 123, 125, 126, 130, 129, 251}
 STANDING_TILES = {0, 110, 120, 121, 122, 123, 125, 126, 130, 129} | ON_EARTHEN_PLANTS
+# Задние панельки
+BACKTILES = {1003, }
 # предметы которые нельзя физически поставить
 ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 351, 401, 801}
 
@@ -264,13 +272,14 @@ Eats = {52: 10, 53: 2, 56: 8, 55: 100, 401: 8, 251: 7, 351: 1}
 iron_capability = {1, 2, 3, 4, 9, 11, 12, 31, 32, 33, 101, 102, 103, 104, 105, 106, 110, 121, 122, 123, 124, 125, 126,
                    127, 251,
                    128, 130}
-
+spatula_iron_capability = {1003}
 Pickaxes_capability = {
     530: iron_capability,
     531: iron_capability,
     532: None,
     533: iron_capability,
-
+    # spatula
+    581: spatula_iron_capability,
     # hand
     -1: iron_capability
 }
@@ -355,10 +364,12 @@ tile_words = {None: "None",
               531: "Железная кирка",
               532: "Золотая кирка",
               533: "Медная кирка",
+              581: "Шпатель",
 
               610: "Призыатель босса слизней",
 
-              801: "Палка"
+              801: "Палка",
+              1003: "Панелька камня"
               }
 
 # Прочность блоков

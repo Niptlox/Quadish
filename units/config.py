@@ -37,6 +37,7 @@ class GameSettings:
     creatures = config.getboolean(section, 'creatures')
     vertical_tunel = config.getboolean(section, 'vertical_tunel')
     start_pos = tuple(map(int, config.get(section, 'start_pos').split(",")))
+    view_item_index = config.getboolean(section, 'view_item_index')
 
     @classmethod
     def set_clouds_state(cls, state):

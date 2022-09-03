@@ -2,8 +2,8 @@ from time import time
 
 from units import Entities
 from units.Tiles import item_of_break_tile, item_of_right_click_tile, STANDING_TILES, ITEM_TILES, tile_imgs, \
-    tile_drops, ON_EARTHEN_PLANTS, MULTI_BLOCK_PLANTS,\
-     PLANT_STAND_ON_DIRT, PLANT_STAND_ON_PLANT
+    tile_drops, ON_EARTHEN_PLANTS, MULTI_BLOCK_PLANTS, \
+    PLANT_STAND_ON_DIRT, PLANT_STAND_ON_PLANT, BACKTILES
 from units.Tools.AnimationTool import *
 from units.common import *
 
@@ -106,28 +106,36 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
 
 def check_dig_tile(game_map, x, y, tool):
     tile = game_map.get_static_tile(x, y)
+    backtile = game_map.get_backtile(x, y)
+    if not tool.can_dig_this_tile(backtile) or not tool.tool_cls & CLS_SPATULA:
+        backtile = False
     if tile is None:  # or tile[1] == -1:
-        return
+        return None, None
     ttile = tile[0]
     d_ttile = game_map.get_static_tile_type(x, y - 1)
     if d_ttile in {101, 103, 110} and ttile != 110:
-        return
+        return None, None
     count_items = 1
     if ttile == 0:
-        return  # self.set_tile(x, y)
-    if tool.capability is not None and ttile not in tool.capability:
+        return None, backtile  # self.set_tile(x, y)
+    if not tool.can_dig_this_tile(ttile):
         # мы не можем выкопать этой киркой
-        return False
-    return tile
+        return False, backtile
+    return tile, backtile
 
 
 def dig_tile(game_map, x, y, tool, check=True):
     if not check:
-        tile = check_dig_tile(game_map, x, y, tool)
-        if not tile:
+        tile, backtile = check_dig_tile(game_map, x, y, tool)
+        if not (tile or backtile):
             return tile
     else:
-        tile = game_map.get_static_tile(x, y)
+        tile, backtile = check
+    print(tile, backtile)
+    if not tile:
+        game_map.set_backtile(x, y, 0)
+        game_map.add_item_of_index(backtile, 1, x, y)
+        return True
     sol = tile[1]  # прочность
     if tool is None:
         sol = 0
@@ -140,9 +148,7 @@ def dig_tile(game_map, x, y, tool, check=True):
             break_tile(game_map, x, y, tile)
             tile_up = game_map.get_static_tile(x, y - 1)
             if tile_up[0] in STANDING_TILES and tile_up[0] not in {0, None, 110}:
-                break_tile(game_map, x, y-1, tile_up)
-
-
+                break_tile(game_map, x, y - 1, tile_up)
     else:
         game_map.set_static_tile_solidity(x, y, sol)
     return True
@@ -167,11 +173,15 @@ def dig_tree(game_map, x, y, tool):
 def check_set_tile(game_map, x, y, inventory_cell):
     if inventory_cell is None:
         return
+    cell_ttile = inventory_cell.index
+    if cell_ttile in BACKTILES:
+        if game_map.get_backtile(x, y) == 0:
+            return True
     tile = game_map.get_static_tile(x, y)  # ground
     if tile is None or tile[0] != 0:
         return
     # id предмета в руке
-    cell_ttile = inventory_cell.index
+
     # id блока под местом куда ставим
     bottom_ttile = game_map.get_static_tile_type(x, y + 1, 0)
     if cell_ttile in PLANT_STAND_ON_PLANT and cell_ttile == bottom_ttile:
@@ -200,8 +210,11 @@ def set_tile(player, x, y, inventory_cell, check=True):
     #     obj = Entities.Dynamite(game_map.game, x * TSIZE, y * TSIZE)
     #     game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), obj)
     # else:
-    tile = player.game_map.get_tile_ttile_tpos(inventory_cell.index, (x, y))
-    player.game_map.set_static_tile(x, y, tile)
+    if inventory_cell.index in BACKTILES:
+        player.game_map.set_backtile(x, y, inventory_cell.index)
+    else:
+        tile = player.game_map.get_tile_ttile_tpos(inventory_cell.index, (x, y))
+        player.game_map.set_static_tile(x, y, tile)
     if inventory_cell.count <= 0:
         return 0
     return inventory_cell.count

@@ -329,7 +329,7 @@ def center_pos_2rects(len1, big_len):
 
 class PauseUI(UI):
     def init_ui(self):
-        self.rect = pg.Rect((0, 0, 320, 450))
+        self.rect = pg.Rect((0, 0, 320, 500))
         w, h = self.screen.get_size()
         self.rect.center = w // 2, h // 2
         self.surface = pg.Surface(self.rect.size).convert_alpha()
@@ -351,6 +351,7 @@ class PauseUI(UI):
             ("Достижения", lambda _: self.app.set_scene(self.app.app.achievements_scene)),
             ("Справка по игре", lambda _: self.app.app.open_help()),
             ("Телепорт домой", lambda _: self.app.tp_to_home()),
+            ("Создать новый мир", lambda _: self.app.new_world()),
             ("Сохранить и выйти", lambda _: self.app.save_and_exit()),
             ("Выйти", lambda _: self.app.exit()),
             ("Оконный режим" if FULLSCREEN else "Полный экран", lambda _: self.app.editfullscreen()),
@@ -489,7 +490,10 @@ class InventoryUI(SurfaceUI):
         if item is None:
             self.inventory_info_index = -1
             return
-        text = textfont.render(tile_words[item.index], True, text_color_light)
+        string = tile_words[item.index]
+        if config.GameSettings.view_item_index:
+            string += f" #{item.index}"
+        text = textfont.render(string, True, text_color_light)
         w, h = text.get_size()
         self.inventory_info_index_surface = pygame.Surface((w + 6, h + 4)).convert_alpha()
         self.inventory_info_index_surface.fill(self.top_bg_color)
@@ -796,6 +800,9 @@ class ScrollSurfaceRecipes(ScrollSurface):
         tx = 3
         ty = 3
         name = tile_words[out[0]]
+        if config.GameSettings.view_item_index:
+            name += f" #{out[0]}"
+
         name_surface = textfont.render(name, True, text_color_light)
         span = textfont.get_height() + 3
         self.info_index_surface = pygame.Surface(
@@ -901,6 +908,8 @@ class ScrollSurfaceAllTiles(ScrollSurfaceRecipes):
 
     def redraw_recipes_info(self):
         ttile, name = list(tile_words.items())[self.info_index]
+        if config.GameSettings.view_item_index:
+            name += f" #{ttile}"
         name_surface = textfont.render(name, True, text_color_light)
         self.info_index_surface = pygame.Surface(
             (name_surface.get_width() + 6, textfont.get_height() + 3),

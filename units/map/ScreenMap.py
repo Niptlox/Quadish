@@ -93,11 +93,11 @@ class ScreenMap:
         # if climate:
         #     biome_color = biome_colors[climate[0]]
         #     self.display.fill(biome_color)
-        self.true_scroll[0] += (p.rect.centerx - self.true_scroll[0] - WSIZE[0] // 2) / 20
-        offset_y = (p.rect.centery - self.true_scroll[1] - WSIZE[1] // 2)
-        if abs(offset_y) > TSIZE * 3:
-            offset_y *= min(abs(offset_y) / (2 * TSIZE), 10)
-        self.true_scroll[1] += float(offset_y / 20)
+        # self.true_scroll[0] += (p.rect.centerx - self.true_scroll[0] - WSIZE[0] // 2) / 20
+        # offset_y = (p.rect.centery - self.true_scroll[1] - WSIZE[1] // 2)
+        # if abs(offset_y) > TSIZE * 3:
+        #     offset_y *= min(abs(offset_y) / (2 * TSIZE), 10)
+        # self.true_scroll[1] += float(offset_y / 20)
 
         self.true_scroll[0] += (p.rect.x - self.true_scroll[0] - WSIZE[0] // 2) / 15
 
@@ -111,7 +111,7 @@ class ScreenMap:
             for star in self.sky_stars:
                 pos = (star[1] - scroll[0] * PARALLAX_SPACE,
                        star[2] - scroll[1] * PARALLAX_SPACE - (TOP_MIDDLE_WORLD * TSIZE - 7000))
-                        # star[2] - scroll[1] * PARALLAX_SPACE - (TOP_MIDDLE_WORLD * TSIZE - 6200))
+                # star[2] - scroll[1] * PARALLAX_SPACE - (TOP_MIDDLE_WORLD * TSIZE - 6200))
                 self.display.blit(star_images[star[0]], pos)
         if GameSettings.clouds:
             for cloud in self.clouds:
@@ -155,11 +155,17 @@ class ScreenMap:
                     dynamic_tiles += chunk[1]
                     group_handlers.update(chunk[2])
                     index = 0
+                    backtile_index = 0
                     tile_y = chunk_y * CSIZE
                     i = 0
                     for y in range(CSIZE):
                         tile_x = chunk_x * CSIZE
                         for x in range(CSIZE):
+                            backtile_type = chunk[5][backtile_index]
+                            if backtile_type != 0:
+                                sprite_pos = [tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1]]
+                                self.display.blit(tile_imgs[backtile_type], sprite_pos)
+
                             tile = chunk[0][index:index + self.game_map.tile_data_size]
                             tile_type = tile[0]
                             if tile_type > 0:
@@ -202,6 +208,7 @@ class ScreenMap:
                                         sprite_pos[0] += local_pos[0]
                                         sprite_pos[1] += local_pos[1]
                                     self.display.blit(img, sprite_pos)
+
                                     sol = tile[1]
                                     if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
                                         br_i = (break_imgs_cnt - 1) - int(
@@ -216,6 +223,7 @@ class ScreenMap:
                             if tile_type != 0:
                                 static_tiles[(tile_x, tile_y)] = tile_type
                             index += self.game_map.tile_data_size
+                            backtile_index += 1
                             tile_x += 1
                             i += 1
                         tile_y += 1

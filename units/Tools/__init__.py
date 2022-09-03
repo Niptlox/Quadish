@@ -6,6 +6,7 @@ from units.Tools.ToolHand import *
 from units.Tools.ToolsPickaxe import *
 from units.Tools.ToolsSummoner import *
 from units.Tools.ToolsSword import *
+from units.Tools.ToolSpatula import *
 
 
 # модуль обобщения and items
@@ -80,6 +81,7 @@ class ItemTool(Items):
 
 TOOLS_CLASSES = {obj.index: obj for obj in vars().values() if type(obj) is type and vars(obj).get("index") in IDX_TOOLS}
 TOOLS_CLASSES[0] = Tool
+pprint(TOOLS_CLASSES)
 
 # items of tools
 TOOLS = {idx: lambda game, idx=idx, pos=(0, 0): ItemTool(game, idx, pos)
@@ -96,4 +98,3 @@ TOOLS = {idx: lambda game, idx=idx, pos=(0, 0): ItemTool(game, idx, pos)
 #              ItemSummon
 #          }
 #          }
-pprint(TOOLS)

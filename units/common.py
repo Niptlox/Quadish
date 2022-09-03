@@ -28,8 +28,8 @@ FPS = 30
 flags = 0
 desktop_size = pygame.display.get_desktop_sizes()[0]
 print("INIT GAME VARS")
-last_versions = ["0.9.1", "0.1.3-alpha"]
-GAME_VERSION = "0.1.5-alpha"
+last_versions = ["0.9.1", "0.1.3-alpha", "0.1.5-alpha"]
+GAME_VERSION = "0.1.6-alpha"
 
 WINDOW_SIZE = config.Window.size
 FULLSCREEN = config.Window.fullscreen
@@ -108,6 +108,7 @@ CLS_SWORD = 16
 CLS_PICKAXE = 32
 CLS_EAT = 64
 CLS_COMMON = 128
+CLS_SPATULA = 256
 
 # STATES OF TILE ================================================
 
