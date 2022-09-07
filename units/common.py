@@ -47,6 +47,7 @@ pygame.display.set_caption('Quadish')
 Icon = pg.image.load("data/sprites/icon.png")
 pygame.display.set_icon(Icon)
 
+
 screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags, vsync=1)
 display_ = pygame.Surface(WINDOW_SIZE)
 

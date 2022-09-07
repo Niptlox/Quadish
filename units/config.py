@@ -5,7 +5,7 @@ try:
 except ImportError:
     from ConfigParser import ConfigParser  # ver. < 3.0
 
-config_filename = os.getcwd()+'\settings.ini'
+config_filename = os.getcwd() + '\settings.ini'
 
 config = ConfigParser()
 config.read(config_filename)
@@ -26,6 +26,12 @@ class Window:
     def set_fullscreen(cls, value):
         config.set(cls.section, 'fullscreen', str(value))
         config_save()
+
+
+class UISettings:
+    config = config
+    section = 'UI'
+    show_title_menu = config.getboolean(section, 'show_title_menu')
 
 
 class GameSettings:

@@ -6,10 +6,11 @@ from pygame import Surface
 from units.Achievements import achievements
 from units.Items import ItemsTile, Items
 from units.Texture import WHITE
-from units.Tiles import tile_imgs, sky, tile_words, live_imgs, bg_live_img, goldlive_imgs, bg_livecreative_img
+from units.Tiles import tile_imgs, sky, tile_words, live_imgs, bg_live_img, goldlive_imgs, bg_livecreative_img, \
+    title_background
 from units.Tools import TOOLS
 from units.UI.Button import createImagesButton, createVSteckButtons, Button
-from units.UI.ClassUI import SurfaceUI, UI, ScrollSurface
+from units.UI.ClassUI import SurfaceUI, UI, ScrollSurface, GroupUI
 from units.common import *
 
 # INIT TEXT ==================================================
@@ -106,16 +107,9 @@ class AchievementMessege(SysMessege):
 # =============================================================
 
 class GameUI(UI):
-    def __init__(self, app) -> None:
-        super().__init__(app)
-
-    def init_ui(self):
-        super().init_ui()
-        # self.sky_surface = pg.Surface(self.display.get_size()).convert_alpha()
-        # self.sky_surface.fill(sky)
-
+    def __init__(self, scene) -> None:
+        super().__init__(scene)
         self.info_surface = SurfaceUI((0, 0, 250, 100)).convert_alpha()
-
         self.sys_message = SysMessege()
         self.achievement_message = AchievementMessege()
         # self.playerui = SurfaceAlphaUI((0, 0, 280, 120))
@@ -155,17 +149,17 @@ class GameUI(UI):
         self.achievement_message.new(id_name)
 
     def redraw_info(self):
-        true_fps = self.app.clock.get_fps()
+        true_fps = self.scene.clock.get_fps()
         self.info_surface.fill(bg_color)
         text_fps = textfont_info.render(
             f" fps: {int(true_fps)}", True, "white")
         text_pos_real = textfont_info.render(
-            f"rpos: {self.app.player.rect.x, self.app.player.rect.y}", True, "white")
+            f"rpos: {self.scene.player.rect.x, self.scene.player.rect.y}", True, "white")
         text_pos = textfont_info.render(
-            f" pos: {self.app.player.rect.x // TSIZE, self.app.player.rect.y // TSIZE}", True, "white")
+            f" pos: {self.scene.player.rect.x // TSIZE, self.scene.player.rect.y // TSIZE}", True, "white")
         text_ents = textfont_info.render(
-            f"Ents: {len(self.app.screen_map.dynamic_tiles)}", True, "white")
-        chunk_ents = self.app.game_map.chunk(self.app.player.update_chunk_pos())
+            f"Ents: {len(self.scene.screen_map.dynamic_tiles)}", True, "white")
+        chunk_ents = self.scene.game_map.chunk(self.scene.player.update_chunk_pos())
         if chunk_ents is not None:
             chunk_ents = chunk_ents[3][1]
         text_c_ents = textfont_info.render(
@@ -186,18 +180,18 @@ class GameUI(UI):
         startx, starty = x, y
         iy = 0
 
-        for i in range(self.app.player.max_lives // lives_in_heart):
+        for i in range(self.scene.player.max_lives // lives_in_heart):
             if i == cnt_in_row * 2:
                 x, y = startx, starty
                 iy = 0
                 imgs = goldlive_imgs
-            if self.app.player.creative_mode:
+            if self.scene.player.creative_mode:
                 self.playerui.blit(bg_livecreative_img, (x - 2, y - 2))
-            if i < self.app.player.lives // lives_in_heart:
+            if i < self.scene.player.lives // lives_in_heart:
                 self.playerui.blit(imgs[0], (x, y))
             else:
-                if (i - 1) < self.app.player.lives // lives_in_heart and self.app.player.lives % lives_in_heart > 0:
-                    self.playerui.blit(imgs[4 - self.app.player.lives % lives_in_heart // 2], (x, y))
+                if (i - 1) < self.scene.player.lives // lives_in_heart and self.scene.player.lives % lives_in_heart > 0:
+                    self.playerui.blit(imgs[4 - self.scene.player.lives % lives_in_heart // 2], (x, y))
                 else:
                     if i < cnt_in_row * 2:
                         self.playerui.blit(bg_live_img, (x, y))
@@ -209,14 +203,56 @@ class GameUI(UI):
                 x = startx + iy
 
 
+class TitleUI(UI):
+    background = title_background
+    if background.get_width() < WSIZE[0] or background.get_height() < WSIZE[1]:
+        background = pg.transform.scale(background, WSIZE)
+
+    def __init__(self, scn):
+        super(TitleUI, self).__init__(scn)
+
+        btns = [
+            ("Новый мир", lambda _: self.scene.new_game()),
+            ("Настройки", lambda _: self.scene.set_ui(self.scene.settings_ui)),
+            ("Справка", lambda _: self.scene.app.open_help()),
+            ("Выйти", lambda _: self.scene.exit()),
+            ("Разработчики", lambda _: self.scene.set_ui(self.scene.developers_ui)),
+        ]
+
+        btn_size = 250, 35
+        btn_pos = 230, 300
+        btn_pos = 780 * (WSIZE[0]/title_background.get_width()), self.rect.h//2 -50 / 2 * len(btns)
+
+        btn_rect = pg.Rect(btn_pos, btn_size)
+
+        self.img_btns = [createImagesButton(btn_rect.size, t, font=textfont_btn)
+                         for t, f in btns]
+        funcs = [f for t, f in btns]
+
+        obj_btns = createVSteckButtons(btn_rect.size, btn_rect.centerx, btn_rect.top, 15, self.img_btns, funcs,
+                                        screen_position=(self.rect.x, self.rect.y))  # кнопки открывающие карты
+        self.objects = GroupUI(obj_btns)
+
+    def draw(self):
+        self.screen.blit(self.background, (0, 0))
+        self.objects.draw(self.screen)
+        pg.display.flip()
+
+    def pg_event(self, event: pg.event.Event):
+        self.objects.pg_event(event)
+
+
+
 class SwitchMapUI(UI):
+
+
+
+
     bg = (82, 82, 91, 150)
 
-    def __init__(self, app, title) -> None:
+    def __init__(self, scene, title) -> None:
         self.title = title
-        super().__init__(app)
-
-    def init_ui(self):
+        super().__init__(scene)
         w, h = 300, 500
         self.rect = pg.Rect(0, 0, w, h)
         self.rect.center = WSIZE[0] // 2, WSIZE[1] // 2
@@ -230,7 +266,7 @@ class SwitchMapUI(UI):
         self.btns_scroll = [(w - btn_rect.w) // 2 - 15, btn_rect.y]
         self.btns_scroll_step = 20 + btn_rect.height
 
-        n = self.app.game.game_map.save_slots
+        n = self.scene.game.game_map.save_slots
         imgs = [createImagesButton(btn_rect.size, f"Карта #{i}", font=textfont_btn)
                 for i in range(n)]
         self.img_btns = imgs
@@ -291,11 +327,12 @@ class SwitchMapUI(UI):
                 self.btns[i].imgUpB = self.img_btns[i][0]
 
     def open_map(self, but, num):
-        res = self.app.open_map(num)
+        res = self.scene.open_map(num)
 
 
 class EndUI(UI):
-    def init_ui(self):
+    def __init__(self, scn):
+        super(EndUI, self).__init__(scn)
         self.rect_surface = pg.Rect((0, 0, 220, 100))
         w, h = self.screen.get_size()
         self.rect_surface.center = w // 2, h // 2
@@ -307,7 +344,7 @@ class EndUI(UI):
         self.surface.blit(text, (self.rect_surface.w // 2 - w // 2, self.rect_surface.h // 2 - h // 2))
         rect_btn = pg.Rect((self.rect_surface.x + 10, self.rect_surface.bottom + 15,
                             self.rect_surface.w - 20, 35))
-        self.btn_relive = Button(lambda _: self.app.relive(), rect_btn,
+        self.btn_relive = Button(lambda _: self.scene.relive(), rect_btn,
                                  *createImagesButton(rect_btn.size, "Возродиться"))
 
     def draw(self):
@@ -319,7 +356,7 @@ class EndUI(UI):
     def pg_event(self, event: pg.event.Event):
         self.btn_relive.pg_event(event)
         if event.type == pg.KEYDOWN:
-            self.app.relive()
+            self.scene.relive()
 
 
 # находит позицию xy чтобы один стоял в центре другого
@@ -328,7 +365,8 @@ def center_pos_2rects(len1, big_len):
 
 
 class PauseUI(UI):
-    def init_ui(self):
+    def __init__(self, scene):
+        super(PauseUI, self).__init__(scene)
         self.rect = pg.Rect((0, 0, 320, 500))
         w, h = self.screen.get_size()
         self.rect.center = w // 2, h // 2
@@ -346,15 +384,15 @@ class PauseUI(UI):
         btn_rect = pg.Rect(btn_pos, btn_size)
 
         btns = [
-            ("Сохранить карту", lambda _: self.app.set_scene(self.app.app.savem_scene)),
-            ("Открыть карту", lambda _: self.app.set_scene(self.app.app.openm_scene)),
-            ("Достижения", lambda _: self.app.set_scene(self.app.app.achievements_scene)),
-            ("Справка по игре", lambda _: self.app.app.open_help()),
-            ("Телепорт домой", lambda _: self.app.tp_to_home()),
-            ("Создать новый мир", lambda _: self.app.new_world()),
-            ("Сохранить и выйти", lambda _: self.app.save_and_exit()),
-            ("Выйти", lambda _: self.app.exit()),
-            ("Оконный режим" if FULLSCREEN else "Полный экран", lambda _: self.app.editfullscreen()),
+            ("Сохранить карту", lambda _: self.scene.set_scene(self.scene.app.savem_scene)),
+            ("Открыть карту", lambda _: self.scene.set_scene(self.scene.app.openm_scene)),
+            ("Достижения", lambda _: self.scene.set_scene(self.scene.app.achievements_scene)),
+            ("Справка по игре", lambda _: self.scene.app.open_help()),
+            ("Телепорт домой", lambda _: self.scene.tp_to_home()),
+            ("Создать новый мир", lambda _: self.scene.new_world()),
+            ("Сохранить и выйти", lambda _: self.scene.save_and_exit()),
+            ("Выйти", lambda _: self.scene.exit()),
+            ("Оконный режим" if FULLSCREEN else "Полный экран", lambda _: self.scene.editfullscreen()),
         ]
 
         self.img_btns = [createImagesButton(btn_rect.size, t, font=textfont_btn)
@@ -385,8 +423,8 @@ class AchievementsUI(UI):
     font_text = pygame.font.SysFont("Fenix", 24, )  # yes rus
     font_action = pygame.font.SysFont("Fenix", 20, )  # yes rus
 
-    def __init__(self, app, player_achievements):
-        super(AchievementsUI, self).__init__(app)
+    def __init__(self, scene, player_achievements):
+        super(AchievementsUI, self).__init__(scene)
         self.achievements = player_achievements
         self.rect = pg.Rect((0, 0, 320, 400))
         w, h = self.screen.get_size()
@@ -404,7 +442,7 @@ class AchievementsUI(UI):
 
         for id_name in self.achievements.completed:
             ach = achievements[id_name]
-            surface = pg.Surface((self.surface_achievements.get_width()-20, 75))
+            surface = pg.Surface((self.surface_achievements.get_width() - 20, 75))
             surface.fill("#27272A")
             title = self.font_title.render(ach["title"], True, "#FDE047")
             surface.blit(title, (5, 5))
@@ -413,7 +451,7 @@ class AchievementsUI(UI):
             surface.blit(text, (10, title.get_height() + 10))
 
             text = self.font_action.render(ach["action"], True, "#FFFFFF")
-            surface.blit(text, (surface.get_width()//2 - text.get_width()//2,
+            surface.blit(text, (surface.get_width() // 2 - text.get_width() // 2,
                                 title.get_height() * 2 + 14))
 
             self.surface_achievements.blit(surface, (10, y))
@@ -920,9 +958,7 @@ class ScrollSurfaceAllTiles(ScrollSurfaceRecipes):
 
     def redraw(self):
         self.scroll_surface.fill(color_none)
-        x = 0
-        y = 0
-        i = 0
+        x, y = 0, 0
         cell_size_2 = cell_size // 2
         for i in range(len(tile_words)):
             if i % 5 == 0 and i > 0:

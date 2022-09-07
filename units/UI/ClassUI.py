@@ -2,10 +2,10 @@ import pygame as pg
 
 
 class UI:
-    def __init__(self, app) -> None:
-        self.app = app
-        self.screen = app.screen
-        self.display = self.app.display
+    def __init__(self, scene) -> None:
+        self.scene = scene
+        self.screen = scene.screen
+        self.display = self.scene.display
         self.rect = pg.Rect((0, 0), self.display.get_size())
 
     def init_ui(self):
@@ -20,11 +20,24 @@ class UI:
 
     @property
     def onscreenx(self):
-        return self.rect.x + self.app.rect.x
+        return self.rect.x + self.scene.rect.x
 
     @property
     def onscreeny(self):
-        return self.rect.y + self.app.rect.y
+        return self.rect.y + self.scene.rect.y
+
+
+class GroupUI:
+    def __init__(self, components):
+        self.components = components
+
+    def pg_event(self, event):
+        for component in self.components:
+            component.pg_event(event)
+
+    def draw(self, surface):
+        for component in self.components:
+            component.draw(surface)
 
 
 class SurfaceUI(pg.Surface):

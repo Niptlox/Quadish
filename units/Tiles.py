@@ -20,6 +20,8 @@ def transform_hand(surf, size=HAND_RECT, colorkey=COLORKEY):
 
 sky = "#A5F3FC"
 
+title_background = pg.image.load("data/sprites/QuadishTitle.png")
+
 cloud_images = load_imgs("data/sprites/clouds/cloud-{}.png", 7, size=None, scale=2)
 star_images = load_imgs("data/sprites/stars/star-{}.png", 5, size=None, scale=2)
 star_chances = [i for i in range(len(star_images))], [(i + 1) / 10 for i in range(len(star_images))]
