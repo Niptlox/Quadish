@@ -20,7 +20,9 @@ def transform_hand(surf, size=HAND_RECT, colorkey=COLORKEY):
 
 sky = "#A5F3FC"
 
-title_background = pg.image.load("data/sprites/QuadishTitle.png")
+title_background = pg.image.load("data/sprites/title_back.png")
+title_background_layer_2 = pg.image.load("data/sprites/title_back layer 2.png")
+title_text = pg.image.load("data/sprites/title_text.png")
 
 cloud_images = load_imgs("data/sprites/clouds/cloud-{}.png", 7, size=None, scale=2)
 star_images = load_imgs("data/sprites/stars/star-{}.png", 5, size=None, scale=2)

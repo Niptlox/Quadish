@@ -31,7 +31,7 @@ print("INIT GAME VARS")
 last_versions = ["0.9.1", "0.1.3-alpha", "0.1.5-alpha"]
 GAME_VERSION = "0.1.6-alpha"
 
-WINDOW_SIZE = config.Window.size
+WINDOW_SIZE = tuple(map(int, config.Window.size.split(",")))
 FULLSCREEN = config.Window.fullscreen
 if FULLSCREEN:
     WINDOW_SIZE = desktop_size

@@ -84,6 +84,7 @@ class SceneMenu(Scene):
 
     def set_ui(self, ui):
         if ui is not None:
+            print(ui)
             self.ui = ui
 
     def pg_events(self):

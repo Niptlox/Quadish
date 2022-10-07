@@ -7,9 +7,9 @@ from units.Achievements import achievements
 from units.Items import ItemsTile, Items
 from units.Texture import WHITE
 from units.Tiles import tile_imgs, sky, tile_words, live_imgs, bg_live_img, goldlive_imgs, bg_livecreative_img, \
-    title_background
+    title_background, title_text, title_background_layer_2
 from units.Tools import TOOLS
-from units.UI.Button import createImagesButton, createVSteckButtons, Button
+from units.UI.Button import createImagesButton, createVSteckButtons, Button, createVSteckTextButtons, ChangeTextButton
 from units.UI.ClassUI import SurfaceUI, UI, ScrollSurface, GroupUI
 from units.common import *
 
@@ -18,11 +18,13 @@ from units.creating_items import RECIPES
 
 pygame.font.init()
 # textfont = pygame.font.SysFont('Jokerman', 19)
-textfont = pygame.font.SysFont("Fenix", 19, )  # yes rus
-textfont_sys_msg = pygame.font.SysFont("Fenix", 30, )  # yes rus
+textfont = pygame.font.Font('data/fonts/xenoa.ttf', 12, )  # yes rus
+textfont_sys_msg = pygame.font.Font('data/fonts/xenoa.ttf', 21, )  # yes rus
 # textfont = pygame.font.Font('data/fonts/Teletactile.ttf', 10, bold=True)
 textfont_info = pygame.font.Font('data/fonts/Teletactile.ttf', 10, )  # no rus
 textfont_btn = pygame.font.SysFont("Fenix", 35, )
+
+textfont_btn = pygame.font.Font('data/fonts/xenoa.ttf', 28, )  # rus
 
 # texframe = font.render(text, False, text_color)
 text_color = "#1C1917"
@@ -37,6 +39,10 @@ bg_color = (82, 82, 91, 150)
 bg_color_dark = (52, 52, 51, 150)
 
 # =============================================================
+
+ru_bool_lst = ["Вкл", "Выкл"]
+eng_bool_lst = [True, False]
+bool_dict = {ru_bool_lst[0]: eng_bool_lst[0], ru_bool_lst[1]: eng_bool_lst[1]}
 
 # OBJECT IN MOUSE =============================================
 __object_in_mouse = None
@@ -204,24 +210,33 @@ class GameUI(UI):
 
 
 class TitleUI(UI):
+    color_sky = "#a5f3fc"
     background = title_background
-    if background.get_width() < WSIZE[0] or background.get_height() < WSIZE[1]:
-        background = pg.transform.scale(background, WSIZE)
+    background_layer_2 = title_background_layer_2
+    background = pg.transform.scale(background, (int(WSIZE[0] * 1.5), int(WSIZE[1] * 1.5)))
+    background_layer_2 = pg.transform.scale(background_layer_2, background.get_size())
+    background.set_colorkey(color_sky)
+    game_title_text = title_text
+    step_objects = 15
 
     def __init__(self, scn):
         super(TitleUI, self).__init__(scn)
+        self.objects = GroupUI([])
+        print(self.scene, self)
+
 
         btns = [
             ("Новый мир", lambda _: self.scene.new_game()),
             ("Настройки", lambda _: self.scene.set_ui(self.scene.settings_ui)),
             ("Справка", lambda _: self.scene.app.open_help()),
             ("Выйти", lambda _: self.scene.exit()),
-            ("Разработчики", lambda _: self.scene.set_ui(self.scene.developers_ui)),
+
         ]
 
         btn_size = 250, 35
+        step = self.step_objects
         btn_pos = 230, 300
-        btn_pos = 780 * (WSIZE[0]/title_background.get_width()), self.rect.h//2 -50 / 2 * len(btns)
+        btn_pos = self.rect.w // 2 - btn_size[0] // 2, self.rect.h // 2 - (btn_size[1] + step) / 2 * len(btns) + 40
 
         btn_rect = pg.Rect(btn_pos, btn_size)
 
@@ -229,12 +244,34 @@ class TitleUI(UI):
                          for t, f in btns]
         funcs = [f for t, f in btns]
 
-        obj_btns = createVSteckButtons(btn_rect.size, btn_rect.centerx, btn_rect.top, 15, self.img_btns, funcs,
-                                        screen_position=(self.rect.x, self.rect.y))  # кнопки открывающие карты
-        self.objects = GroupUI(obj_btns)
+        obj_btns = createVSteckButtons(btn_rect.size, btn_rect.centerx, btn_rect.top, step, self.img_btns, funcs,
+                                       screen_position=(self.rect.x, self.rect.y))  # кнопки открывающие карты
+
+        self.objects.add_lst(obj_btns)
+        _font_dev_btn = pygame.font.Font('data/fonts/xenoa.ttf', 23, )
+        dev_but = Button(lambda _: self.scene.open_developers(),
+                         (self.rect.w - 200, self.rect.h - 60, 175, 35),
+                         *createImagesButton((175, 35), "Разработчики", font=_font_dev_btn))
+        self.objects.add(dev_but)
+        title_text_surf = SurfaceUI(((0, 0), self.game_title_text.get_size()))
+        title_text_surf.blit(self.game_title_text, (0, 0))
+        title_text_surf.set_colorkey(self.color_sky)
+        title_text_surf.rect.topleft = center_pos_2lens(title_text_surf.rect.w, self.rect.w), \
+                                       center_pos_2lens(title_text_surf.rect.h, self.rect.h) - 220
+        self.objects.add(title_text_surf)
+        print("objects", self.objects.components)
+
+
+    def draw_background(self):
+        self.screen.fill(self.color_sky)
+        x, y = pg.mouse.get_pos()
+
+        self.screen.blit(self.background_layer_2, (x // 40 - self.rect.w // 2, y // 40 - self.rect.h // 2))
+        self.screen.blit(self.background, (x // 20 - self.rect.w // 2, y // 20 - self.rect.h // 2))
 
     def draw(self):
-        self.screen.blit(self.background, (0, 0))
+
+        self.draw_background()
         self.objects.draw(self.screen)
         pg.display.flip()
 
@@ -242,12 +279,60 @@ class TitleUI(UI):
         self.objects.pg_event(event)
 
 
+class SettingsUI(TitleUI):
+    window_sizes_lst = ["1240,720", "720,480"]
+
+    def __init__(self, scene):
+        super(SettingsUI, self).__init__(scene)
+        self.objects = GroupUI([])
+
+        btn_size = 400, 35
+        btn_rect = pg.Rect((0, 0), btn_size)
+
+        if config.Window.size in self.window_sizes_lst:
+            size_start_state_index = self.window_sizes_lst.index(config.Window.size)
+        else:
+            self.window_sizes_lst.append(config.Window.size)
+            size_start_state_index = len(self.window_sizes_lst)-1
+
+        btns = [
+            ChangeTextButton(lambda _, state: config.Window.set_size(state), btn_rect, "Размер ({})",
+                             states_text_lst=self.window_sizes_lst, start_state_index=size_start_state_index),
+            ChangeTextButton(lambda _, state: config.Window.set_fullscreen(bool_dict[state]), btn_rect,
+                             "Полноэкранный режим: {}", states_text_lst=ru_bool_lst,
+                             start_state_index=eng_bool_lst.index(config.Window.fullscreen)),
+            ChangeTextButton(lambda _, state: config.GameSettings.set_clouds_state(bool_dict[state]), btn_rect,
+                             "Отображение облаков: {}", states_text_lst=ru_bool_lst,
+                             start_state_index=eng_bool_lst.index(config.GameSettings.clouds)),
+            ChangeTextButton(lambda _, state: config.GameSettings.set_stars_state(bool_dict[state]), btn_rect,
+                             "Отображение звёзд: {}", states_text_lst=ru_bool_lst,
+                             start_state_index=eng_bool_lst.index(config.GameSettings.stars)),
+            ChangeTextButton(lambda _, state: config.GameSettings.set_item_index_state(bool_dict[state]), btn_rect,
+                             "ID предмета: {}", states_text_lst=ru_bool_lst,
+                             start_state_index=eng_bool_lst.index(config.GameSettings.view_item_index)),
+            ("В главное меню", lambda _: self.scene.set_ui(self.scene.title_ui)),
+
+        ]
+
+        step = 15
+        btn_pos = self.rect.w // 2 - btn_size[0] // 2, self.rect.h // 2 - (btn_size[1] + step) / 2 * len(btns) + 40
+        btn_rect = pg.Rect(btn_pos, btn_size)
+        obj_btns = createVSteckTextButtons(btn_rect.size, btn_rect.centerx, btn_rect.top, step, btns,
+                                           screen_position=(self.rect.x, self.rect.y),
+                                           font=textfont_btn)  # кнопки открывающие карты
+
+        self.objects.add_lst(obj_btns)
+
+        title_text_surf = SurfaceUI(((0, 0), self.game_title_text.get_size()))
+        title_text_surf.blit(self.game_title_text, (0, 0))
+        title_text_surf.set_colorkey(self.color_sky)
+        title_text_surf.rect.topleft = center_pos_2lens(title_text_surf.rect.w, self.rect.w), \
+                                       center_pos_2lens(title_text_surf.rect.h, self.rect.h) - 220
+
+        self.objects.add(title_text_surf)
+
 
 class SwitchMapUI(UI):
-
-
-
-
     bg = (82, 82, 91, 150)
 
     def __init__(self, scene, title) -> None:
@@ -331,6 +416,9 @@ class SwitchMapUI(UI):
 
 
 class EndUI(UI):
+    font_1 = pygame.font.SysFont("Fenix", 35, )
+    font_2 = pygame.font.SysFont("Fenix", 34, )
+
     def __init__(self, scn):
         super(EndUI, self).__init__(scn)
         self.rect_surface = pg.Rect((0, 0, 220, 100))
@@ -338,14 +426,19 @@ class EndUI(UI):
         self.rect_surface.center = w // 2, h // 2
         self.surface = pg.Surface(self.rect_surface.size).convert_alpha()
         self.surface.fill((82, 82, 91, 150))
-        text = textfont_btn.render(
+        text = self.font_1.render(
+            f"Вы погибли...", True, "white")
+        w, h = text.get_size()
+        self.surface.blit(text, (self.rect_surface.w // 2 - w // 2+1, self.rect_surface.h // 2 - h // 2+1))
+        text = self.font_1.render(
             f"Вы погибли...", True, "red")
         w, h = text.get_size()
         self.surface.blit(text, (self.rect_surface.w // 2 - w // 2, self.rect_surface.h // 2 - h // 2))
         rect_btn = pg.Rect((self.rect_surface.x + 10, self.rect_surface.bottom + 15,
                             self.rect_surface.w - 20, 35))
+
         self.btn_relive = Button(lambda _: self.scene.relive(), rect_btn,
-                                 *createImagesButton(rect_btn.size, "Возродиться"))
+                                 *createImagesButton(rect_btn.size, "Возродиться", font=textfont_btn))
 
     def draw(self):
         self.screen.blit(self.display, (0, 0))
@@ -360,14 +453,19 @@ class EndUI(UI):
 
 
 # находит позицию xy чтобы один стоял в центре другого
-def center_pos_2rects(len1, big_len):
+def center_pos_2lens(len1, big_len):
     return big_len // 2 - len1 // 2
+
+
+# находит позицию xy чтобы один стоял в центре другого
+def center_pos_2rects(rect, big_rect):
+    return center_pos_2lens(rect.w, big_rect.w), center_pos_2lens(rect.h, big_rect.h)
 
 
 class PauseUI(UI):
     def __init__(self, scene):
         super(PauseUI, self).__init__(scene)
-        self.rect = pg.Rect((0, 0, 320, 500))
+        self.rect = pg.Rect((0, 0, 370, 350))
         w, h = self.screen.get_size()
         self.rect.center = w // 2, h // 2
         self.surface = pg.Surface(self.rect.size).convert_alpha()
@@ -379,20 +477,17 @@ class PauseUI(UI):
         self.surface.blit(text, (10, 10))
         # end surf
         # init btns
-        btn_size = 250, 35
-        btn_pos = center_pos_2rects(btn_size[0], self.rect.w), t_h + 10 + 10
+        btn_size = 350, 35
+        btn_pos = center_pos_2lens(btn_size[0], self.rect.w), t_h + 10 + 10
         btn_rect = pg.Rect(btn_pos, btn_size)
 
         btns = [
             ("Сохранить карту", lambda _: self.scene.set_scene(self.scene.app.savem_scene)),
             ("Открыть карту", lambda _: self.scene.set_scene(self.scene.app.openm_scene)),
             ("Достижения", lambda _: self.scene.set_scene(self.scene.app.achievements_scene)),
-            ("Справка по игре", lambda _: self.scene.app.open_help()),
+            ("Как играть", lambda _: self.scene.app.open_help()),
             ("Телепорт домой", lambda _: self.scene.tp_to_home()),
-            ("Создать новый мир", lambda _: self.scene.new_world()),
-            ("Сохранить и выйти", lambda _: self.scene.save_and_exit()),
-            ("Выйти", lambda _: self.scene.exit()),
-            ("Оконный режим" if FULLSCREEN else "Полный экран", lambda _: self.scene.editfullscreen()),
+            ("Сохранить и выйти в меню", lambda _: self.scene.save_and_to_main_menu()),
         ]
 
         self.img_btns = [createImagesButton(btn_rect.size, t, font=textfont_btn)
@@ -419,14 +514,14 @@ class PauseUI(UI):
 
 class AchievementsUI(UI):
     bg = (82, 82, 91, 150)
-    font_title = pygame.font.SysFont("Fenix", 28, )  # yes rus
-    font_text = pygame.font.SysFont("Fenix", 24, )  # yes rus
-    font_action = pygame.font.SysFont("Fenix", 20, )  # yes rus
+    font_title = pygame.font.Font('data/fonts/xenoa.ttf', 28, )
+    font_text = pygame.font.Font('data/fonts/xenoa.ttf', 21, )
+    font_action = pygame.font.Font('data/fonts/xenoa.ttf', 14, )
 
     def __init__(self, scene, player_achievements):
         super(AchievementsUI, self).__init__(scene)
-        self.achievements = player_achievements
-        self.rect = pg.Rect((0, 0, 320, 400))
+        # self.achievements = player_achievements
+        self.rect = pg.Rect((0, 0, 370, 400))
         w, h = self.screen.get_size()
         self.rect.center = w // 2, h // 2
         self.surface = pg.Surface(self.rect.size).convert_alpha()
@@ -434,28 +529,31 @@ class AchievementsUI(UI):
         self.surface_achievements = pg.Surface((1, 1))
 
     def redraw_achievements(self):
-        height = 85 * len(self.achievements.completed) + 20
+        achievs = self.scene.app.game_scene.player.achievements
+        height_block = 105
+        height = height_block * len(achievs.completed) + 20
         self.surface_achievements = pg.Surface((self.rect.w, height)).convert_alpha()
         self.surface_achievements.fill(color_none)
 
-        y = 10
-
-        for id_name in self.achievements.completed:
+        y = 15
+        for id_name in achievs.completed:
             ach = achievements[id_name]
-            surface = pg.Surface((self.surface_achievements.get_width() - 20, 75))
+            surface = pg.Surface((self.surface_achievements.get_width() - 20, height_block-10))
             surface.fill("#27272A")
             title = self.font_title.render(ach["title"], True, "#FDE047")
-            surface.blit(title, (5, 5))
+            surface.blit(title, (5, 0))
+
+            pg.draw.line(surface, "#FDE047", (0, title.get_height()+4), (500, title.get_height()+4), width=2)
 
             text = self.font_text.render(ach["description"], True, "#FFFFFF")
-            surface.blit(text, (10, title.get_height() + 10))
+            surface.blit(text, (5, title.get_height()+9))
 
             text = self.font_action.render(ach["action"], True, "#FFFFFF")
             surface.blit(text, (surface.get_width() // 2 - text.get_width() // 2,
-                                title.get_height() * 2 + 14))
+                                title.get_height() * 2 + 7))
 
             self.surface_achievements.blit(surface, (10, y))
-            y += 85
+            y += height_block
 
     def draw(self):
         self.redraw_achievements()
@@ -842,9 +940,9 @@ class ScrollSurfaceRecipes(ScrollSurface):
             name += f" #{out[0]}"
 
         name_surface = textfont.render(name, True, text_color_light)
-        span = textfont.get_height() + 3
+        span = textfont.get_height()
         self.info_index_surface = pygame.Surface(
-            (max(140, name_surface.get_width() + 6), span * (len(recipe) + 3)),
+            (max(140, name_surface.get_width() + 6), span * (len(recipe) + 3)+3),
             pygame.SRCALPHA,
             32)
         self.info_index_surface.fill(bg_color)
@@ -857,6 +955,7 @@ class ScrollSurfaceRecipes(ScrollSurface):
             text = textfont.render(res, True, text_color_light)
             self.info_index_surface.blit(text, (tx, ty))
             ty += span
+        self.info_index_surface.blit(textfont.render("-" * 50, True, text_color_light), (0, ty))
 
     def redraw(self):
         gray_cell = Surface((self.cell_size, self.cell_size - 1)).convert_alpha()

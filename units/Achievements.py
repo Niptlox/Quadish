@@ -6,13 +6,14 @@ class Achievements(SavedObject):
 
     def __init__(self, owner):
         self.owner = owner
-        self.completed = []
+        self.completed = ["killer"]
         self.murder_statistic = {}
 
     def new_completed(self, id_title):
         if id_title in achievements:
             if not self.is_completed(id_title):
                 self.completed.append(id_title)
+                print(self.completed)
                 self.owner.ui.new_achievement_completed(id_title)
                 return True
         else:

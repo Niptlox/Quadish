@@ -12,14 +12,18 @@ def openImagesButton(nameImg: str, colorkey=COLORKEY):
     return imgUp, imgIn, imgDown
 
 
-def createImageButton(size, text="", bg=BLACK, font=TEXTFONT_BTN, text_color=WHITE, colorkey=COLORKEY):
+def createImageButton(size, text="", bg=BLACK, font=TEXTFONT_BTN, text_color=WHITE, colorkey=COLORKEY, border=3):
     surf = get_texture_size(bg, size, colorkey=colorkey)
+    if border:
+        surf.fill("black")
+        pygame.draw.rect(surf, bg, (border, 0, size[0]-border*2, size[1]))
 
-    texframe = font.render(text, True, text_color)
-    texframe_rect = pygame.Rect(((0, 0), texframe.get_size()))
+
+    textframe = font.render(text, True, text_color)
+    textframe_rect = pygame.Rect(((0, 0), textframe.get_size()))
     # print("texframe_rect.center", texframe_rect, size)
-    texframe_rect.center = size[0] // 2, size[1] // 2
-    surf.blit(texframe, texframe_rect)
+    textframe_rect.center = size[0] // 2, size[1] // 2
+    surf.blit(textframe, textframe_rect)
     return surf
 
 
@@ -42,11 +46,34 @@ def createVSteckButtons(size, center_x, start_y, step, images_buttons, funcs, sc
     return buts
 
 
+def createVSteckTextButtons(size, center_x, start_y, step, text_func_buttons, screen_position=(0, 0),
+                            color_schema=DEF_COLOR_SCHEME_BUT, font=TEXTFONT_BTN):
+    y = start_y
+    x = center_x - size[0] // 2
+    step += size[1]
+    buts = []
+    for _btn in text_func_buttons:
+        if isinstance(_btn, TextButton):
+            but = _btn
+            but.rect = pygame.Rect((x, y), size)
+            but.screenRect = pygame.Rect((screen_position[0] + x, screen_position[1] + y), size)
+            but.color_schema = color_schema
+            but.font = font
+            but.redraw_text()
+        else:
+            text_button, func = _btn
+            but = TextButton(func, ((x, y), size), text_button, screenXY=(screen_position[0] + x, screen_position[1] + y),
+                             color_schema=color_schema, font=font)
+        y += step
+        buts.append(but)
+    return buts
+
+
 class Button(pygame.sprite.Sprite):
     # image = load_image("bomb.png")
     # image_boom = load_image("boom.png")
 
-    def __init__(self, func, rect, imgUpB, imgInB=None, imgDownB=None, group=None, screenXY=None, disabled=False):        
+    def __init__(self, func, rect, imgUpB, imgInB=None, imgDownB=None, group=None, screenXY=None, disabled=False):
         """func, rect, imgUpB, imgInB=None, imgDownB=None, group=None, screenXY=None, disabled=False
         вызов func(button) - по пораметру передаёться кнопка"""
         # если рамеры == -1 то берётся размер кнопки
@@ -77,7 +104,7 @@ class Button(pygame.sprite.Sprite):
             self.rect = pygame.Rect(xy, size)
             self.imgUpB = pygame.transform.scale(self.imgUpB, self.rect.size)
             self.imgDownB = pygame.transform.scale(self.imgDownB, self.rect.size)
-            self.imgInB = pygame.transform.scale(self.imgInB, self.rect.size)            
+            self.imgInB = pygame.transform.scale(self.imgInB, self.rect.size)
         if not disabled:
             self.image = self.imgUpB
         else:
@@ -96,7 +123,7 @@ class Button(pygame.sprite.Sprite):
     def pg_event(self, event):
         if self.disabled:
             return
-        but = 1        
+        but = 1
         if event.type == pygame.MOUSEBUTTONUP and event.button == but:
             if self.mauseDownButton:
                 self.click()
@@ -114,7 +141,7 @@ class Button(pygame.sprite.Sprite):
                 if self.screenRect.collidepoint(event.pos):
                     self.mauseInButton = True
         self.redraw()
-        
+
     def update(self, *args) -> None:
         if args:
             event = args[0]
@@ -143,10 +170,52 @@ class Button(pygame.sprite.Sprite):
             self.image = self.imgInB
         else:
             self.image = self.imgUpB
-        
+
     def draw(self, surface):
         surface.blit(self.image, self.rect)
 
     def set_disabled(self, dsb):
         self.disabled = dsb
         self.redraw()
+
+
+class TextButton(Button):
+    def __init__(self, func, rect, text, group=None, screenXY=None, disabled=False, color_schema=DEF_COLOR_SCHEME_BUT,
+                 font=TEXTFONT_BTN):
+        rect = pygame.Rect(rect)
+        self.text = text
+        self.color_schema = color_schema
+        self.font = font
+        imgUpB, imgInB, imgDownB = createImagesButton(rect.size, text, color_schema=color_schema, font=font)
+        super(TextButton, self).__init__(func, rect, imgUpB, imgInB, imgDownB, group=group, screenXY=screenXY,
+                                         disabled=disabled)
+
+    def set_text(self, text):
+        self.text = text
+        self.redraw_text()
+
+    def redraw_text(self):
+        self.imgUpB, self.imgInB, self.imgDownB = createImagesButton(self.rect.size, self.text,
+                                                                     color_schema=self.color_schema,
+                                                                     font=self.font)
+        self.redraw()
+
+
+class ChangeTextButton(TextButton):
+    def __init__(self, func, rect, text: str, group=None, screenXY=None, disabled=False,
+                 states_text_lst=[], start_state_index=0,
+                 color_schema=DEF_COLOR_SCHEME_BUT, font=TEXTFONT_BTN):
+        self.format_text = text
+        self.states_text_lst = states_text_lst
+        self.state_index = start_state_index
+        text = text.format(states_text_lst[start_state_index])
+        n_func = lambda btn: self.change_state(btn, func)
+        super(ChangeTextButton, self).__init__(n_func, rect, text, group=group, screenXY=screenXY, disabled=disabled,
+                                               color_schema=color_schema, font=font)
+
+    def change_state(self, btn, func):
+        self.state_index = (self.state_index + 1) % len(self.states_text_lst)
+        state = self.states_text_lst[self.state_index]
+        self.set_text(self.format_text.format(state))
+        func(btn, state)
+

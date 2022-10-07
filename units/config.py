@@ -1,9 +1,6 @@
 import os
 
-try:
-    from configparser import ConfigParser
-except ImportError:
-    from ConfigParser import ConfigParser  # ver. < 3.0
+from configparser import ConfigParser
 
 config_filename = os.getcwd() + '\settings.ini'
 
@@ -16,26 +13,43 @@ def config_save():
         config.write(configfile)
 
 
-class Window:
+class __Settings:
     config = config
+    section = ""
+
+    @classmethod
+    def set(cls, var_name, var_value):
+        print(cls.section, var_name, var_value)
+        config.set(cls.section, var_name, str(var_value))
+        config_save()
+        if var_name in cls.__dict__:
+            if isinstance(var_value, str):
+                var_value = '"'+var_value+'"'
+            exec(f"cls.{var_name} = {var_value}")
+        print(cls.__dict__[var_name])
+
+
+
+class Window(__Settings):
     section = 'window'
-    size = tuple(map(int, config.get(section, 'size').split(",")))
+    size = config.get(section, 'size')
     fullscreen = config.getboolean(section, 'fullscreen')
 
     @classmethod
     def set_fullscreen(cls, value):
-        config.set(cls.section, 'fullscreen', str(value))
-        config_save()
+        cls.set('fullscreen', str(value))
+
+    @classmethod
+    def set_size(cls, value):
+        cls.set('size', str(value))
 
 
-class UISettings:
-    config = config
+class UISettings(__Settings):
     section = 'UI'
     show_title_menu = config.getboolean(section, 'show_title_menu')
 
 
-class GameSettings:
-    config = config
+class GameSettings(__Settings):
     section = 'game'
     clouds = config.getboolean(section, 'clouds')
     show_biomes = config.getboolean(section, 'show_biomes')
@@ -47,7 +61,15 @@ class GameSettings:
 
     @classmethod
     def set_clouds_state(cls, state):
-        config.set(cls.section, "clouds", state)
+        cls.set("clouds", state)
+
+    @classmethod
+    def set_stars_state(cls, state):
+        cls.set("stars", state)
+
+    @classmethod
+    def set_item_index_state(cls, state):
+        cls.set("view_item_index", state)
 
 # https://stackoverflow.com/questions/8884188/how-to-read-and-write-ini-file-with-python3
 # string_val = config.get('section_a', 'string_val')

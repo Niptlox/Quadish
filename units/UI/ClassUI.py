@@ -31,6 +31,13 @@ class GroupUI:
     def __init__(self, components):
         self.components = components
 
+    def add(self, obj):
+        self.components.append(obj)
+
+    def add_lst(self, lst_objs):
+        for obj in lst_objs:
+            self.add(obj)
+
     def pg_event(self, event):
         for component in self.components:
             component.pg_event(event)

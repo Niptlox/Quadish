@@ -1,8 +1,10 @@
+import webbrowser
+
 from units.common import *
 from units.App import *
 from units.Cursor import set_cursor, CURSOR_NORMAL
 from units.Player import Player
-from units.UI.UI import GameUI, SwitchMapUI, EndUI, PauseUI, AchievementsUI, TitleUI
+from units.UI.UI import GameUI, SwitchMapUI, EndUI, PauseUI, AchievementsUI, TitleUI, SettingsUI
 from units.config import Window
 from units.map.GameMap import GameMap
 from units.map.ScreenMap import ScreenMap
@@ -12,12 +14,16 @@ class TitleScene(SceneMenu):
     def __init__(self, app):
         super(TitleScene, self).__init__(app, TitleUI)
         self.title_ui = self.ui
-        self.settings_ui = None
+        self.settings_ui = SettingsUI(self)
+
         self.developers_ui = None
 
     def new_game(self):
         self.set_scene(self.app.game_scene)
         self.app.game_scene.game_map.new_world()
+
+    def open_developers(self):
+        webbrowser.open('https://gamejolt.com/@Niptlox', new=2)
 
 
 class OpenMapScenePopupMenu(ScenePopupMenu):
@@ -87,6 +93,10 @@ class PauseScenePopupMenu(ScenePopupMenu):
     def save_and_exit(self):
         self.app.game_scene.game_map.save_current_game_map()
         self.exit()
+
+    def save_and_to_main_menu(self):
+        self.app.game_scene.game_map.save_current_game_map()
+        self.set_scene(self.app.title_scene)
 
     def new_world(self):
         self.app.game_scene.game_map.new_world()
