@@ -224,6 +224,8 @@ class TitleUI(UI):
         self.objects = GroupUI([])
         print(self.scene, self)
 
+        self.bg_x, self.bg_y = 0, 0
+        self.bg2_x, self.bg2_y = 0, 0
 
         btns = [
             ("Новый мир", lambda _: self.scene.new_game()),
@@ -253,21 +255,45 @@ class TitleUI(UI):
                          (self.rect.w - 200, self.rect.h - 60, 175, 35),
                          *createImagesButton((175, 35), "Разработчики", font=_font_dev_btn))
         self.objects.add(dev_but)
-        title_text_surf = SurfaceUI(((0, 0), self.game_title_text.get_size()))
+        self.tts = title_text_surf = SurfaceUI(((0, 0), self.game_title_text.get_size()))
         title_text_surf.blit(self.game_title_text, (0, 0))
         title_text_surf.set_colorkey(self.color_sky)
-        title_text_surf.rect.topleft = center_pos_2lens(title_text_surf.rect.w, self.rect.w), \
-                                       center_pos_2lens(title_text_surf.rect.h, self.rect.h) - 220
+        title_text_surf.rect.centerx = self.rect.centerx
+        title_text_surf.rect.top = center_pos_2lens(title_text_surf.rect.h, self.rect.h) - 220
+        self.tts_scale = 1.05
+        self.tts_speed = 0.005
+        self.tts_size = self.tts.rect.size
         self.objects.add(title_text_surf)
         print("objects", self.objects.components)
-
 
     def draw_background(self):
         self.screen.fill(self.color_sky)
         x, y = pg.mouse.get_pos()
+        c = 4
+        nx, ny = x // 40 - self.rect.w // 2, y // 40 - self.rect.h // 2
+        if self.bg2_x == 0 and self.bg2_y == 0:
+            self.bg2_x, self.bg2_y = nx, ny
+        else:
+            self.bg2_x += (nx - self.bg2_x) // c
+            self.bg2_y += (ny - self.bg2_y) // c
+        self.screen.blit(self.background_layer_2, (self.bg2_x, self.bg2_y))
 
-        self.screen.blit(self.background_layer_2, (x // 40 - self.rect.w // 2, y // 40 - self.rect.h // 2))
-        self.screen.blit(self.background, (x // 20 - self.rect.w // 2, y // 20 - self.rect.h // 2))
+        nx, ny = x // 20 - self.rect.w // 2, y // 20 - self.rect.h // 2
+        if self.bg_x == 0 and self.bg_y == 0:
+            self.bg_x, self.bg_y = nx, ny
+        else:
+            self.bg_x += (nx - self.bg_x) // c
+            self.bg_y += (ny - self.bg_y) // c
+
+        self.screen.blit(self.background, (self.bg_x, self.bg_y))
+        # self.tts.rect.top = self.tts_y + y // 50
+        self.tts_scale += self.tts_speed
+        if self.tts_scale > 1.08 or self.tts_scale < 1.01:
+            self.tts_speed *= 0
+        tts = pg.transform.smoothscale(self.game_title_text, (self.tts_size[0]*self.tts_scale, self.tts_size[1]*self.tts_scale))
+        self.tts.set(tts)
+        self.tts.set_colorkey(self.color_sky)
+        # self.tts.rect.x = self.tts_x
 
     def draw(self):
 
@@ -293,7 +319,7 @@ class SettingsUI(TitleUI):
             size_start_state_index = self.window_sizes_lst.index(config.Window.size)
         else:
             self.window_sizes_lst.append(config.Window.size)
-            size_start_state_index = len(self.window_sizes_lst)-1
+            size_start_state_index = len(self.window_sizes_lst) - 1
 
         btns = [
             ChangeTextButton(lambda _, state: config.Window.set_size(state), btn_rect, "Размер ({})",
@@ -323,11 +349,12 @@ class SettingsUI(TitleUI):
 
         self.objects.add_lst(obj_btns)
 
-        title_text_surf = SurfaceUI(((0, 0), self.game_title_text.get_size()))
+        self.tts = title_text_surf = SurfaceUI(((0, 0), self.game_title_text.get_size()))
         title_text_surf.blit(self.game_title_text, (0, 0))
         title_text_surf.set_colorkey(self.color_sky)
         title_text_surf.rect.topleft = center_pos_2lens(title_text_surf.rect.w, self.rect.w), \
                                        center_pos_2lens(title_text_surf.rect.h, self.rect.h) - 220
+        self.tts_y = title_text_surf.rect.top
 
         self.objects.add(title_text_surf)
 
@@ -429,7 +456,7 @@ class EndUI(UI):
         text = self.font_1.render(
             f"Вы погибли...", True, "white")
         w, h = text.get_size()
-        self.surface.blit(text, (self.rect_surface.w // 2 - w // 2+1, self.rect_surface.h // 2 - h // 2+1))
+        self.surface.blit(text, (self.rect_surface.w // 2 - w // 2 + 1, self.rect_surface.h // 2 - h // 2 + 1))
         text = self.font_1.render(
             f"Вы погибли...", True, "red")
         w, h = text.get_size()
@@ -538,15 +565,15 @@ class AchievementsUI(UI):
         y = 15
         for id_name in achievs.completed:
             ach = achievements[id_name]
-            surface = pg.Surface((self.surface_achievements.get_width() - 20, height_block-10))
+            surface = pg.Surface((self.surface_achievements.get_width() - 20, height_block - 10))
             surface.fill("#27272A")
             title = self.font_title.render(ach["title"], True, "#FDE047")
             surface.blit(title, (5, 0))
 
-            pg.draw.line(surface, "#FDE047", (0, title.get_height()+4), (500, title.get_height()+4), width=2)
+            pg.draw.line(surface, "#FDE047", (0, title.get_height() + 4), (500, title.get_height() + 4), width=2)
 
             text = self.font_text.render(ach["description"], True, "#FFFFFF")
-            surface.blit(text, (5, title.get_height()+9))
+            surface.blit(text, (5, title.get_height() + 9))
 
             text = self.font_action.render(ach["action"], True, "#FFFFFF")
             surface.blit(text, (surface.get_width() // 2 - text.get_width() // 2,
@@ -942,7 +969,7 @@ class ScrollSurfaceRecipes(ScrollSurface):
         name_surface = textfont.render(name, True, text_color_light)
         span = textfont.get_height()
         self.info_index_surface = pygame.Surface(
-            (max(140, name_surface.get_width() + 6), span * (len(recipe) + 3)+3),
+            (max(140, name_surface.get_width() + 6), span * (len(recipe) + 3) + 3),
             pygame.SRCALPHA,
             32)
         self.info_index_surface.fill(bg_color)

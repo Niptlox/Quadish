@@ -61,12 +61,17 @@ class SurfaceUI(pg.Surface):
 
     def set_size(self, size):
         self.rect.size = size
-        super().__init__(self.rect.size)
+        super().__init__(self.rect.size, self.get_flags())
 
     def convert_alpha(self):
         """Изменяет саму плоскость"""
         super(SurfaceUI, self).__init__(self.rect.size, pg.SRCALPHA, 32)
         return self
+
+    def set(self, surface):
+        super(SurfaceUI, self).__init__(surface.get_size(), surface.get_flags(), 32)
+        self.blit(surface, (0, 0))
+
 
 
 #

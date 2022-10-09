@@ -5,6 +5,7 @@ from pygame import Vector2
 from pygame.locals import *
 
 from units.Achievements import Achievements
+from units.Animation import get_death_animation
 from units.Entity import PhysicalObject
 from units.Inventory import InventoryPlayer
 from units.Items import Items
@@ -90,7 +91,9 @@ class Player(PhysicalObject):
 
         self.achievements = Achievements(self)
         self.killer = ""
+        # ANIMATION ============================
 
+        self.death_animation = get_death_animation(self.rect.size)
         # INVENTORY ============================
         self.creative_mode = CREATIVE_MODE
 
@@ -376,10 +379,13 @@ class Player(PhysicalObject):
         player_display_pos = (min(WSIZE[0], max(-TSIZE, self.rect.x - scroll[0])),
                               min(WSIZE[0], max(-TSIZE, self.rect.y - scroll[1])))
         surface.blit(self.player_img, player_display_pos)
+        self.death_animation.update()
+        self.death_animation.draw(surface, *player_display_pos)
         # if self.lives != self.max_lives:
         self.draw_lives(surface, player_display_pos)
 
     def damage(self, lives, owner="Unknown"):
+        self.death_animation.start()
         if self.creative_mode:
             return True
         if self.max_lives == -1:

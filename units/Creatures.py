@@ -1,6 +1,7 @@
 import random
 from time import time
 
+from units.Animation import get_death_animation
 from units.Entity import PhysicalObject
 from units.Items import ItemsTile
 from units.common import *
@@ -40,6 +41,7 @@ class Creature(PhysicalObject):
         self.lives_surface = pg.Surface((self.rect.w, 6)).convert_alpha()
         self.punch_reload_time = 1 / self.punch_speed
         self.last_punch_time = 0
+        self.death_animation = get_death_animation(self.rect.size)
 
     def update(self, tact):
         self.update_physics()
@@ -54,6 +56,8 @@ class Creature(PhysicalObject):
 
     def draw(self, surface, pos):
         super().draw(surface, pos)
+        self.death_animation.update()
+        self.death_animation.draw(surface, *pos)
         if self.lives != self.max_lives:
             self.draw_lives(surface, pos)
 
@@ -71,6 +75,10 @@ class Creature(PhysicalObject):
             items = item_cls(self.game, index=idx, count=count,
                              pos=(x, y))
             self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(x // TSIZE, y // TSIZE), items)
+
+    def damage(self, lives):
+        super(Creature, self).damage(lives)
+        self.death_animation.start()
 
 
 class MovingCreature(Creature):
@@ -173,6 +181,7 @@ class Slime(MovingCreature):
 
     def update(self, tact):
         super().update(tact)
+        self.death_animation.set_resize(self.rect.size)
         if self.collisions["bottom"]:
             if self.jump_state == 1:
                 self.rect.height += self.reduction_step
