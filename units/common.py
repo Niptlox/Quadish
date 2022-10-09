@@ -185,6 +185,7 @@ Chest_size_table = 5, 4
 
 class SavedObject:
     not_save_vars = {"", }
+    is_not_saving = False
 
     def get_vars(self):
         # print(self.not_save_vars)
@@ -194,7 +195,10 @@ class SavedObject:
             if key in self.not_save_vars:
                 d.pop(key)
             elif isinstance(value, SavedObject):
-                d[key] = value.get_vars()
+                if not value.is_not_saving:
+                    d[key] = value.get_vars()
+                else:
+                    d.pop(key)
             elif isinstance(value, pg.Surface) or (isinstance(value, (list, tuple)) and value and isinstance(value[0], pg.Surface)):
                 warning(f"Не контроллируемый {key}: {value}, удален из сохранения!")
                 d.pop(key)

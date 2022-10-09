@@ -1,7 +1,9 @@
 from units.common import *
 
 
-class Animation:
+class Animation(SavedObject):
+    is_not_saving = True
+
     def __init__(self, frames, speed=20, looped=False, start_frame=0):
         self.animation = False
         # массив картинок
