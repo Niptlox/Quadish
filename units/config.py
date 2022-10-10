@@ -3,7 +3,7 @@ import os
 from configparser import ConfigParser
 
 config_filename = os.getcwd() + '\settings.ini'
-
+print("config_filename", config_filename)
 config = ConfigParser()
 config.read(config_filename)
 
@@ -24,10 +24,9 @@ class __Settings:
         config_save()
         if var_name in cls.__dict__:
             if isinstance(var_value, str):
-                var_value = '"'+var_value+'"'
+                var_value = '"' + var_value + '"'
             exec(f"cls.{var_name} = {var_value}")
         print(cls.__dict__[var_name])
-
 
 
 class Window(__Settings):

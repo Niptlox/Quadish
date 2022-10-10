@@ -1,4 +1,6 @@
 from units.Texture import *
+from units.audio import audio_click
+
 
 DARK = "#27272A"
 DEF_COLOR_SCHEME_BUT = ((WHITE, GRAY, DARK), (BLACK, BLACK, WHITE))
@@ -149,6 +151,7 @@ class Button(pygame.sprite.Sprite):
 
     def click(self):
         if self.func:
+            audio_click.play()
             self.mauseInButton = False
             self.mauseDownButton = False
             self.redraw()

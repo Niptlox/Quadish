@@ -23,9 +23,11 @@ CHUNK_BD_COLOR = (230, 20, 20)
 CWDIR = os.getcwd()
 
 # INIT GAME ==============================================
+pygame.mixer.pre_init(44100, -16, 1, 512)
 pygame.init()  # initiate pygame
+
 FPS = 30
-flags = 0
+flags = pygame.SCALED
 desktop_size = pygame.display.get_desktop_sizes()[0]
 print("INIT GAME VARS")
 last_versions = ["0.9.1", "0.1.3-alpha", "0.1.5-alpha"]

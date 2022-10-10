@@ -48,7 +48,7 @@ def grow_tree(pos, game_map, tile_type=102, rec=0):
         if game_map.get_static_tile_type(x + ax, y + ay, default=0) == 0:
             game_map.set_static_tile(x + ax, y + ay, game_map.get_tile_ttile(leave_type))
 
-    if tile_type == -102 and rec < 5:
+    if tile_type == -102 and rec < 50:
         print(pos)
 
         grow_tree((pos[0], pos[1] -6), game_map, tile_type=tile_type, rec=rec+1)
