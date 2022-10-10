@@ -385,9 +385,9 @@ class Player(PhysicalObject):
         self.draw_lives(surface, player_display_pos)
 
     def damage(self, lives, owner="Unknown"):
-        self.death_animation.start()
         if self.creative_mode:
             return True
+        self.death_animation.start()
         if self.max_lives == -1:
             return True
         self.lives -= lives

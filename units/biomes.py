@@ -52,7 +52,12 @@ def biome_of_pos(x, y):
     k = snoise2(x / 100, y / 100, 2, persistence=0.75, base=113, lacunarity=2)
     j -= (j - i) * k
     i -= (i - j) * k
+    if y < TOP_MIDDLE_WORLD:
+        iy = y - TOP_MIDDLE_WORLD - 15
+        i -= -iy / 100
+        j -= -y / 10
     t = int(i * 25) + 10
+    t = max(t, -273)
     p = int(j * 50) + 50
     if (snoise2(x / freq_x, y / freq_y) * 20 + y) > START_HELL_Y:
         t += 100

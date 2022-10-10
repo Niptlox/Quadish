@@ -36,7 +36,9 @@ class Animation(SavedObject):
                 else:
                     self.stop()
 
-    def start(self):
+    def start(self, restart=True):
+        if restart:
+            self.stop()
         self.animation = True
 
     def pause(self):
@@ -47,7 +49,7 @@ class Animation(SavedObject):
         self.frame_index = 0
 
 
-def get_death_animation(size, color=(185, 28, 28), speed=10, time=1, start_alpha=200):
+def get_death_animation(size, color=(185, 28, 28), speed=10, time=2, start_alpha=200):
     count = FPS * time // speed
     arr = []
     for i in range(count):
