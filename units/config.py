@@ -70,6 +70,16 @@ class GameSettings(__Settings):
     def set_item_index_state(cls, state):
         cls.set("view_item_index", state)
 
+
+class VolumeSettings(__Settings):
+    section = 'sound'
+    game_volume = config.getfloat(section, 'game_volume')
+    ui_volume = config.getfloat(section, 'ui_volume')
+    player_volume = config.getfloat(section, 'player_volume')
+    creatures_volume = config.getfloat(section, 'creatures_volume')
+    back_music_volume = config.getfloat(section, 'back_music_volume')
+
+
 # https://stackoverflow.com/questions/8884188/how-to-read-and-write-ini-file-with-python3
 # string_val = config.get('section_a', 'string_val')
 # bool_val = config.getboolean('section_a', 'bool_val')

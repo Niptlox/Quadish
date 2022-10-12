@@ -77,8 +77,8 @@ class Creature(PhysicalObject):
             self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(x // TSIZE, y // TSIZE), items)
 
     def damage(self, lives):
-        super(Creature, self).damage(lives)
         self.death_animation.start()
+        return super(Creature, self).damage(lives)
 
 
 class MovingCreature(Creature):

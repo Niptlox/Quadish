@@ -28,7 +28,7 @@ class Game(App):
 
     @classmethod
     def open_help(cls):
-        subprocess.Popen(('start', CWDIR + '/help.txt'), shell=True)
+        subprocess.Popen(('start', 'help.txt'), shell=True, cwd=CWDIR)
 
 
 class GameScene(Scene):

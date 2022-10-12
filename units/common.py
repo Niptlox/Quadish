@@ -154,6 +154,8 @@ CREATIVE_MODE = False
 EVENT_100_MSEC = pg.USEREVENT + 1
 pygame.time.set_timer(EVENT_100_MSEC, 100, False)
 
+EVENT_END_OF_STEP_SOUND = pg.USEREVENT + 10
+
 # CREATURES ===============================================================
 
 KINGDOM_CREATURAE = "Creaturae"

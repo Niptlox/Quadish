@@ -1,5 +1,6 @@
-from units.Tiles import Pickaxes_capability
+from units.Tiles import Pickaxes_capability, STONE_TILES, WOOD_TILES
 from units.Tools.ToolsSword import *
+from units.sound import *
 
 
 class ToolPickaxe(ToolSword):
@@ -47,6 +48,11 @@ class ToolPickaxe(ToolSword):
                     dig_tile(self.owner.game_map, x, y, self, check)
                     result = True
                     self.owner.choose_active_cell()
+                    if self.tool_cls & CLS_PICKAXE:
+                        if check[0][0] in STONE_TILES:
+                            get_random_sound_of(sounds_pickaxe).play()
+                        if check[0][0] in WOOD_TILES:
+                            get_random_sound_of(sounds_axe).play()
                 self.stroke_rect.x = x * TSIZE - vp.x
                 self.stroke_rect.y = y * TSIZE - vp.y
                 self.stroke = True
@@ -58,6 +64,7 @@ class ToolPickaxe(ToolSword):
             self.flip = vector_to_mouse.x < 0
             self.animation.start()
             self.last_action_time = time()
+
         return result
 
     def can_dig_this_tile(self, ttile):
@@ -68,7 +75,7 @@ class ToolPickaxe(ToolSword):
 
 class ToolGoldPickaxe(ToolPickaxe):
     strength = 777  # dig
-    damage = 17   # punch
+    damage = 17  # punch
     speed = 7
     distance = 1.5 * TSIZE  # punch
     discard_distance = 7  # отбрасывание
@@ -99,4 +106,3 @@ class ToolCopperPickaxe(ToolPickaxe):
     index = 533
     sprite = tile_imgs[index]
     capability = Pickaxes_capability[index]
-

@@ -64,7 +64,7 @@ class AnimationSword(AnimationTool):
     def __init__(self, tool):
         super().__init__(tool)
         self.rotate = 0
-        self.rotate_speed = 6 * max(2, tool.speed)
+        self.rotate_speed = 8 * max(2, tool.speed)
         self.rotate_end = 180
         self.set_sprite(tool.sprite)
 

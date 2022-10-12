@@ -23,6 +23,7 @@ class Achievements(SavedObject):
         return id_title in self.completed
 
     def add_murder(self, obj):
+        print(obj)
         if obj.class_obj & OBJ_CREATURE:
             self.murder_statistic.setdefault("creature", 0)
             self.murder_statistic["creature"] += 1

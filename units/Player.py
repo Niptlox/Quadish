@@ -14,6 +14,7 @@ from units.Tiles import hand_pass_img, player_img, dig_rect_img
 from units.Tools import ToolHand, TOOLS, ItemTool, \
     ToolCreativeHand  # ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe, ItemTool
 from units.UI.UI import InventoryPlayerChestUI
+from units.sound import *
 from units.common import *
 
 
@@ -32,6 +33,7 @@ class Player(PhysicalObject):
     max_max_lives = 600
 
     def __init__(self, game, x, y) -> None:
+
         if x == 777:
             x = random.randint(-1000 * TSIZE, 1000 * TSIZE)
         if y == 777:
@@ -109,6 +111,9 @@ class Player(PhysicalObject):
         self.chest_ui = InventoryPlayerChestUI(self.inventory)
         self.tile_ui = None
 
+        # ====================================
+        self.state_step_sound = 0
+
     def set_vars(self, vrs):
         # self.inventory.set_vars(vrs.pop("inventory"))
         self.chest_ui = InventoryPlayerChestUI(self.inventory)
@@ -124,6 +129,8 @@ class Player(PhysicalObject):
             return True
         if self.inventory.pg_event(event):
             return True
+        if event.type == EVENT_END_OF_STEP_SOUND:
+            self.state_step_sound = 0
         if event.type == KEYDOWN:
             if event.key in (K_RIGHT, K_d):
                 self.moving_right = True
@@ -245,13 +252,18 @@ class Player(PhysicalObject):
             self.tool.right_button(vector_to_mouse)
         self.tool.draw(self.ui.display, vector_player_display.x, vector_player_display.y)
         if self.eat and item and item.class_item == CLS_EAT:
+
             if item.index == 55:
                 self.max_lives += 20
-            if self.max_lives > self.max_max_lives:
-                self.max_lives = self.max_max_lives
+                get_random_sound_of(sounds_drink).play()
             elif item.index == 351:
+                get_random_sound_of(sounds_drink).play()
                 if self.max_jump_count < 5:
                     self.max_jump_count += 1
+            else:
+                get_random_sound_of(sounds_eat).play()
+            if self.max_lives > self.max_max_lives:
+                self.max_lives = self.max_max_lives
             self.lives = min(self.lives + item.recovery_lives, self.max_lives)
             item.count -= 1
             if item.count <= 0:
@@ -363,6 +375,11 @@ class Player(PhysicalObject):
             self.jump_count = 0
             self.vertical_momentum = 0
             self.first_fall = False
+            if abs(self.speed) > 0 and self.state_step_sound == 0 and collisions['bottom'][0][1] == 1:
+                step_sound = get_random_sound_of(sounds_step_dry).play()
+                self.state_step_sound = 1
+                step_sound.set_endevent(EVENT_END_OF_STEP_SOUND)
+
         else:
             self.air_timer += 1
         if collisions['top']:
@@ -373,6 +390,9 @@ class Player(PhysicalObject):
                 self.vertical_momentum = 0
                 self.jump_count = min(self.max_jump_count, self.jump_count)
                 self.on_wall = True
+
+    def fin_step_sound(self):
+        self.state_step_sound = 0
 
     def draw(self, surface):
         scroll = self.game.screen_map.scroll

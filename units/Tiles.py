@@ -256,6 +256,9 @@ BACKTILES = {1003, }
 # предметы которые нельзя физически поставить
 ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 351, 401, 801}
 
+STONE_TILES = {3, 4, 5, 31, 32, 33}
+WOOD_TILES = {12, 110, 11, 121, 122, 123, 124, 126, 127, 128, 129, 251}
+
 # Блоки у которых state это массив
 ITEM_WITH_STATE_IS_LIST = {126}
 # Растения у которых есть таймер
@@ -474,7 +477,7 @@ def debug_draw():
     screen_.fill("green")
 
     x, y = 5, 5
-    for im in break_imgs:
+    for im in pickaxe_0_imgs:
         screen_.blit(im, (x, y))
         x += im.get_width() + 5
     pg.display.flip()
