@@ -108,6 +108,12 @@ chest_img = load_img("data/sprites/tiles/chest.png")  # сундук
 cauldron_img = load_img("data/sprites/tiles/cauldron.png")
 water_img = load_img("data/sprites/tiles/water.png")
 
+stone_blore_ore_img = load_img(r"data/sprites/tiles/Ore/StoneBloreOre.png")  # blue ore
+stone_copper_ore_img = load_img(r"data/sprites/tiles/Ore/StoneCopperOre.png")
+stone_gold_ore_img = load_img(r"data/sprites/tiles/Ore/StoneGoldOre.png")
+stone_iron_ore_img = load_img(r"data/sprites/tiles/Ore/StoneIronOre.png")
+stone_silver_ore_img = load_img(r"data/sprites/tiles/Ore/StoneSilverOre.png")
+
 cloud_img = create_tile_image("#CBD5E1")
 cloud_imgs = [create_tile_image((203 - i, 213 - i, 230 - i)) for i in range(0, 130, 30)]
 
@@ -163,6 +169,12 @@ tile_imgs = {None: none_img,
              9: tnt_img,
              11: plank_img,
              12: wood_img,
+             21: stone_blore_ore_img,
+             22: stone_copper_ore_img,
+             23: stone_gold_ore_img,
+             24: stone_iron_ore_img,
+             25: stone_silver_ore_img,
+
              31: stone_brick_img,
              32: stone_brick_1_img,
              33: stone_brick_2_img,
@@ -245,7 +257,7 @@ MULTI_BLOCK_PLANTS = {103, }
 ON_EARTHEN_PLANTS = {101, 102, 103, 104}
 
 # блоки через которые нельзя пройти
-PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 31, 32, 33, 103, 124, 128, 251}
+PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 21, 22, 23, 24, 25, 31, 32, 33, 103, 124, 128, 251}
 # полуфизические блоки например мебель листва вода
 SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 122}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
@@ -256,7 +268,7 @@ BACKTILES = {1003, }
 # предметы которые нельзя физически поставить
 ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 351, 401, 801}
 
-STONE_TILES = {3, 4, 5, 31, 32, 33}
+STONE_TILES = {3, 4, 5, 31, 32, 33, 21, 22, 23, 24, 25}
 WOOD_TILES = {12, 110, 11, 121, 122, 123, 124, 126, 127, 128, 129, 251}
 
 # Блоки у которых state это массив
@@ -276,7 +288,8 @@ Eats = {52: 10, 53: 2, 56: 8, 55: 100, 401: 8, 251: 7, 351: 1}
 
 # PICKAXE ===============================================================
 
-iron_capability = {1, 2, 3, 4, 9, 11, 12, 31, 32, 33, 101, 102, 103, 104, 105, 106, 110, 121, 122, 123, 124, 125, 126,
+iron_capability = {1, 2, 3, 4, 9, 11, 12, 21, 22, 23, 24, 25, 31, 32, 33, 101, 102, 103, 104, 105, 106, 110, 121, 122,
+                   123, 124, 125, 126,
                    127, 251,
                    128, 130}
 spatula_iron_capability = {1003}
@@ -314,6 +327,7 @@ tile_hand_imgs[122] = load_img("data/sprites/tiles/chear_item.png", HAND_RECT)  
 tile_hand_imgs[130] = bedroll_of_pelts_item_img
 
 # INIT_TILES ====================================================
+
 tile_words = {None: "None",
               0: "None",
               1: "Дёрн",
@@ -324,6 +338,11 @@ tile_words = {None: "None",
               9: "Динамит",
               11: "Доски",
               12: "Древесина",
+              21: "Блок блоровой руды",
+              22: "Блок медной руды",
+              23: "Блок золотой руды",
+              24: "Блок железной руды",
+              25: "Блок серебряной руды",
               31: "Каменный кирпич",
               32: "Замшелый каменный кирпич",
               33: "Старый каменный кирпич",
@@ -378,7 +397,6 @@ tile_words = {None: "None",
               801: "Палка",
               1003: "Панелька камня"
               }
-
 # Прочность блоков
 TILES_SOLIDITY = {
     1: 15,
@@ -389,6 +407,11 @@ TILES_SOLIDITY = {
     9: 60,
     11: 45,
     12: 45,
+    21: 60,
+    22: 50,
+    23: 50,
+    24: 60,
+    25: 50,
     31: 75,
     32: 70,
     33: 60,
@@ -439,7 +462,17 @@ tile_drops = {
     124: [(123, 1, 1)],  # close door
     128: [(127, 1, 1)],  # close door
     110: [(12, 1, 1)],  # из дерева древесина
-    105: [(105, 1, 1), (102, 1, 0.13), (801, (1, 2), 0.25)]
+    105: [(105, 1, 1), (102, 1, 0.13), (801, (1, 2), 0.25)],
+    21: [(3, 1, 0.95),
+         (61, (1, 2), 1)],
+    22: [(3, 1, 0.95),
+         (62, (1, 2), 1)],
+    23: [(3, 1, 0.95),
+         (63, (1, 2), 1)],
+    24: [(3, 1, 0.95),
+         (64, (1, 2), 1)],
+    25: [(3, 1, 0.95),
+         (65, (1, 2), 1)],
 }
 
 

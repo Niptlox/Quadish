@@ -6,7 +6,7 @@ class Achievements(SavedObject):
 
     def __init__(self, owner):
         self.owner = owner
-        self.completed = ["killer"]
+        self.completed = []
         self.murder_statistic = {}
 
     def new_completed(self, id_title):
@@ -21,6 +21,10 @@ class Achievements(SavedObject):
 
     def is_completed(self, id_title) -> bool:
         return id_title in self.completed
+
+    def new_created(self, obj_id):
+        if not self.is_completed("last_pickaxe") and obj_id == 532:
+            self.new_completed("last_pickaxe")
 
     def add_murder(self, obj):
         print(obj)
@@ -64,5 +68,7 @@ achievements = {
                  "action": "Вы должны убить 1000 слаймов"},
     "wolfI": {"title": "Уничтожитель волков I", "description": "Вы убили 10 волков",
               "action": "Вы должны убить 10 волков"},
+    "last_pickaxe": {"title": "Создатель божественной кирки", "description": "Вы создали кирку бога",
+              "action": "Вы должны создать последнюю кирку"}
 
 }

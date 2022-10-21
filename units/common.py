@@ -20,7 +20,7 @@ show_info_menu = True or DEBUG
 CHUNK_BD_COLOR = (230, 20, 20)
 
 #  current working directory.
-CWDIR = os.getcwd()
+CWDIR = os.getcwd() + "/"
 
 # INIT GAME ==============================================
 pygame.mixer.pre_init(44100, -16, 1, 512)
@@ -72,7 +72,7 @@ CHUNK_SIZE = 32
 CSIZE = CHUNK_SIZE
 
 STRUCTURE_CHUNKS_SIZE = 100  # чанков
-CNT_BUILDS_OF_STRUCTURE_BLOCK = 1000
+
 SCSIZE = STRUCTURE_CHUNKS_SIZE
 
 CHUNK_SIZE_PX = CHUNK_SIZE * TILE_SIZE
@@ -131,6 +131,8 @@ freq_y = 14 * cof
 
 CHUNK_CREATURE_LIMIT = 4
 CHUNK_CREATURE_CHANCE = 0.2
+
+CNT_BUILDS_OF_STRUCTURE_BLOCK = 10000
 
 START_SPACE_Y = -1000
 START_ATMO_Y = START_SPACE_Y + 200

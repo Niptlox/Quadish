@@ -15,6 +15,8 @@ from units.common import *
 
 # INIT TEXT ==================================================
 from units.creating_items import RECIPES
+from units.outline import add_outline_to_image
+from units.sound import set_category_volume
 
 pygame.font.init()
 # textfont = pygame.font.SysFont('Jokerman', 19)
@@ -290,7 +292,8 @@ class TitleUI(UI):
         self.tts_scale += self.tts_speed
         if self.tts_scale > 1.08 or self.tts_scale < 1.01:
             self.tts_speed *= 0
-        tts = pg.transform.smoothscale(self.game_title_text, (self.tts_size[0]*self.tts_scale, self.tts_size[1]*self.tts_scale))
+        tts = pg.transform.smoothscale(self.game_title_text,
+                                       (self.tts_size[0] * self.tts_scale, self.tts_size[1] * self.tts_scale))
         self.tts.set(tts)
         self.tts.set_colorkey(self.color_sky)
         # self.tts.rect.x = self.tts_x
@@ -305,16 +308,37 @@ class TitleUI(UI):
         self.objects.pg_event(event)
 
 
-class SettingsUI(TitleUI):
+class MainSettingsUI(TitleUI):
     window_sizes_lst = ["1240,720", "720,480"]
 
     def __init__(self, scene):
-        super(SettingsUI, self).__init__(scene)
+        super(MainSettingsUI, self).__init__(scene)
         self.objects = GroupUI([])
 
         btn_size = 400, 35
         btn_rect = pg.Rect((0, 0), btn_size)
 
+        btns = self.get_pre_buttons(btn_rect)
+
+        step = 15
+        btn_pos = self.rect.w // 2 - btn_size[0] // 2, self.rect.h // 2 - (btn_size[1] + step) / 2 * len(btns) + 40
+        btn_rect = pg.Rect(btn_pos, btn_size)
+        obj_btns = createVSteckTextButtons(btn_rect.size, btn_rect.centerx, btn_rect.top, step, btns,
+                                           screen_position=(self.rect.x, self.rect.y),
+                                           font=textfont_btn)  # кнопки открывающие карты
+
+        self.objects.add_lst(obj_btns)
+
+        self.tts = title_text_surf = SurfaceUI(((0, 0), self.game_title_text.get_size()))
+        title_text_surf.blit(self.game_title_text, (0, 0))
+        title_text_surf.set_colorkey(self.color_sky)
+        title_text_surf.rect.topleft = center_pos_2lens(title_text_surf.rect.w, self.rect.w), \
+                                       center_pos_2lens(title_text_surf.rect.h, self.rect.h) - 220
+        self.tts_y = title_text_surf.rect.top
+
+        self.objects.add(title_text_surf)
+
+    def get_pre_buttons(self, btn_rect):
         if config.Window.size in self.window_sizes_lst:
             size_start_state_index = self.window_sizes_lst.index(config.Window.size)
         else:
@@ -336,27 +360,45 @@ class SettingsUI(TitleUI):
             ChangeTextButton(lambda _, state: config.GameSettings.set_item_index_state(bool_dict[state]), btn_rect,
                              "ID предмета: {}", states_text_lst=ru_bool_lst,
                              start_state_index=eng_bool_lst.index(config.GameSettings.view_item_index)),
+            ("Звуки и музыка...", lambda _: self.scene.set_ui(self.scene.sound_settings_ui)),
             ("В главное меню", lambda _: self.scene.set_ui(self.scene.title_ui)),
 
         ]
+        return btns
 
-        step = 15
-        btn_pos = self.rect.w // 2 - btn_size[0] // 2, self.rect.h // 2 - (btn_size[1] + step) / 2 * len(btns) + 40
-        btn_rect = pg.Rect(btn_pos, btn_size)
-        obj_btns = createVSteckTextButtons(btn_rect.size, btn_rect.centerx, btn_rect.top, step, btns,
-                                           screen_position=(self.rect.x, self.rect.y),
-                                           font=textfont_btn)  # кнопки открывающие карты
 
-        self.objects.add_lst(obj_btns)
+categories_sounds = {
+    "ui",
+    'player',
+    'creatures',
+    'game',
+    'background',
+}
 
-        self.tts = title_text_surf = SurfaceUI(((0, 0), self.game_title_text.get_size()))
-        title_text_surf.blit(self.game_title_text, (0, 0))
-        title_text_surf.set_colorkey(self.color_sky)
-        title_text_surf.rect.topleft = center_pos_2lens(title_text_surf.rect.w, self.rect.w), \
-                                       center_pos_2lens(title_text_surf.rect.h, self.rect.h) - 220
-        self.tts_y = title_text_surf.rect.top
+volume_values_lst = [0, 10, 20, 30, 40, 50, 60, 70, 80, 100]
 
-        self.objects.add(title_text_surf)
+
+class SoundSettingsUI(MainSettingsUI):
+    def get_pre_buttons(self, btn_rect):
+        btns = [
+            ("Громкость", lambda _: ()),
+            ChangeTextButton(lambda _, state: set_category_volume("background", state / 100), btn_rect, "Музыка {}%",
+                             states_text_lst=volume_values_lst,
+                             start_state_index=volume_values_lst.index(config.VolumeSettings.background_volume * 100)),
+            ChangeTextButton(lambda _, state: set_category_volume("player", state / 100), btn_rect, "Игрок {}%",
+                             states_text_lst=volume_values_lst,
+                             start_state_index=volume_values_lst.index(config.VolumeSettings.player_volume * 100)),
+            ChangeTextButton(lambda _, state: set_category_volume("creatures", state / 100), btn_rect, "Существа {}%",
+                             states_text_lst=volume_values_lst,
+                             start_state_index=volume_values_lst.index(config.VolumeSettings.creatures_volume * 100)),
+            ChangeTextButton(lambda _, state: set_category_volume("ui", state / 100), btn_rect, "Интерфейс {}%",
+                             states_text_lst=volume_values_lst,
+                             start_state_index=volume_values_lst.index(config.VolumeSettings.ui_volume * 100)),
+            ("Назад", lambda _: self.scene.set_ui(self.scene.settings_ui)),
+
+        ]
+        print(btns)
+        return btns
 
 
 class SwitchMapUI(UI):
@@ -442,10 +484,10 @@ class SwitchMapUI(UI):
         res = self.scene.open_map(num)
 
 
-class EndUI(UI):
-    font_1 = pygame.font.SysFont("Fenix", 35, )
-    font_2 = pygame.font.SysFont("Fenix", 34, )
+font_end = pygame.font.Font('data/fonts/xenoa.ttf', 28, )  # rus
 
+
+class EndUI(UI):
     def __init__(self, scn):
         super(EndUI, self).__init__(scn)
         self.rect_surface = pg.Rect((0, 0, 220, 100))
@@ -453,12 +495,10 @@ class EndUI(UI):
         self.rect_surface.center = w // 2, h // 2
         self.surface = pg.Surface(self.rect_surface.size).convert_alpha()
         self.surface.fill((82, 82, 91, 150))
-        text = self.font_1.render(
-            f"Вы погибли...", True, "white")
-        w, h = text.get_size()
-        self.surface.blit(text, (self.rect_surface.w // 2 - w // 2 + 1, self.rect_surface.h // 2 - h // 2 + 1))
-        text = self.font_1.render(
-            f"Вы погибли...", True, "red")
+
+        text = font_end.render(f"Вы погибли...", True, "red")
+        text = add_outline_to_image(text, 2, WHITE)
+
         w, h = text.get_size()
         self.surface.blit(text, (self.rect_surface.w // 2 - w // 2, self.rect_surface.h // 2 - h // 2))
         rect_btn = pg.Rect((self.rect_surface.x + 10, self.rect_surface.bottom + 15,

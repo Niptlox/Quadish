@@ -4,7 +4,7 @@ from units.common import *
 from units.App import *
 from units.Cursor import set_cursor, CURSOR_NORMAL
 from units.Player import Player
-from units.UI.UI import GameUI, SwitchMapUI, EndUI, PauseUI, AchievementsUI, TitleUI, SettingsUI
+from units.UI.UI import GameUI, SwitchMapUI, EndUI, PauseUI, AchievementsUI, TitleUI, MainSettingsUI, SoundSettingsUI
 from units.config import Window
 from units.map.GameMap import GameMap
 from units.map.ScreenMap import ScreenMap
@@ -14,7 +14,8 @@ class TitleScene(SceneMenu):
     def __init__(self, app):
         super(TitleScene, self).__init__(app, TitleUI)
         self.title_ui = self.ui
-        self.settings_ui = SettingsUI(self)
+        self.settings_ui = MainSettingsUI(self)
+        self.sound_settings_ui = SoundSettingsUI(self)
 
         self.developers_ui = None
 
@@ -24,6 +25,10 @@ class TitleScene(SceneMenu):
 
     def open_developers(self):
         webbrowser.open('https://gamejolt.com/@Niptlox', new=2)
+
+    def main(self):
+        # pg.mixer.stop()
+        return super(TitleScene, self).main()
 
 
 class OpenMapScenePopupMenu(ScenePopupMenu):

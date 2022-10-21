@@ -10,6 +10,8 @@ from units.Scenes import TitleScene, OpenMapScenePopupMenu, SaveMapScenePopupMen
     AchievementsSceneUI
 import subprocess
 
+from units.sound import sounds_background, get_random_sound_of
+
 set_cursor(CURSOR_NORMAL)
 choice_pos1 = None
 choice_pos2 = None
@@ -45,6 +47,7 @@ class GameScene(Scene):
         self.ctrl_on = False
         self.first_start = False
         self.hided_ui = False
+        self.background_sound = get_random_sound_of(sounds_background).play(loops=-1, )
 
     def pg_events(self):
         for event in pygame.event.get():
@@ -115,5 +118,8 @@ class GameScene(Scene):
             self.ui.draw()
         self.ui.flip()
         self.tact += 1
+
+    def main(self):
+        return super(GameScene, self).main()
 
 

@@ -12,7 +12,7 @@ from units.biomes import biome_of_pos
 from units.Structures import Structures_middleworld, Structures_chance_middleworld, Structures_chance_space, \
     Structures_chance, Structures, Structures_all, structure_start
 from units.Trees import grow_tree
-from ..Tiles import *
+from units.Tiles import *
 
 
 class GameMap:
@@ -455,10 +455,11 @@ class GameMap:
                 if standart_noise2_bool(tile_x, tile_y) and tile_type is None:
                     if standart_noise2_bool(tile_x, tile_y - 2 - random.randint(0, 1)):
                         tile_type = 3  # stone
-                        if standart_noise2_bool(tile_x, tile_y +1+random.randint(0, 1)) and standart_noise2_bool(tile_x+1, tile_y) and standart_noise2_bool(tile_x-1, tile_y):
+                        if standart_noise2_bool(tile_x, tile_y + 1 + random.randint(0, 1)) and standart_noise2_bool(
+                                tile_x + 1, tile_y) and standart_noise2_bool(tile_x - 1, tile_y):
                             backtile_type = 1003  # backstone
                         v4 = noise2(tile_x / 10, tile_y / 10, 2, persistence=0.55, base=base + 1, lacunarity=1)
-                        if v4 < -0.7:
+                        if v4 < -0.8:
                             tile_type = 4  # blore
                         else:
                             v5 = noise2(tile_x / 16 + 100, tile_y / 16 + 100, 2, persistence=0.35, base=base + 2,
@@ -469,6 +470,36 @@ class GameMap:
                                 v6 = noise2(tile_x / 10, tile_y / 10, 2, persistence=0.55, base=base + 3, lacunarity=1)
                                 if v6 < -0.7:
                                     tile_type = 2  # dirt
+                                else:
+                                    cof = 0.05
+                                    v7 = noise2(tile_x * cof, tile_y * cof, 2, persistence=0.55, base=base + 4,
+                                                lacunarity=1)
+                                    if v7 < -0.915:
+                                        tile_type = 21  # ore blore
+                                    else:
+                                        v8 = noise2(tile_x * cof, tile_y * cof, 2, persistence=0.55, base=base + 5,
+                                                    lacunarity=1)
+                                        if v8 < -0.9:
+                                            tile_type = 22  # ore copper
+                                        else:
+                                            v9 = noise2(tile_x * 0.03, tile_y * 0.03, 2, persistence=0.55,
+                                                        base=base + 6,
+                                                        lacunarity=1)
+                                            if v9 < -0.97:
+                                                tile_type = 23  # ore gold
+                                            else:
+                                                v10 = noise2(tile_x * 0.08, tile_y * 0.08, 2, persistence=0.55,
+                                                             base=base + 7,
+                                                             lacunarity=1)
+                                                if v10 < -0.84:
+                                                    tile_type = 24  # ore iron
+                                                else:
+                                                    v10 = noise2(tile_x * cof, tile_y * cof, 2, persistence=0.55,
+                                                                 base=base + 8,
+                                                                 lacunarity=1)
+                                                    if v10 < -0.93:
+                                                        tile_type = 25  # ore silver
+
                     else:
                         tile_type = 2  # dirt
                         if (y_pos > 0 and static_tiles[tile_index - self.chunk_arr_width] == 0) or \

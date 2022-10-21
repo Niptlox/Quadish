@@ -3,8 +3,30 @@ from random import choice
 from units.config import *
 
 
+class Sounds(list):
+    def rplay(self):
+        self.rchoice().play()
+
+    def rchoice(self):
+        return choice(self)
+
+    @classmethod
+    def init_sounds(cls, path, count, index_start=0):
+        return load_sounds(path, count, index_start=index_start)
+
+    def set_volume(self, volume):
+        sounds_set_volume(self, volume)
+        
+    def __add__(self, other):
+        return self.__class__(super(Sounds, self).__add__(other))
+
+
+def load_sound(path):
+    return pg.mixer.Sound(path)
+
+
 def load_sounds(path, count, index_start=0):
-    ar = []
+    ar = Sounds()
     for i in range(index_start, index_start + count):
         ar.append(pygame.mixer.Sound(path.format(i)))
     return ar
@@ -16,27 +38,52 @@ def get_random_sound_of(sounds_list) -> pg.mixer.Sound:
 
 def sounds_set_volume(lst_sounds, volume):
     for snd in lst_sounds:
-        snd.set_volume(volume)
+        snd.set_volume(float(volume))
 
 
-sound_click = pygame.mixer.Sound("data/audio/UI/click.wav")
+# ====== UI ========
+sound_click = load_sound("data/audio/UI/click.wav")
 sound_click.set_volume(VolumeSettings.ui_volume)
 
-# sound_step_dry_1 = pygame.mixer.Sound("data/audio/steps/FootstepsDry-1.ogg")
-# sound_step_dry_2 = pygame.mixer.Sound("data/audio/steps/FootstepsDry-2.ogg")
-# sound_step_dry_3 = pygame.mixer.Sound("data/audio/steps/FootstepsDry-3.ogg")
+sounds_ui = Sounds([sound_click])
+sounds_set_volume(sounds_ui, VolumeSettings.ui_volume)
 
+# ======= PLAYER =======
 sounds_step_dry = load_sounds("data/audio/steps/FootstepsDry-{}.ogg", 3, 1)
-sounds_set_volume(sounds_step_dry, VolumeSettings.player_volume)
-
 sounds_pickaxe = load_sounds("data/audio/tools/Pickaxe-{}.ogg", 4, 1)
-sounds_set_volume(sounds_pickaxe, VolumeSettings.player_volume)
-
 sounds_axe = load_sounds("data/audio/tools/Axe-{}.ogg", 2, 1)
-sounds_set_volume(sounds_axe, VolumeSettings.player_volume)
-
 sounds_eat = load_sounds("data/audio/food/EatingFood{}.ogg", 2, 1)
-sounds_set_volume(sounds_eat, VolumeSettings.player_volume)
-
 sounds_drink = load_sounds("data/audio/food/Drink-{}.ogg", 1, 1)
-sounds_set_volume(sounds_drink, VolumeSettings.player_volume)
+
+sounds_brake_rock = load_sound("data/audio/tools/BrakeRock.wav")
+
+sounds_player = sounds_step_dry + sounds_pickaxe + sounds_axe + sounds_eat + sounds_drink
+sounds_set_volume(sounds_player, VolumeSettings.player_volume)
+
+
+# ====== BACK MUSIC ======
+sounds_background = Sounds([load_sound("data/audio/background/alexander-nakarada-fantasy-motion-loop-ready.mp3")])
+sounds_set_volume(sounds_background, VolumeSettings.background_volume)
+
+# ====== CREATURES ======
+sounds_creatures = Sounds()
+
+# ====== GAME ======
+sounds_game = Sounds()
+
+# SET VOLUME
+
+categories_sounds = {
+    "ui": sounds_ui,
+    'player': sounds_player,
+    'creatures': sounds_creatures,
+    'game': sounds_game,
+    'background': sounds_background,
+}
+
+
+def set_category_volume(category, volume):
+    if category in categories_sounds:
+        categories_sounds[category].set_volume(volume)
+        name_var = category + "_volume"
+        VolumeSettings.set(name_var, volume)

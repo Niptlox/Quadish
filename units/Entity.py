@@ -57,7 +57,8 @@ class PhysicalObject(SavedObject):
     index = 0
     count = 0
 
-    def __init__(self, game, x=0, y=0, width=0, height=0, use_physics=False, sprite=None) -> None:
+    def __init__(self, game, x=0, y=0, width=0, height=0, use_physics=False, sprite=None,
+                 use_collisions=False, use_gravity=False) -> None:
         self.rect: pygame.Rect = pygame.Rect(x, y, width, height)
         self.chunk_pos = (0, 0)
         self.update_chunk_pos()
@@ -67,13 +68,16 @@ class PhysicalObject(SavedObject):
         self.lives = self.max_lives
         self.alive = True
         self.use_physics = use_physics
-        if use_physics:
-            self.fall_speed = FALL_SPEED
-            self.max_fall_speed = MAX_FALL_SPEED
-            self.vertical_momentum = 0
-            self.movement_vector = pg.Vector2(0, 0)
-            self.physical_vector = pg.Vector2(0, 0)
-            self.collisions = {}
+        self.use_collisions = use_collisions or use_physics
+        self.use_gravity = use_gravity or use_physics
+        # if use_physics:
+
+        self.fall_speed = FALL_SPEED
+        self.max_fall_speed = MAX_FALL_SPEED
+        self.vertical_momentum = 0
+        self.movement_vector = pg.Vector2(0, 0)
+        self.physical_vector = pg.Vector2(0, 0)
+        self.collisions = {}
 
     # def get_vars(self):
     #     d = self.__dict__.copy()
@@ -134,38 +138,42 @@ class PhysicalObject(SavedObject):
                     self.damage(1)
         return collision_types
 
+    def not_collisions_move(self, movement):
+        self.rect.x += movement[0]
+        self.rect.y += movement[1]
+
     def update(self, tact):
         if not self.alive:
             return False
-        if self.use_physics:
-            self.update_physics()
+        self.update_physics()
         return True
 
     def update_physics(self):
-
-        self.physical_vector.y += self.fall_speed
-        if self.physical_vector.y > self.max_fall_speed:
-            self.physical_vector.y = self.max_fall_speed
-
+        if self.use_gravity:
+            self.physical_vector.y += self.fall_speed
+            if self.physical_vector.y > self.max_fall_speed:
+                self.physical_vector.y = self.max_fall_speed
         movement = (self.physical_vector + self.movement_vector).xy
-        collisions = self.move(movement, self.game.screen_map.static_tiles)
-        self.collisions = collisions
-        if collisions['bottom']:
-            self.vertical_momentum = 0
-            self.physical_vector.x = int(self.physical_vector.x / 2)
-            self.physical_vector.y = 0
-        if collisions['top']:
-            self.physical_vector.y = 0
-            self.physical_vector.x = int(self.physical_vector.x / 2)
-
-        if collisions["left"] or collisions["right"]:
-            self.physical_vector.x = 0
-        new_cy = self.rect.y // (TSIZE * CSIZE)
-        new_cx = self.rect.x // (TSIZE * CSIZE)
-        if self.chunk_pos[1] != new_cy or new_cx != self.chunk_pos[0]:
-            # print(self.rect.y, cy, new_cy)
-            self.game_map.move_dinamic_obj(*self.chunk_pos, new_cx, new_cy, self)
-            self.chunk_pos = (new_cx, new_cy)
+        if self.use_collisions:
+            collisions = self.move(movement, self.game.screen_map.static_tiles)
+            self.collisions = collisions
+            if collisions['bottom']:
+                self.vertical_momentum = 0
+                self.physical_vector.x = int(self.physical_vector.x / 2)
+                self.physical_vector.y = 0
+            if collisions['top']:
+                self.physical_vector.y = 0
+                self.physical_vector.x = int(self.physical_vector.x / 2)
+            if collisions["left"] or collisions["right"]:
+                self.physical_vector.x = 0
+            new_cy = self.rect.y // (TSIZE * CSIZE)
+            new_cx = self.rect.x // (TSIZE * CSIZE)
+            if self.chunk_pos[1] != new_cy or new_cx != self.chunk_pos[0]:
+                # print(self.rect.y, cy, new_cy)
+                self.game_map.move_dinamic_obj(*self.chunk_pos, new_cx, new_cy, self)
+                self.chunk_pos = (new_cx, new_cy)
+        else:
+            self.not_collisions_move(movement)
         self.movement_vector.xy = (0, 0)
 
     def update_chunk_pos(self):

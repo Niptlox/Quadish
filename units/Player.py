@@ -9,6 +9,7 @@ from units.Animation import get_death_animation
 from units.Entity import PhysicalObject
 from units.Inventory import InventoryPlayer
 from units.Items import Items
+from units.Particle import TextParticle, DamageParticle
 from units.Structures import structure_start
 from units.Tiles import hand_pass_img, player_img, dig_rect_img
 from units.Tools import ToolHand, TOOLS, ItemTool, \
@@ -250,7 +251,7 @@ class Player(PhysicalObject):
             self.tool.left_button(vector_to_mouse)
         elif self.set:
             self.tool.right_button(vector_to_mouse)
-        self.tool.draw(self.ui.display, vector_player_display.x, vector_player_display.y)
+        # self.tool.draw(self.ui.display, vector_player_display.x, vector_player_display.y)
         if self.eat and item and item.class_item == CLS_EAT:
 
             if item.index == 55:
@@ -400,13 +401,19 @@ class Player(PhysicalObject):
                               min(WSIZE[0], max(-TSIZE, self.rect.y - scroll[1])))
         surface.blit(self.player_img, player_display_pos)
         self.death_animation.update()
-        self.death_animation.draw(surface, *player_display_pos)
+        self.death_animation.draw(surface, player_display_pos)
+        if self.tool:
+            self.tool.draw(self.ui.display, player_display_pos[0]+self.rect.w//2, player_display_pos[1]+self.rect.h // 2)
+
         # if self.lives != self.max_lives:
         self.draw_lives(surface, player_display_pos)
 
     def damage(self, lives, owner="Unknown"):
         if self.creative_mode:
             return True
+        particle = DamageParticle(self.game, (self.rect.centerx, self.rect.top - 26), (lives))
+        self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(particle.rect.x // TSIZE, particle.rect.y // TSIZE),
+                                      particle)
         self.death_animation.start()
         if self.max_lives == -1:
             return True

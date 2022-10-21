@@ -4,6 +4,7 @@ from time import time
 from units.Animation import get_death_animation
 from units.Entity import PhysicalObject
 from units.Items import ItemsTile
+from units.Particle import TextParticle, DamageParticle
 from units.common import *
 
 
@@ -57,7 +58,7 @@ class Creature(PhysicalObject):
     def draw(self, surface, pos):
         super().draw(surface, pos)
         self.death_animation.update()
-        self.death_animation.draw(surface, *pos)
+        self.death_animation.draw(surface, pos)
         if self.lives != self.max_lives:
             self.draw_lives(surface, pos)
 
@@ -77,6 +78,10 @@ class Creature(PhysicalObject):
             self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(x // TSIZE, y // TSIZE), items)
 
     def damage(self, lives):
+        lives = min(lives, self.lives)
+        particle = DamageParticle(self.game, (self.rect.centerx, self.rect.top-25), (lives))
+        self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(particle.rect.x // TSIZE, particle.rect.y // TSIZE),
+                                      particle)
         self.death_animation.start()
         return super(Creature, self).damage(lives)
 

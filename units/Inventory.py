@@ -231,6 +231,7 @@ class InventoryPlayer(Inventory):
             res, _ = self.put_to_inventory(item)  # дверь
             if not res:
                 self.discard_item(None, item)
+            self.owner.achievements.new_created(item.index)
 
     def choose_active_cell(self, i):
         self.owner.choose_active_cell(i)

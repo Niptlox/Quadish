@@ -17,6 +17,8 @@ class __Settings:
     config = config
     section = ""
 
+
+
     @classmethod
     def set(cls, var_name, var_value):
         print(cls.section, var_name, var_value)
@@ -77,7 +79,9 @@ class VolumeSettings(__Settings):
     ui_volume = config.getfloat(section, 'ui_volume')
     player_volume = config.getfloat(section, 'player_volume')
     creatures_volume = config.getfloat(section, 'creatures_volume')
-    back_music_volume = config.getfloat(section, 'back_music_volume')
+    background_volume = config.getfloat(section, 'background_volume')
+
+
 
 
 # https://stackoverflow.com/questions/8884188/how-to-read-and-write-ini-file-with-python3

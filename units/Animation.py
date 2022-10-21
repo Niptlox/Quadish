@@ -1,6 +1,10 @@
 from units.common import *
 
 
+def load_animation(path):
+    path = CWDIR + path
+
+
 class Animation(SavedObject):
     is_not_saving = True
 
@@ -17,12 +21,12 @@ class Animation(SavedObject):
         self.speed_one_tick = speed / FPS
         self.resize = None
 
-    def draw(self, surface, x, y):
+    def draw(self, surface, pos):
         if self.animation:
             if self.resize:
-                surface.blit(pg.transform.scale(self.frames[int(self.frame_index)], self.resize), (x, y))
+                surface.blit(pg.transform.scale(self.frames[int(self.frame_index)], self.resize), pos)
             else:
-                surface.blit(self.frames[int(self.frame_index)], (x, y))
+                surface.blit(self.frames[int(self.frame_index)], pos)
 
     def set_resize(self, size):
         self.resize = size
