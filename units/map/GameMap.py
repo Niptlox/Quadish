@@ -27,6 +27,7 @@ class GameMap:
         self.chunk_arr_width = CHUNK_SIZE * self.tile_data_size
         self.chunk_arr_size = self.tile_data_size * CHUNK_SIZE ** 2
         self.game_map = {}
+        self.particles = []
         self.structures = {}
         # build - (build_index, build_id, points)
         self.structures_lst = []
@@ -72,6 +73,7 @@ class GameMap:
             game_map[pos][2] = {key: (type(obj), obj.get_vars()) for key, obj in chunk[2].items()}
         d["game_map"] = game_map
         d.pop("game")
+        d.pop("particles")
         return d
 
     def chunk(self, xy, default=None, for_player=False, create_chunk=False):
@@ -273,6 +275,12 @@ class GameMap:
             # raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
 
         return
+
+    def add_particle(self, particle):
+        self.particles.append(particle)
+
+    def del_particle_of_idx(self, idx):
+        return self.particles.pop(idx)
 
     def add_item_of_index(self, index, count_items, x, y):
         npos = (x * TSIZE + random.randint(0, TSIZE - HAND_SIZE), y * TSIZE)

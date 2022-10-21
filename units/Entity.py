@@ -168,9 +168,10 @@ class PhysicalObject(SavedObject):
                 self.physical_vector.x = 0
             new_cy = self.rect.y // (TSIZE * CSIZE)
             new_cx = self.rect.x // (TSIZE * CSIZE)
+
             if self.chunk_pos[1] != new_cy or new_cx != self.chunk_pos[0]:
-                # print(self.rect.y, cy, new_cy)
-                self.game_map.move_dinamic_obj(*self.chunk_pos, new_cx, new_cy, self)
+                if not (self.class_obj & OBJ_PARTICLE):
+                    self.game_map.move_dinamic_obj(*self.chunk_pos, new_cx, new_cy, self)
                 self.chunk_pos = (new_cx, new_cy)
         else:
             self.not_collisions_move(movement)

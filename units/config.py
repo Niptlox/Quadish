@@ -17,11 +17,9 @@ class __Settings:
     config = config
     section = ""
 
-
-
     @classmethod
     def set(cls, var_name, var_value):
-        print(cls.section, var_name, var_value)
+        # print(cls.section, var_name, var_value)
         config.set(cls.section, var_name, str(var_value))
         config_save()
         if var_name in cls.__dict__:

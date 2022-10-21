@@ -235,6 +235,7 @@ class ScreenMap:
         self.dynamic_tiles = dynamic_tiles
         self.group_handlers = group_handlers
         self.update_dynamic()
+        self.update_particles()
         tt = time() - tt
 
     def update_dynamic(self):
@@ -248,6 +249,18 @@ class ScreenMap:
                 continue
             pos = dtile.rect.x - self.scroll[0], dtile.rect.y - self.scroll[1]
             dtile.draw(self.display, pos)
+            i += 1
+
+    def update_particles(self):
+        i = 0
+        while i < len(self.game_map.particles):
+            particle = self.game_map.particles[i]
+            particle.update(self.tact)
+            if not particle.alive:
+                self.game_map.del_particle_of_idx(i)
+                continue
+            pos = particle.rect.x - self.scroll[0], particle.rect.y - self.scroll[1]
+            particle.draw(self.display, pos)
             i += 1
 
     def update_tile(self, chunk, tile, tile_type, index, tile_x, tile_y, tact):

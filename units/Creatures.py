@@ -80,8 +80,7 @@ class Creature(PhysicalObject):
     def damage(self, lives):
         lives = min(lives, self.lives)
         particle = DamageParticle(self.game, (self.rect.centerx, self.rect.top-25), (lives))
-        self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(particle.rect.x // TSIZE, particle.rect.y // TSIZE),
-                                      particle)
+        self.game_map.add_particle(particle)
         self.death_animation.start()
         return super(Creature, self).damage(lives)
 

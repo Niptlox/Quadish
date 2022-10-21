@@ -403,7 +403,8 @@ class Player(PhysicalObject):
         self.death_animation.update()
         self.death_animation.draw(surface, player_display_pos)
         if self.tool:
-            self.tool.draw(self.ui.display, player_display_pos[0]+self.rect.w//2, player_display_pos[1]+self.rect.h // 2)
+            self.tool.draw(self.ui.display, player_display_pos[0] + self.rect.w // 2,
+                           player_display_pos[1] + self.rect.h // 2)
 
         # if self.lives != self.max_lives:
         self.draw_lives(surface, player_display_pos)
@@ -412,8 +413,7 @@ class Player(PhysicalObject):
         if self.creative_mode:
             return True
         particle = DamageParticle(self.game, (self.rect.centerx, self.rect.top - 26), (lives))
-        self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(particle.rect.x // TSIZE, particle.rect.y // TSIZE),
-                                      particle)
+        self.game_map.add_particle(particle)
         self.death_animation.start()
         if self.max_lives == -1:
             return True

@@ -7,6 +7,8 @@ NONE_PARTICLE_SPRITE = get_texture_size(GREEN, (10, 10))
 
 
 class Particle(PhysicalObject):
+    class_obj = OBJ_PARTICLE
+
     def __init__(self, game, rect, sprite=NONE_PARTICLE_SPRITE, use_collisions=False, use_gravity=False,
                  start_movement=pg.Vector2(0, 0), lifetime=FPS // 5*2, animation=None):
         start_movement = pg.Vector2(start_movement)
