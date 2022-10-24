@@ -117,7 +117,8 @@ class Player(PhysicalObject):
 
         # ====================================
         self.state_step_sound = 0
-        self.game_map.set_static_tile(0, 0, self.game_map.get_tile_ttile(131))
+
+        # self.game_map.set_static_tile(0, 0, self.game_map.get_tile_ttile(131))
 
     def set_vars(self, vrs):
         # self.inventory.set_vars(vrs.pop("inventory"))

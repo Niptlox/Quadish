@@ -122,7 +122,7 @@ class GameUI(UI):
         self.achievement_message = AchievementMessege()
         # self.playerui = SurfaceAlphaUI((0, 0, 280, 120))
         self.playerui = SurfaceUI((0, 0, 450, 420)).convert_alpha()
-        # self.playerui.rect.bottom = self.rect.bottom
+        self.playerui.rect.bottom = self.rect.bottom
         self.new_sys_message("Привет игрок")
 
     def draw_sky(self):
