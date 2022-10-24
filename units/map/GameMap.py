@@ -4,18 +4,20 @@ import pickle
 from noise import snoise2 as noise2
 
 from units.Creatures import Slime, Cow, Wolf, SlimeBigBoss, Snake
+from units.Entities import PortalMainGate
 from units.Entity import PhysicalObject
 from units.Items import ItemsTile
-from units.TilesClass import Chest
+from units.TilesClass import Chest, tiles_class
 from units.Tools import TOOLS
 from units.biomes import biome_of_pos
 from units.Structures import Structures_middleworld, Structures_chance_middleworld, Structures_chance_space, \
     Structures_chance, Structures, Structures_all, structure_start
 from units.Trees import grow_tree
 from units.Tiles import *
+from units.sound import sound_gate
 
 
-class GameMap:
+class GameMap(SavedObject):
     save_slots = 16
 
     def __init__(self, game, generate_type, base_generation=None) -> None:
@@ -37,6 +39,7 @@ class GameMap:
         self.start_space_y = START_SPACE_Y
         self.start_hell_y = START_HELL_Y
         self.creative_mode = CREATIVE_MODE
+        self.gate = None
         if self.base_generation is None:
             self.new_base_generation()
 
@@ -58,11 +61,12 @@ class GameMap:
                 tile_obj.set_vars(vrs_obj)
                 chunk[2][key] = tile_obj
         # set vars
-        for k, i in vrs.items():
-            self.__dict__[k] = i
+        super(GameMap, self).set_vars(vrs)
+        # for k, i in vrs.items():
+        #     self.__dict__[k] = i
 
     def get_vars(self):
-        d = self.__dict__.copy()
+        d = super(GameMap, self).get_vars()
         ch = d["game_map"][-1, -1]
         print("==", d["game_map"][-1, -1])
         # === convert dynamic_objs ===
@@ -150,8 +154,8 @@ class GameMap:
         if chunk is not None:
             if tile is None:
                 tile = [0, 0, 0, 0]
-            if tile[0] == 129:  # chest
-                obj = Chest(self.game, (x, y))
+            if tile[0] in CLASS_TILE:  # chest
+                obj = tiles_class[tile[0]](self.game, (x, y))
                 self.add_tile_obj_to_chunk(chunk, obj)
                 tile[3] = obj.id
             i = self.convert_pos_to_i(x, y)
@@ -568,6 +572,8 @@ class GameMap:
         # try:
         data = {"game_map_vars": self.get_vars(), "player_vars": game.player.get_vars(),
                 "game_version": GAME_VERSION, "game_tact": game.tact}
+        with open("save_data.json", 'w') as f:
+            f.write(str(data))
         t = pickle.dumps(data)
         with open(file_p, 'wb') as f:
             f.write(t)
@@ -628,9 +634,18 @@ class GameMap:
                 array.append(self.get_static_tile(x + pos_1[0], y + pos_1[1]))
         return size, array
 
+    def spawn_gate(self):
+        self.gate = PortalMainGate(self.game, TSIZE // 2, TSIZE // 2)
+        self.add_dinamic_obj(*self.gate.chunk_pos, self.gate)
+        self.game.player.active = False
+        sound_gate.play()
+
     def new_world(self, base_generation=None):
         self.__init__(self.game, self.gen_type, base_generation)
-        self.game.player.__init__(self.game, *config.GameSettings.start_pos)
+        self.set_structure((-10, -13), structure_start)
+        self.game.player.__init__(self.game, 0, 0)
+        self.game.player.tp_to(config.GameSettings.start_pos)
+        self.spawn_gate()
 
 
 def random_plant_selection(biome=None):

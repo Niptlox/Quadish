@@ -14,7 +14,7 @@ from units.Structures import structure_start
 from units.Tiles import hand_pass_img, player_img, dig_rect_img
 from units.Tools import ToolHand, TOOLS, ItemTool, \
     ToolCreativeHand  # ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe, ItemTool
-from units.UI.UI import InventoryPlayerChestUI
+from units.UI.UI import InventoryPlayerChestUI, FurnaceUI, InventoryPlayerFurnaceUI
 from units.sound import *
 from units.common import *
 
@@ -24,7 +24,7 @@ from units.common import *
 
 class Player(PhysicalObject):
     not_save_vars = PhysicalObject.not_save_vars | {"game_map", "game", "ui", "hand_img", "lives_surface", "toolHand",
-                                                    "toolCreativeHand", "tool", "chest_ui"}
+                                                    "toolCreativeHand", "tool", "chest_ui", "furnace_ui"}
     class_obj = OBJ_PLAYER
     width, height = max(1, TSIZE - 10), max(1, TSIZE - 2)
     player_img = player_img
@@ -39,9 +39,11 @@ class Player(PhysicalObject):
             x = random.randint(-1000 * TSIZE, 1000 * TSIZE)
         if y == 777:
             y = random.randint(-100 * TSIZE, 100 * TSIZE)
+        # x = x + TSIZE // 2 - self.width // 2
+        # y = y + (TSIZE - self.height) // 2
         super().__init__(game, x, y, self.width, self.height, use_physics=True)
         self.game = game
-        game.game_map.set_structure((-10, -13), structure_start)
+        self.active = True
 
         self.ui = game.ui
 
@@ -106,14 +108,16 @@ class Player(PhysicalObject):
         self.flip = False
         self.toolHand = ToolHand(self)
         self.toolCreativeHand = ToolCreativeHand(self)
-        self.tool = None
+        self.tool = self.toolHand
         self.vector = Vector2(0)
 
         self.chest_ui = InventoryPlayerChestUI(self.inventory)
+        self.furnace_ui = InventoryPlayerFurnaceUI(self.inventory)
         self.tile_ui = None
 
         # ====================================
         self.state_step_sound = 0
+        self.game_map.set_static_tile(0, 0, self.game_map.get_tile_ttile(131))
 
     def set_vars(self, vrs):
         # self.inventory.set_vars(vrs.pop("inventory"))
@@ -121,12 +125,16 @@ class Player(PhysicalObject):
         # vrs["max_fall_speed"] = self.max_fall_speed
         vrs["rect"].size = self.rect.size
 
+        self.active = vrs.get("active", True)
         super().set_vars(vrs)
         self.fall_speed = FALL_SPEED
         self.inventory.redraw()
+        self.game.screen_map.teleport_to_player()
 
     def pg_event(self, event):
         if self.chest_ui.opened and self.chest_ui.pg_event(event):
+            return True
+        if self.furnace_ui.opened and self.furnace_ui.pg_event(event):
             return True
         if self.inventory.pg_event(event):
             return True
@@ -202,7 +210,7 @@ class Player(PhysicalObject):
         # self.tp_to((2 ** 31 - 1500, 2 ** 31 - 1500))
 
     def tp_to(self, pos):
-        self.rect.center = pos
+        self.rect.center = pos[0] + TSIZE // 2, pos[1] + TSIZE // 2
         self.game.screen_map.teleport_to_player()
         self.vertical_momentum = 0
 
@@ -217,9 +225,15 @@ class Player(PhysicalObject):
         self.first_fall = True
         self.moving_right = False
         self.moving_left = False
+        self.game_map.spawn_gate()
+        self.tp_to_home()
+        self.active = True
+        self.death_animation.stop()
         print("relive", self.lives)
 
     def update(self, tact):
+        if not self.active:
+            return True
         self.tact = tact
         self.draw(self.ui.display)
 
@@ -376,10 +390,13 @@ class Player(PhysicalObject):
             self.jump_count = 0
             self.vertical_momentum = 0
             self.first_fall = False
-            if abs(self.speed) > 0 and self.state_step_sound == 0 and collisions['bottom'][0][1] == 1:
-                step_sound = get_random_sound_of(sounds_step_dry).play()
-                self.state_step_sound = 1
+            if abs(self.speed) > 0 and self.state_step_sound == 0 or self.air_timer > FPS // 2:
+                if 104 in self.collisions_ttile or collisions['bottom'][0][1] == 1:
+                    step_sound = get_random_sound_of(sounds_step_dry).play()
+                else:
+                    step_sound = sounds_step_stomp.rplay()
                 step_sound.set_endevent(EVENT_END_OF_STEP_SOUND)
+                self.state_step_sound = 1
 
         else:
             self.air_timer += 1

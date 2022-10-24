@@ -144,7 +144,7 @@ class Slime(MovingCreature):
     max_lives_hard = 150
     punch_damage_hard = 15
     max_lives = 20
-    drop_items = [(ItemsTile, (51, (1, 3)))]
+    drop_items = [(ItemsTile, (51, (1, 2)))]
     jump_speed = 8
     move_speed = 2
     height_of_abyss = 4
@@ -161,7 +161,7 @@ class Slime(MovingCreature):
         self.i_sprite = 0
         self.jump_state = -1
         self.color = random.choice(self.colors)
-        if random.randint(0, 100) < 5:
+        if random.randint(0, 100) < 2:
             # SLIME BOSS
             self.color = self.color_hard
             self.max_lives = self.max_lives_hard

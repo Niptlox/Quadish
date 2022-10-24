@@ -24,6 +24,10 @@ SIZE_2X = "2x"
 def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_tile=False):
     print(path)
     img = pygame.image.load(path)
+    return convert_img(img, size, colorkey, alpha, scale, is_tile)
+
+
+def convert_img(img, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_tile=False):
     if size == SIZE_2X:
         img = pygame.transform.scale2x(img)
     elif size:
@@ -42,6 +46,27 @@ def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_ti
 
 def load_imgs(path, count, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_tile=False):
     return [load_img(path.format(i), size, colorkey, alpha, scale=scale, is_tile=is_tile) for i in range(count)]
+
+
+def load_imgs_of_animation(path, table, count, size=None, colorkey=COLORKEY, alpha=None, scale=1, is_tile=False,
+                           convert_alpha=True):
+    img = pg.image.load(path)
+    img_size = img.get_size()
+    wc, hc = img_size[0] // table[0], img_size[1] // table[1]
+    images = []
+    c = 0
+    for y in range(0, img_size[1], hc):
+        for x in range(0, img_size[0], wc):
+            c_img = img.subsurface((x, y, wc, hc))
+            if convert_alpha:
+                c_img = c_img.convert()
+            images.append(convert_img(c_img, size, colorkey, alpha, scale, is_tile))
+            c += 1
+            if c >= count:
+                break
+        if c >= count:
+            break
+    return images
 
 
 def load_round_tool_imgs(path, count=4, colorkey=COLORKEY, alpha=None, rotate_imgs=True):

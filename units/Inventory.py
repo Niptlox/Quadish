@@ -1,6 +1,6 @@
 from pygame import KEYDOWN, MOUSEWHEEL
 
-from units.Items import Items, ItemsTile
+from units.Items import ItemsTile, Items
 from units.Tools import TOOLS
 from units.UI.UI import InventoryPlayerUI
 from units.common import *
@@ -8,10 +8,10 @@ from units.creating_items import RECIPES
 
 
 class Inventory(SavedObject):
-    not_save_vars = SavedObject.not_save_vars | {"owner", "game_map", }
+    not_save_vars = SavedObject.not_save_vars | {"owner", "game_map", "items_update_event"}
     # cell_size = 1000
 
-    def __init__(self, game_map, owner, size_table=(10, 5)):
+    def __init__(self, game_map, owner, size_table=(10, 5), items_update_event=None):
         self.game_map = game_map
         self.owner = owner
         self.size_table = size_table
@@ -19,6 +19,9 @@ class Inventory(SavedObject):
         self.inventory = [None] * self.inventory_size
         # self.inventory[0] = ItemSword(self.game)
         self.active_cell = 0
+        self.items_update_event = items_update_event
+        self.flag_not_put_in = False
+        self.filter_items = None
 
     def set_vars(self, vrs):
         self.update_inventory_from_lst(vrs.pop("inventory"))
@@ -61,6 +64,8 @@ class Inventory(SavedObject):
                 if obj.class_obj & OBJ_ITEM and obj.class_item & CLS_TOOL:
                     obj.set_owner(self.owner)
                 self.inventory[i] = obj
+        self.items_updated()
+
     @property
     def row_work(self) -> list:
         return self.inventory[:self.size_table[0]]
@@ -77,12 +82,15 @@ class Inventory(SavedObject):
             items.alive = True
             # print(ix, iy, *self.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
             self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix // TSIZE, iy // TSIZE), items)
+        self.items_updated()
 
     def discard_all_items(self):
         for i in range(len(self.inventory)):
             self.discard_item(i, None, discard_vector=(0, 0))
 
     def put_to_inventory(self, items):
+        if self.flag_not_put_in:
+            return False, items.count
         if items.count <= 0:
             return True, None
         i = 0
@@ -115,9 +123,11 @@ class Inventory(SavedObject):
                 # print("Перепонен инвентарь", ttile)
                 self.redraw()
                 # self.ui.redraw_top()
+                self.items_updated()
                 return False, items.count
         # self.ui.redraw_top()
         self.redraw()
+        self.items_updated()
         return True, None
 
     def find_in_inventory(self, ttile, count=1):
@@ -144,6 +154,7 @@ class Inventory(SavedObject):
                         self.inventory[i].count -= count
                         break
         self.redraw()
+        self.items_updated()
         return True
 
     def get_cell_from_inventory(self, num_cell, del_in_inventory=True):
@@ -151,7 +162,12 @@ class Inventory(SavedObject):
         if del_in_inventory:
             self.inventory[num_cell] = None
         self.redraw()
+        self.items_updated()
         return item
+
+    def items_updated(self):
+        if self.items_update_event:
+            self.items_update_event()
 
     def set_cell(self, num_cell, item):
 
@@ -162,9 +178,14 @@ class Inventory(SavedObject):
                 item.set_owner(self.owner)
 
         self.inventory[num_cell] = item
+        self.items_updated()
 
     def redraw(self):
         pass
+
+    def items_of_break(self):
+        return [(item.index, item.count) for item in self.inventory if item]
+
 
 
 class InventoryPlayer(Inventory):

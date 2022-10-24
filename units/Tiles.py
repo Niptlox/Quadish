@@ -107,6 +107,8 @@ rack_img = load_img("data/sprites/tiles/rack.png")  # шкаф
 chest_img = load_img("data/sprites/tiles/chest.png")  # сундук
 cauldron_img = load_img("data/sprites/tiles/cauldron.png")
 water_img = load_img("data/sprites/tiles/water.png")
+furnace_img = load_img("data/sprites/tiles/furnace/furnace0.png")
+furnace_imgs = load_imgs("data/sprites/tiles/furnace/furnace{}.png", 5)
 
 stone_blore_ore_img = load_img(r"data/sprites/tiles/Ore/StoneBloreOre.png")  # blue ore
 stone_copper_ore_img = load_img(r"data/sprites/tiles/Ore/StoneCopperOre.png")
@@ -130,6 +132,9 @@ wildberry_item_img = load_img("data/sprites/tiles/wildberry_item.png", None)
 meet_cow_item_img = load_img("data/sprites/tiles/meet_cow_item.png", None)
 meet_wolf_item_img = load_img("data/sprites/tiles/meet_wolf_item.png", None)
 meet_snake_item_img = load_img("data/sprites/items/meet_snake_item.png", None)
+cooked_meet_cow_item_img = load_img("data/sprites/tiles/cooked_meet_cow_item.png", None)
+cooked_meet_wolf_item_img = load_img("data/sprites/tiles/cooked_meet_wolf_item.png", None)
+cooked_meet_snake_item_img = load_img("data/sprites/items/cooked_meet_snake_item.png", None)
 poison_item_img = load_img("data/sprites/items/poison_item.png", None)
 potion_life_item_img = load_img("data/sprites/tiles/potion_life_item.png", None)
 potion_jump_item_img = load_img("data/sprites/tiles/potion_jump_item.png", None)
@@ -190,6 +195,9 @@ tile_imgs = {None: none_img,
              64: iron_ore_img,
              65: silver_ore_img,
              66: ruby_item_img,
+             81: cooked_meet_snake_item_img,
+             82: cooked_meet_cow_item_img,
+             86: cooked_meet_wolf_item_img,
              101: bush_img,
              102: smalltree_img,
              103: cactus_img,
@@ -208,6 +216,7 @@ tile_imgs = {None: none_img,
              128: close_trapdoor_img,
              129: chest_img,
              130: bedroll_of_pelts_img,
+             131: furnace_img,
              150: structure_pass_img,
              151: group_img,
              152: build_img,
@@ -234,6 +243,7 @@ tile_imgs = {None: none_img,
 count_tiles = len(tile_imgs)
 print("Count_tiles imgs", count_tiles)
 tile_many_imgs = {101: bush_imgs,
+                  131: furnace_imgs,
                   201: cloud_imgs,
                   203: tnt_imgs,
                   251: watermelon_imgs,
@@ -259,17 +269,21 @@ ON_EARTHEN_PLANTS = {101, 102, 103, 104}
 # блоки через которые нельзя пройти
 PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 21, 22, 23, 24, 25, 31, 32, 33, 103, 124, 128, 251}
 # полуфизические блоки например мебель листва вода
-SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 122}
+SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 131, 122, 104}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
 # STANDING_TILES = {0, 101, 102, 103, 104, 110, 120, 121, 122, 123, 125, 126, 130, 129, 251}
-STANDING_TILES = {0, 110, 120, 121, 122, 123, 125, 126, 130, 129} | ON_EARTHEN_PLANTS
+STANDING_TILES = {0, 110, 120, 121, 122, 123, 125, 126, 130, 129, 131} | ON_EARTHEN_PLANTS
 # Задние панельки
 BACKTILES = {1003, }
 # предметы которые нельзя физически поставить
-ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 351, 401, 801}
+ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 351, 401, 801, 81, 82, 86}
 
-STONE_TILES = {3, 4, 5, 31, 32, 33, 21, 22, 23, 24, 25}
-WOOD_TILES = {12, 110, 11, 121, 122, 123, 124, 126, 127, 128, 129, 251}
+STONE_TILES = {3, 4, 5, 31, 32, 33, 21, 22, 23, 24, 25, 131}
+WOOD_TILES = {12, 110, 11, 121, 122, 123, 124, 126, 127, 128, 129, 131, 251}
+
+# блоки у которых есть прграммный класс
+CLASS_TILE = {131, 129}
+CLASS_UPDATING_TILES = {131, }
 
 # Блоки у которых state это массив
 ITEM_WITH_STATE_IS_LIST = {126}
@@ -284,12 +298,13 @@ PLANT_WITH_RANDOM_LOCAL_POS = {251, 102}
 TILE_WITH_LOCAL_POS = {251, } | PLANT_WITH_RANDOM_LOCAL_POS
 # EAT ===================================================================
 
-Eats = {52: 10, 53: 2, 56: 8, 55: 100, 401: 8, 251: 7, 351: 1}
+Eats = {52: 10, 53: 2, 56: 8, 55: 100, 401: 7, 251: 7, 351: 1,
+        81: 14, 82: 20, 86: 16}
 
 # PICKAXE ===============================================================
 
 iron_capability = {1, 2, 3, 4, 9, 11, 12, 21, 22, 23, 24, 25, 31, 32, 33, 101, 102, 103, 104, 105, 106, 110, 121, 122,
-                   123, 124, 125, 126,
+                   123, 124, 125, 126, 131,
                    127, 251,
                    128, 130}
 spatula_iron_capability = {1003}
@@ -358,6 +373,9 @@ tile_words = {None: "None",
               64: "Железная руда",
               65: "Серебряная руда",
               66: "Рубин",
+              81: "Приготовленное мясо коровы",
+              82: "Приготовленное мясо волка",
+              86: "Приготовленное мясо змеи",
               101: "Куст",
               102: "Саженец дуба",
               103: "Кактус",
@@ -376,6 +394,7 @@ tile_words = {None: "None",
               128: "Закрытый люк",
               129: "Сундук",
               130: "Спальный мешок из шкур",
+              131: "Печка",
               151: "Группа обектов",
               150: "Структурная пустота",
               201: "Облако",
@@ -430,6 +449,7 @@ TILES_SOLIDITY = {
     127: 45,
     128: 45,
     130: 80,
+    131: 80,
     251: 45,
 }
 
@@ -487,7 +507,7 @@ def item_of_break_tile(tile, game_map, tile_xy):
     res = [(i, cnt) for i, cnt, ch in items if ch == 1 or random.randint(0, 100 * 100) <= ch * 100 * 100]
     if ttile == 126:  # шкаф
         res += [i for i in tile[3] if i]
-    elif ttile == 129:
+    elif ttile in CLASS_TILE:
         tile_obj = game_map.get_tile_obj(tile_xy[0] // CHUNK_SIZE, tile_xy[1] // CHUNK_SIZE, tile[3])
         res += tile_obj.items_of_break()
     return res

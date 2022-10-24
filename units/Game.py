@@ -37,7 +37,6 @@ class GameScene(Scene):
     def __init__(self, app) -> None:
         super().__init__(app)
         self.game_map = GameMap(self, Generate_type)
-
         self.ui = GameUI(self)
         self.player = Player(self, *config.GameSettings.start_pos)
         self.screen_map = ScreenMap(self.display, self.game_map, self.player)
@@ -113,13 +112,12 @@ class GameScene(Scene):
         if not self.hided_ui:
             if self.player.chest_ui.opened:
                 self.player.chest_ui.draw(self.display)
+            elif self.player.furnace_ui.opened:
+                self.player.furnace_ui.draw(self.display)
             else:
                 self.player.inventory.ui.draw(self.display)
             self.ui.draw()
         self.ui.flip()
         self.tact += 1
-
-    def main(self):
-        return super(GameScene, self).main()
 
 

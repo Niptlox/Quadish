@@ -122,7 +122,7 @@ class GameUI(UI):
         self.achievement_message = AchievementMessege()
         # self.playerui = SurfaceAlphaUI((0, 0, 280, 120))
         self.playerui = SurfaceUI((0, 0, 450, 420)).convert_alpha()
-        self.playerui.rect.bottom = self.rect.bottom
+        # self.playerui.rect.bottom = self.rect.bottom
         self.new_sys_message("Привет игрок")
 
     def draw_sky(self):
@@ -182,7 +182,7 @@ class GameUI(UI):
         lives_in_heart = 10
         self.playerui.fill(color_none)
         imgs = live_imgs
-        cnt_in_row = 15
+        cnt_in_row = 10
         step = imgs[0].get_width() + 5
         x, y = 10, self.playerui.rect.h - step - 5
         startx, starty = x, y
@@ -641,14 +641,16 @@ cell_size = int(TSIZE * 1.5)  # in interface
 class InventoryUI(SurfaceUI):
     cell_size = cell_size
 
-    def __init__(self, inventory, size_table):
+    def __init__(self, inventory, size_table, margin_table=10, ui_owner=None):
+        self.ui_owner = ui_owner
         self.inventory = inventory
+        self.margin = margin_table
         super(InventoryUI, self).__init__(((0, 0), WSIZE))
         self.convert_alpha()
         self.fill((0, 0, 0, 0))
 
-        self.table_inventory = SurfaceUI((0, 0, size_table[0] * self.cell_size + 40,
-                                          size_table[1] * self.cell_size + 40)).convert_alpha()
+        self.table_inventory = SurfaceUI((0, 0, size_table[0] * self.cell_size + self.margin * 2,
+                                          size_table[1] * self.cell_size + self.margin * 2)).convert_alpha()
         self.table_inventory.rect.center = self.rect.center
         self.work_rect = self.table_inventory.rect
 
@@ -656,20 +658,24 @@ class InventoryUI(SurfaceUI):
         self.inventory_info_index_surface = pygame.Surface((1, 1))
         self.top_bg_color = (82, 82, 91, 150)
 
+    def set_work_rect(self, value):
+        self.work_rect = value
+
     def redraw_table_inventory(self):
         self.table_inventory.fill(bg_color)
         self.table_inventory.fill(bg_color_dark,
-                                  (20, 20, self.table_inventory.rect.w - 40, self.table_inventory.rect.h - 40))
+                                  (self.margin, self.margin, self.table_inventory.rect.w - self.margin * 2,
+                                   self.table_inventory.rect.h - self.margin * 2))
         # pg.draw.rect(self.table_inventory, self.top_bg_color,)
-        x = 20
-        y = 20
+        x = self.margin
+        y = self.margin
         i = 0
         cell_size = self.cell_size
         cell_size_2 = cell_size // 2
         for i in range(self.inventory.inventory_size):
             if i > 0 and i % self.inventory.size_table[0] == 0:
                 y += cell_size
-                x = 20
+                x = self.margin
             color = "#000000"
             # if i == self.inventory.active_cell:
             #     color = "#FFFFFF"
@@ -702,7 +708,11 @@ class InventoryUI(SurfaceUI):
         self.inventory_info_index_surface.fill(self.top_bg_color)
         self.inventory_info_index_surface.blit(text, (3, 2))
 
+    def get_draw_rect(self):
+        return self.table_inventory.rect
+
     def draw(self, surface):
+        self.redraw_table_inventory()
         self.fill(color_none)
         self.table_inventory.draw(self)
         if get_obj_mouse():
@@ -713,7 +723,10 @@ class InventoryUI(SurfaceUI):
         surface.blit(self, self.rect)
 
     def convert_table_mpos_to_i(self, pos):
-        offset = 20
+        offset = self.margin
+        if self.ui_owner:
+            offset_ui = self.ui_owner.get_onscreen_pos()
+            pos = pos[0] - offset_ui[0], pos[1] - offset_ui[1]
         if self.table_inventory.rect.collidepoint(pos):
             i = (pos[0] - (self.table_inventory.rect.x + offset)) // self.cell_size + \
                 (pos[1] - (self.table_inventory.rect.y + offset)) // self.cell_size * self.inventory.size_table[0]
@@ -732,6 +745,11 @@ class InventoryUI(SurfaceUI):
             if 0 <= i < self.inventory.inventory_size:
 
                 if get_obj_mouse():
+                    if self.inventory.flag_not_put_in:
+                        return True
+                    if self.inventory.filter_items:
+                        if get_obj_mouse().index not in self.inventory.filter_items:
+                            return True
                     # положить объект из мыши
                     put_item = get_obj_mouse()
                     if event.button == pg.BUTTON_RIGHT:
@@ -880,6 +898,8 @@ class InventoryPlayerUI(InventoryUI):
             x += cell_size
 
     def draw(self, surface):
+        self.redraw_table_inventory()
+
         self.fill(color_none)
 
         self.work_inventory.draw(self)
@@ -953,30 +973,106 @@ class InventoryPlayerUI(InventoryUI):
         return False
 
 
-class InventoryPlayerChestUI(SurfaceUI):
-    def __init__(self, player_inventory):
-        super(InventoryPlayerChestUI, self).__init__(((0, 0), WSIZE))
+class BlockUI(SurfaceUI):
+    def __init__(self, rect):
+        super(BlockUI, self).__init__(rect)
+        self.block_obj = None
+        self.work_rect = self.rect
+
+    def set_block(self, block_obj):
+        self.block_obj = block_obj
+
+    def set_work_rect(self, value):
+        pass
+
+    def get_draw_rect(self):
+        return self.rect
+
+    def get_onscreen_pos(self):
+        return self.rect
+
+
+class ChestUI(InventoryUI):
+    def __init__(self):
+        super(ChestUI, self).__init__(None, Chest_size_table)
+
+    def set_chest_inventory(self, chest_inventory):
+        self.inventory = chest_inventory
+        self.redraw_table_inventory()
+
+    def set_block(self, block_obj):
+        self.set_chest_inventory(block_obj.inventory)
+
+
+#         self.fuel_cell = Inventory(self.game_map, self, [1, 1])
+#         self.input_cell = Inventory(self.game_map, self, [1, 1])
+#         self.result_cell = Inventory(self.game_map, self, [1, 1])
+
+class FurnaceUI(BlockUI):
+    background = bg_color
+
+    def __init__(self):
+        rect = pg.Rect(0, 0, cell_size * 6, cell_size * 4)
+        super(FurnaceUI, self).__init__(rect)
+        self.convert_alpha()
+        self.input_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
+        self.input_inventory_ui.get_draw_rect().topleft = cell_size * 0.5, cell_size * 0.5
+        self.fuel_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
+        self.fuel_inventory_ui.get_draw_rect().topleft = cell_size * 0.5, cell_size * 2.5
+        self.result_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
+        self.result_inventory_ui.get_draw_rect().topleft = cell_size * 4.5, cell_size * 1.5
+        self.inventories = self.input_inventory_ui, self.fuel_inventory_ui, self.result_inventory_ui
+        self._work_rect = None
+
+    def set_work_rect(self, value):
+        for inv in self.inventories:
+            inv.work_rect = value
+
+    def draw(self, surface):
+        self.fill(self.background)
+        for inv in self.inventories:
+            inv.draw(self)
+        surface.blit(self, self.rect)
+
+    def set_block(self, block_obj):
+        super(FurnaceUI, self).set_block(block_obj)
+        self.input_inventory_ui.inventory = block_obj.input_cell
+        self.fuel_inventory_ui.inventory = block_obj.fuel_cell
+        self.result_inventory_ui.inventory = block_obj.result_cell
+
+    def pg_event(self, event: pg.event.Event):
+        res = False
+        for inv in self.inventories:
+            res = inv.pg_event(event) or res
+        return res
+
+
+class InventoryPlayerWithBlockUI(SurfaceUI):
+    def __init__(self, player_inventory, block_ui: BlockUI):
+        super(InventoryPlayerWithBlockUI, self).__init__(((0, 0), WSIZE))
         self.player_inventory_ui = InventoryPlayerUI(player_inventory)
         self.player_inventory_ui.opened_full_inventory = True
         self.player_inventory_ui.table_inventory.rect.y = 100
 
-        self.chest_inventory_ui = InventoryUI(None, Chest_size_table)
-        self.chest_inventory_ui.table_inventory.rect.y = self.player_inventory_ui.table_inventory.rect.bottom + 40
-        self.work_rect = pg.Rect.union(self.chest_inventory_ui.work_rect, self.player_inventory_ui.work_rect)
-        self.player_inventory_ui.work_rect = self.chest_inventory_ui.work_rect = self.work_rect
+        self.block_ui = block_ui
+        self.block_ui.get_draw_rect().y = self.player_inventory_ui.table_inventory.rect.bottom + 40
+        self.block_ui.get_draw_rect().centerx = self.player_inventory_ui.table_inventory.rect.centerx
+
+        self.work_rect = pg.Rect.union(self.block_ui.work_rect, self.player_inventory_ui.work_rect)
+        self.block_ui.set_work_rect(self.work_rect)
+        self.player_inventory_ui.set_work_rect(self.work_rect)
         set_obj_mouse(None)
         self.opened = False
 
-    def set_chest_inventory(self, chest_inventory):
-        self.chest_inventory_ui.inventory = chest_inventory
-        self.chest_inventory_ui.redraw_table_inventory()
-        self.player_inventory_ui.opened_full_inventory = True
+    def set_block(self, block_obj, view=True):
+        self.block_ui.set_block(block_obj)
+        if view:
+            self.player_inventory_ui.opened_full_inventory = True
+            self.opened = True
 
     def draw(self, surface):
-        self.player_inventory_ui.redraw_table_inventory()
-        self.chest_inventory_ui.redraw_table_inventory()
+        self.block_ui.draw(surface)
         self.player_inventory_ui.draw(surface)
-        self.chest_inventory_ui.draw(surface)
         if get_obj_mouse():
             mx, my = pg.mouse.get_pos()
             self.blit(get_obj_mouse().sprite, (mx, my))
@@ -984,8 +1080,18 @@ class InventoryPlayerChestUI(SurfaceUI):
 
     def pg_event(self, event: pg.event.Event):
         res = self.player_inventory_ui.pg_event(event)
-        res = self.chest_inventory_ui.pg_event(event) or res
+        res = self.block_ui.pg_event(event) or res
         return res
+
+
+class InventoryPlayerChestUI(InventoryPlayerWithBlockUI):
+    def __init__(self, player_inventory):
+        super(InventoryPlayerChestUI, self).__init__(player_inventory, ChestUI())
+
+
+class InventoryPlayerFurnaceUI(InventoryPlayerWithBlockUI):
+    def __init__(self, player_inventory):
+        super(InventoryPlayerFurnaceUI, self).__init__(player_inventory, FurnaceUI())
 
 
 class ScrollSurfaceRecipes(ScrollSurface):

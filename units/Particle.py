@@ -1,3 +1,5 @@
+import random
+
 from units.Texture import get_texture_size, GREEN
 from units.common import *
 from units.Entity import *
@@ -59,6 +61,9 @@ class TextParticle(Particle):
 
 class DamageParticle(TextParticle):
     def __init__(self, game, pos, lives):
+        pos = list(pos)
+        pos[0] += random.randint(-5, 5)
+        pos[1] += random.randint(-5, 5)
         text = str(lives)
         size = min(30, 18 + lives // 10)
         font = pygame.font.Font('data/fonts/xenoa.ttf', size, )

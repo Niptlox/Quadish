@@ -1,7 +1,13 @@
 {
-"path": "portal_anim_nebula.png",
-"table": [8, 8],
-"count_frames": 61,
-"speed": 24,
-"looped": True,
+  "path": "portal_anim_vortex.png",
+  "table": [
+    8,
+    8
+  ],
+  "count_frames": 61,
+  "speed": 60,
+  "looped": false,
+  "convert_alpha": true,
+  "centered": true,
+  "colorkey": "black"
 }

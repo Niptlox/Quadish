@@ -1,6 +1,7 @@
 import math
 import os
 import pickle
+import sys
 from logging import warning, debug
 
 import pygame
@@ -48,7 +49,6 @@ WSIZE = WINDOW_SIZE
 pygame.display.set_caption('Quadish')
 Icon = pg.image.load("data/sprites/icon.png")
 pygame.display.set_icon(Icon)
-
 
 screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags, vsync=1)
 display_ = pygame.Surface(WINDOW_SIZE)
@@ -188,6 +188,23 @@ colors = ['#CD5C5C', '#F08080', '#FA8072', '#E9967A', '#FFA07A', '#DC143C', '#FF
 Chest_size_table = 5, 4
 
 
+# DEFS ======================================================================
+
+def pygame_mainloop(f_iter_loop, f_pgevent=None, rect=WSIZE):
+    # screen = pygame.display.set_mode((rect[0], rect[1]), 0, 32)
+    clock = pg.time.Clock()
+    while True:
+        for event in pygame.event.get():
+            if event.type == pg.QUIT:
+                pygame.quit()
+                sys.exit()
+            if f_pgevent:
+                f_pgevent(event)
+        clock.tick(FPS)
+        f_iter_loop(screen_)
+        pygame.display.flip()
+
+
 # CLASSES ===================================================================
 
 class SavedObject:
@@ -206,7 +223,8 @@ class SavedObject:
                     d[key] = value.get_vars()
                 else:
                     d.pop(key)
-            elif isinstance(value, pg.Surface) or (isinstance(value, (list, tuple)) and value and isinstance(value[0], pg.Surface)):
+            elif isinstance(value, pg.Surface) or (
+                    isinstance(value, (list, tuple)) and value and isinstance(value[0], pg.Surface)):
                 warning(f"Не контроллируемый {key}: {value}, удален из сохранения!")
                 d.pop(key)
         # print(self.__class__, d)
@@ -214,7 +232,8 @@ class SavedObject:
         return d
 
     def set_vars(self, vrs):
-        vrs.pop("__class__")
+        if "__class__" in vrs:
+            vrs.pop("__class__")
         for var_name, var_value in vrs.items():
             if isinstance(var_value, dict) and var_value.get("__class__"):
                 self.__dict__[var_name].set_vars(var_value)

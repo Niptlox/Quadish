@@ -14,16 +14,17 @@ class Items(PhysicalObject):
     cell_size = 999
 
     def __init__(self, game, index=None, pos=(0, 0), count: int or tuple = 1):
+        super().__init__(game, pos[0], pos[1], self.width, self.height, use_physics=True)
         self.index = index
+
         if index in Eats:
             self.class_item = CLS_EAT
             self.recovery_lives = Eats[index]
         if isinstance(count, tuple):
             count = randint(*count)
-            if count <= 0:
-                self.kill()
+        if count <= 0:
+            self.kill()
         self.count = count
-        super().__init__(game, pos[0], pos[1], self.width, self.height, use_physics=True)
 
     def __copy__(self):
         obj = self.__class__(self.game, self.index, self.rect.topleft, self.count)

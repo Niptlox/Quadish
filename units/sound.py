@@ -5,7 +5,7 @@ from units.config import *
 
 class Sounds(list):
     def rplay(self):
-        self.rchoice().play()
+        return self.rchoice().play()
 
     def rchoice(self):
         return choice(self)
@@ -16,7 +16,7 @@ class Sounds(list):
 
     def set_volume(self, volume):
         sounds_set_volume(self, volume)
-        
+
     def __add__(self, other):
         return self.__class__(super(Sounds, self).__add__(other))
 
@@ -49,7 +49,8 @@ sounds_ui = Sounds([sound_click])
 sounds_set_volume(sounds_ui, VolumeSettings.ui_volume)
 
 # ======= PLAYER =======
-sounds_step_dry = load_sounds("data/audio/steps/FootstepsDry-{}.ogg", 3, 1)
+sounds_step_dry = load_sounds("data/audio/FootStep/StepGrass{}.wav", 2, 1)
+sounds_step_stomp = load_sounds("data/audio/FootStep/Stomp{}.wav", 2, 4)
 sounds_pickaxe = load_sounds("data/audio/tools/Pickaxe-{}.ogg", 4, 1)
 sounds_axe = load_sounds("data/audio/tools/Axe-{}.ogg", 2, 1)
 sounds_eat = load_sounds("data/audio/food/EatingFood{}.ogg", 2, 1)
@@ -57,16 +58,16 @@ sounds_drink = load_sounds("data/audio/food/Drink-{}.ogg", 1, 1)
 
 sounds_brake_rock = load_sound("data/audio/tools/BrakeRock.wav")
 
-sounds_player = sounds_step_dry + sounds_pickaxe + sounds_axe + sounds_eat + sounds_drink
+sounds_player = sounds_step_dry + sounds_step_stomp + sounds_pickaxe + sounds_axe + sounds_eat + sounds_drink
 sounds_set_volume(sounds_player, VolumeSettings.player_volume)
-
 
 # ====== BACK MUSIC ======
 sounds_background = Sounds([load_sound("data/audio/background/alexander-nakarada-fantasy-motion-loop-ready.mp3")])
 sounds_set_volume(sounds_background, VolumeSettings.background_volume)
 
 # ====== CREATURES ======
-sounds_creatures = Sounds()
+sound_gate = load_sound("data/audio/gate/Fire4.wav")
+sounds_creatures = Sounds([sound_gate])
 
 # ====== GAME ======
 sounds_game = Sounds()

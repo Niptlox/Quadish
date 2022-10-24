@@ -171,7 +171,7 @@ class ScreenMap:
                             if tile_type > 0:
                                 b_pos = [tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1]]
                                 sprite_pos = b_pos
-                                if srect_d.collidepoint(*b_pos) or 1:
+                                if 1 or srect_d.collidepoint(*b_pos):
                                     # print(tile_xy)
                                     if tile_type in tile_many_imgs:
                                         img = tile_many_imgs[tile_type][tile[2]]
@@ -201,7 +201,9 @@ class ScreenMap:
                                                                                (TSIZE // 2 - 1, TSIZE // 2 - 1)),
                                                             (itx * step + 1, ity * step + 1))
                                     else:
-                                        self.update_tile(chunk, tile, tile_type, index, tile_x, tile_y, tact)
+                                        # Если передана картинка, то отрисовываем
+                                        img = self.update_tile(chunk, tile, tile_type, index,
+                                                               tile_x, tile_y, chunk_x, chunk_y, tact) or img
 
                                     if tile_type in TILE_WITH_LOCAL_POS:
                                         local_pos = tile[3][TILE_LOCAL_POS]
@@ -263,7 +265,7 @@ class ScreenMap:
             particle.draw(self.display, pos)
             i += 1
 
-    def update_tile(self, chunk, tile, tile_type, index, tile_x, tile_y, tact):
+    def update_tile(self, chunk, tile, tile_type, index, tile_x, tile_y, chunk_x, chunk_y, tact):
         if tile_type == 101:
             if tile[2] < 3:
                 if tile[3][TILE_TIMER] < tact:
@@ -273,6 +275,8 @@ class ScreenMap:
                         chunk[0][index + 3][TILE_TIMER] = tact
                     # tile[3] = tact --> тк срез
                     chunk[0][index + 3][TILE_TIMER] += random.randint(FPS * 60, FPS * 120)
+        elif tile_type in CLASS_UPDATING_TILES:
+            return self.game_map.get_tile_obj(chunk_x, chunk_y, tile[3]).update()
 
         elif tile_type == 102:
             # дерево

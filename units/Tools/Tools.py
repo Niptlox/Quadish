@@ -3,7 +3,7 @@ from time import time
 from units import Entities
 from units.Tiles import item_of_break_tile, item_of_right_click_tile, STANDING_TILES, ITEM_TILES, tile_imgs, \
     tile_drops, ON_EARTHEN_PLANTS, MULTI_BLOCK_PLANTS, \
-    PLANT_STAND_ON_DIRT, PLANT_STAND_ON_PLANT, BACKTILES
+    PLANT_STAND_ON_DIRT, PLANT_STAND_ON_PLANT, BACKTILES, CLASS_TILE
 from units.Tools.AnimationTool import *
 from units.common import *
 
@@ -89,7 +89,7 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
         game_map.set_static_tile(x, y, game_map.get_tile_ttile(128))
     elif ttile == 128:
         game_map.set_static_tile(x, y, game_map.get_tile_ttile(127))
-    elif ttile == 129:
+    elif ttile in CLASS_TILE:
         obj = game_map.get_tile_obj(x // CHUNK_SIZE, y // CHUNK_SIZE, tile[3])
         obj.right_click(local_pos_tile)
     elif ttile == 101:

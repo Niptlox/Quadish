@@ -1,6 +1,7 @@
 from math import sin, cos, pi
 from random import randint
 
+from units.Animation import load_animation
 from units.Entity import PhysicalObject, collision_test
 # from units.Items import ItemsTile
 from units.Tiles import item_of_break_tile
@@ -85,7 +86,6 @@ class Dynamite(PhysicalObject):
                     # self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(ix, iy), items)
                     self.game_map.add_item_of_index(ttile, count_items, ix, iy)
 
-
             return
         elif self.detonation_state == 1:
             self.detonation_state = 2
@@ -112,4 +112,19 @@ class Dynamite(PhysicalObject):
             return True
 
 
+class PortalMainGate(PhysicalObject):
+    not_save_vars = PhysicalObject.not_save_vars | {"animation"}
 
+    def __init__(self, game, x=0, y=0):
+        super(PortalMainGate, self).__init__(game, x, y, 1, 1, use_physics=False, use_gravity=False)
+        self.animation = load_animation("data/animations/portal_anim_nebula.json")
+        self.animation.start()
+        self.spawn_player_tact = 20
+
+    def draw(self, surface, pos):
+        self.animation.update()
+        self.animation.draw(surface, pos)
+        self.alive = self.animation.animation
+        self.spawn_player_tact -= 1
+        if self.spawn_player_tact <= 0:
+            self.game.player.active = True

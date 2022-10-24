@@ -60,8 +60,7 @@ class PhysicalObject(SavedObject):
     def __init__(self, game, x=0, y=0, width=0, height=0, use_physics=False, sprite=None,
                  use_collisions=False, use_gravity=False) -> None:
         self.rect: pygame.Rect = pygame.Rect(x, y, width, height)
-        self.chunk_pos = (0, 0)
-        self.update_chunk_pos()
+        self.chunk_pos = self.update_chunk_pos()
         self.game = game
         self.game_map = game.game_map
         self.sprite = sprite
