@@ -1,6 +1,6 @@
 import random
 
-from units.Image import *
+from units.Graphics.Image import *
 
 DEBUG_DRAW_TILES = False
 

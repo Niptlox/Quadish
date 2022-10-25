@@ -1,18 +1,15 @@
 import glob
-import pickle
 
 from noise import snoise2 as noise2
 
-from units.Creatures import Slime, Cow, Wolf, SlimeBigBoss, Snake
-from units.Entities import PortalMainGate
-from units.Entity import PhysicalObject
-from units.Items import ItemsTile
-from units.TilesClass import Chest, tiles_class
+from units.Objects.Creatures import Slime, Cow, Wolf, SlimeBigBoss, Snake
+from units.Objects.Entities import PortalMainGate
+from units.Objects.Entity import PhysicalObject
+from units.Objects.Items import ItemsTile
+from units.Objects.TilesClass import tiles_class
 from units.Tools import TOOLS
 from units.biomes import biome_of_pos
-from units.Structures import Structures_middleworld, Structures_chance_middleworld, Structures_chance_space, \
-    Structures_chance, Structures, Structures_all, structure_start
-from units.Trees import grow_tree
+from units.Map.Structures import Structures_chance, Structures, Structures_all, structure_start
 from units.Tiles import *
 from units.sound import sound_gate
 
@@ -566,7 +563,7 @@ class GameMap(SavedObject):
         self.saved = True
         self.game.ui.new_sys_message(f"Сохранение", draw_now=True)
 
-        file_p = CWDIR + f'/data/maps/game_map-{num}.pclv'
+        file_p = CWDIR + f'data/maps/game_map-{num}.pclv'
         print(f"GamaMap: '{file_p}' - SAVING...")
         self.num_save_map = num
         # try:

@@ -26,7 +26,7 @@ def replace_color(img, color, new_color):
 
 
 def create_ground():
-    path = "../data/sprites/tiles/ground/"
+    path = "../../data/sprites/tiles/ground/"
     path_imgs = [path + "ground", path + "ground_L", path + "ground_LR", path + "ground_R"]
     i = 0
     for color in biome_colors:

@@ -1,4 +1,4 @@
-from units.Texture import *
+from units.Graphics.Texture import *
 from units.sound import sound_click
 
 

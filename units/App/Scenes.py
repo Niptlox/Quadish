@@ -1,13 +1,8 @@
 import webbrowser
 
-from units.common import *
-from units.App import *
-from units.Cursor import set_cursor, CURSOR_NORMAL
-from units.Player import Player
-from units.UI.UI import GameUI, SwitchMapUI, EndUI, PauseUI, AchievementsUI, TitleUI, MainSettingsUI, SoundSettingsUI
+from units.App.App import *
+from units.UI.UI import SwitchMapUI, EndUI, PauseUI, AchievementsUI, TitleUI, MainSettingsUI, SoundSettingsUI
 from units.config import Window
-from units.map.GameMap import GameMap
-from units.map.ScreenMap import ScreenMap
 
 
 class TitleScene(SceneMenu):

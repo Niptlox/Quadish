@@ -5,16 +5,14 @@ from pygame import Vector2
 from pygame.locals import *
 
 from units.Achievements import Achievements
-from units.Animation import get_death_animation
-from units.Entity import PhysicalObject
+from units.Graphics.Animation import get_death_animation
+from units.Objects.Entity import PhysicalObject
 from units.Inventory import InventoryPlayer
-from units.Items import Items
-from units.Particle import TextParticle, DamageParticle
-from units.Structures import structure_start
+from units.Objects.Items import Items
+from units.Graphics.Particle import DamageParticle
 from units.Tiles import hand_pass_img, player_img, dig_rect_img
-from units.Tools import ToolHand, TOOLS, ItemTool, \
-    ToolCreativeHand  # ToolSword, ItemSword, ItemPickaxe, TOOLS, ItemGoldPickaxe, ItemTool
-from units.UI.UI import InventoryPlayerChestUI, FurnaceUI, InventoryPlayerFurnaceUI
+from units.Tools import ToolHand, ItemTool, ToolCreativeHand
+from units.UI.BlocksUI import InventoryPlayerChestUI, InventoryPlayerFurnaceUI
 from units.sound import *
 from units.common import *
 

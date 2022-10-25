@@ -1,6 +1,16 @@
 import pygame as pg
 
 
+# находит позицию xy чтобы один стоял в центре другого
+def center_pos_2lens(len1, big_len):
+    return big_len // 2 - len1 // 2
+
+
+# находит позицию xy чтобы один стоял в центре другого
+def center_pos_2rects(rect, big_rect):
+    return center_pos_2lens(rect.w, big_rect.w), center_pos_2lens(rect.h, big_rect.h)
+
+
 class UI:
     def __init__(self, scene) -> None:
         self.scene = scene
@@ -71,7 +81,6 @@ class SurfaceUI(pg.Surface):
     def set(self, surface):
         super(SurfaceUI, self).__init__(surface.get_size(), surface.get_flags(), 32)
         self.blit(surface, (0, 0))
-
 
 
 #

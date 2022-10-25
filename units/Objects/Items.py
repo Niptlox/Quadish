@@ -1,6 +1,6 @@
 from random import randint
 
-from units.Entity import PhysicalObject, collision_test
+from units.Objects.Entity import PhysicalObject, collision_test
 from units.Tiles import tile_hand_imgs, Eats
 from units.common import *
 

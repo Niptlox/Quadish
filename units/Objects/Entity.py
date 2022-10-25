@@ -2,7 +2,7 @@ from units.Tiles import PHYSBODY_TILES, SEMIPHYSBODY_TILES
 from units.common import *
 
 
-# from units.map.GameMap import GameMap
+# from units.Map.GameMap import GameMap
 
 def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic_tiles: list = [],
                    first_tile_pos=(0, 0), collide_all_tiles=False, semiphysbody=False):

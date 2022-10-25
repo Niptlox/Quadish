@@ -1,6 +1,6 @@
 from time import time
 
-from units import Entities
+from units.Objects import Entities
 from units.Tiles import item_of_break_tile, item_of_right_click_tile, STANDING_TILES, ITEM_TILES, tile_imgs, \
     tile_drops, ON_EARTHEN_PLANTS, MULTI_BLOCK_PLANTS, \
     PLANT_STAND_ON_DIRT, PLANT_STAND_ON_PLANT, BACKTILES, CLASS_TILE

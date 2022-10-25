@@ -1,11 +1,12 @@
 from time import time
 
-from units.Texture import get_color_of_gradient
+from units.Graphics.Texture import get_color_of_gradient
 from units.Tiles import *
 # rect для отрисовки
-from units.biomes import biome_colors, biome_tiles
+from units.biomes import biome_tiles
 from units.config import GameSettings
-from units.map.GameMap import GameMap, grow_tree
+from units.Map.GameMap import GameMap
+from units.Trees import grow_tree
 
 srect_d = pg.Rect(-TSIZE, -TSIZE, WSIZE[0] + TSIZE, WSIZE[1] + TSIZE)
 

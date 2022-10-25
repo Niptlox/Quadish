@@ -1,6 +1,6 @@
 from pprint import pprint
 
-from units.Items import Items
+from units.Objects.Items import Items
 from units.Tiles import IDX_TOOLS
 from units.Tools.ToolHand import *
 from units.Tools.ToolsPickaxe import *

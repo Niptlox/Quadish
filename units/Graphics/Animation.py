@@ -1,17 +1,25 @@
-from units.Image import load_imgs_of_animation
+from units.Graphics.Image import load_imgs_of_animation
 from units.common import *
 import json
+from pathlib import Path
 
 
 def load_animation(path):
     path = os.path.join(CWDIR, path)
     print(path)
     data = json.load(open(path, "r"))
-    path_img = os.path.join(os.path.dirname(path), data.get("path", "None"))
-    frames = load_imgs_of_animation(path_img, data.get("table", [1, 1]), data.get("count_frames", 1),
+    if data.get("format_path", None):
+        json_file_name = Path(path).stem
+        path_img = data.get("format_path", "").format(json_file_name)
+    else:
+        path_img = data.get("path", "None")
+    path_img = os.path.join(os.path.dirname(path), path_img)
+    table = data.get("table", [1, 1])
+    frames = load_imgs_of_animation(path_img, table, data.get("count_frames", table[0] * table[1]),
                                     colorkey=data.get("colorkey", None), convert_alpha=data.get("convert_alpha", True))
     print(frames)
     size = frames[0].get_size()
+    fsize = size
     nframes = []
     for i in range(len(frames)):
         fsize = (size[0] + i * 3 - 60, size[1] + i * 3 - 60)
@@ -82,6 +90,59 @@ class Animation(SavedObject):
     def stop(self):
         self.animation = False
         self.frame_index = 0
+
+
+# Animation with Start Loop End
+class AnimationSLE(SavedObject):
+    is_not_saving = True
+
+    def __init__(self, start_anim: Animation, loop_anim: Animation, end_anim: Animation):
+        """Animation with Start Loop Stop"""
+        self.start_anim = start_anim
+        self.loop_anim = loop_anim
+        self.end_anim = end_anim
+        self.state = 0
+        self.animations = [start_anim, loop_anim, end_anim]
+        self.animation = False
+
+    def draw(self, surface, pos):
+        if self.animation:
+            self.animations[self.state].draw(surface, pos)
+
+    def get_frame(self):
+        return self.animations[self.state].get_frame()
+
+    def next_state(self):
+        self.set_state(self.state+1)
+
+    def update(self):
+        if self.animation:
+            self.animations[self.state].update()
+            if not self.animations[self.state].animation:
+                self.next_state()
+
+    def start(self, restart=True):
+        if restart:
+            self.stop()
+        self.animation = True
+
+    def pause(self):
+        self.animation = False
+
+    def stop(self):
+        self.animation = False
+        self.state = 0
+
+    def set_state(self, state):
+        if state != self.state:
+            self.state = state
+            if self.state >= len(self.animations):
+                self.stop()
+            else:
+                self.animations[self.state].start(restart=True)
+
+
+
 
 
 def get_death_animation(size, color=(185, 28, 28), speed=10, time=2, start_alpha=200):

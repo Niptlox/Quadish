@@ -1,6 +1,6 @@
-from units.Animation import Animation
+from units.Graphics.Animation import Animation
 from units.Inventory import Inventory
-from units.Items import Items, ItemsTile
+from units.Objects.Items import Items, ItemsTile
 from units.Tiles import WOOD_TILES, furnace_imgs
 from units.common import *
 
@@ -60,7 +60,7 @@ fuel_tiles = {idx: 1 for idx in WOOD_TILES}
 
 
 class Furnace(Tile):
-    not_save_vars = Tile.not_save_vars
+    not_save_vars = Tile.not_save_vars | {"animation"}
     index = 131
     burn_time = FPS
 
@@ -70,9 +70,10 @@ class Furnace(Tile):
         self.fuel_cell.filter_items = set(fuel_tiles)
         self.input_cell = Inventory(self.game_map, self, [1, 1], items_update_event=self.check_cells_and_start)
         self.result_cell = Inventory(self.game_map, self, [1, 1], items_update_event=self.check_cells_and_start)
-        self.result_cell.flag_not_put_in = True
+        # self.result_cell.flag_not_put_in = True
         self.inventories = [self.fuel_cell, self.input_cell, self.result_cell]
         self.burning = None
+        self.progress = 0
         self.timer = 0
         self.animation = Animation(furnace_imgs[1:], looped=True)
 
@@ -80,6 +81,7 @@ class Furnace(Tile):
         self.game.player.furnace_ui.set_block(self, view=True)
 
     def __start_burning(self):
+        self.progress = 0
         self.burning = self.input_cell[0].index
         self.fuel_cell.get_from_inventory(self.fuel_cell[0].index, 1)
         self.timer = 0
@@ -91,7 +93,7 @@ class Furnace(Tile):
         # if self.check_cells(fuel_is_getting=True):
         self.result_cell.put_to_inventory(ItemsTile(self.game, furnace_burn_tiles[self.burning], count=1))
         self.input_cell.get_from_inventory(self.input_cell[0].index, 1)
-
+        self.progress = 0
         self.burning = None
         self.check_cells_and_start()
 
@@ -114,6 +116,7 @@ class Furnace(Tile):
     def update(self):
         if self.burning:
             self.timer += 1
+            self.progress = self.timer / self.burn_time
             if self.timer >= self.burn_time:
                 self.__finish_burning()
             self.animation.update()

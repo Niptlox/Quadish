@@ -1,12 +1,10 @@
-from units.common import *
-from units.App import *
-from units.Cursor import set_cursor, CURSOR_NORMAL
-from units.Player import Player
-from units.UI.UI import GameUI, SwitchMapUI, EndUI, PauseUI, AchievementsUI, TitleUI
-from units.config import Window
-from units.map.GameMap import GameMap
-from units.map.ScreenMap import ScreenMap
-from units.Scenes import TitleScene, OpenMapScenePopupMenu, SaveMapScenePopupMenu, PauseScenePopupMenu, EndSceneUI,\
+from units.App.App import *
+from units.Graphics.Cursor import set_cursor, CURSOR_NORMAL
+from units.Objects.Player import Player
+from units.UI.UI import GameUI
+from units.Map.GameMap import GameMap
+from units.Map.ScreenMap import ScreenMap
+from units.App.Scenes import TitleScene, OpenMapScenePopupMenu, SaveMapScenePopupMenu, PauseScenePopupMenu, EndSceneUI,\
     AchievementsSceneUI
 import subprocess
 

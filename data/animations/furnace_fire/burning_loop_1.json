@@ -1,0 +1,12 @@
+{
+  "format_path": "{}.png",
+  "table": [
+    8,
+    1
+  ],
+  "speed": 60,
+  "looped": false,
+  "convert_alpha": true,
+  "centered": true,
+  "colorkey": "black"
+}

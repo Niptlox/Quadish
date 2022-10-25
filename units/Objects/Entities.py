@@ -1,8 +1,8 @@
 from math import sin, cos, pi
 from random import randint
 
-from units.Animation import load_animation
-from units.Entity import PhysicalObject, collision_test
+from units.Graphics.Animation import load_animation
+from units.Objects.Entity import PhysicalObject, collision_test
 # from units.Items import ItemsTile
 from units.Tiles import item_of_break_tile
 from units.Tiles import tnt_imgs, DYNAMITE_NOT_BREAK

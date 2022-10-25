@@ -31,8 +31,8 @@ FPS = 30
 flags = pygame.SCALED
 desktop_size = pygame.display.get_desktop_sizes()[0]
 print("INIT GAME VARS")
-last_versions = ["0.9.1", "0.1.3-alpha", "0.1.5-alpha"]
-GAME_VERSION = "0.1.6-alpha"
+last_versions = ["0.9.1", "0.1.3-alpha", "0.1.5-alpha", "0.1.6-alpha"]
+GAME_VERSION = "0.1.7-alpha"
 
 WINDOW_SIZE = tuple(map(int, config.Window.size.split(",")))
 FULLSCREEN = config.Window.fullscreen
@@ -124,7 +124,7 @@ TILE_LOCAL_POS = "p"
 TGENERATE_LOAD = 0
 TGENERATE_INFINITE = 1
 TGENERATE_INFINITE_LANDS = 2
-Generate_type = 2  # 0:load map,1: autogenerate
+Generate_type = 2  # 0:load Map,1: autogenerate
 
 cof = 4.5
 freq_x = 49 * cof

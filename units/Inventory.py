@@ -1,6 +1,6 @@
 from pygame import KEYDOWN, MOUSEWHEEL
 
-from units.Items import ItemsTile, Items
+from units.Objects.Items import ItemsTile, Items
 from units.Tools import TOOLS
 from units.UI.UI import InventoryPlayerUI
 from units.common import *

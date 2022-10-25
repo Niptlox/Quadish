@@ -1,10 +1,10 @@
 import random
 from time import time
 
-from units.Animation import get_death_animation
-from units.Entity import PhysicalObject
-from units.Items import ItemsTile
-from units.Particle import TextParticle, DamageParticle
+from units.Graphics.Animation import get_death_animation
+from units.Objects.Entity import PhysicalObject
+from units.Objects.Items import ItemsTile
+from units.Graphics.Particle import DamageParticle
 from units.common import *
 
 

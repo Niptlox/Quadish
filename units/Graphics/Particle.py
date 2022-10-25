@@ -1,9 +1,8 @@
 import random
 
-from units.Texture import get_texture_size, GREEN
-from units.common import *
-from units.Entity import *
-from units.outline import add_outline_to_image
+from units.Graphics.Texture import get_texture_size, GREEN
+from units.Objects.Entity import *
+from units.Graphics.outline import add_outline_to_image
 
 NONE_PARTICLE_SPRITE = get_texture_size(GREEN, (10, 10))
 

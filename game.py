@@ -1,12 +1,12 @@
 import os
 
-import units.Game
+from units.App.Game import Game
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 
 def main():
-    game = units.Game.Game()
+    game = Game()
     game.main()
 
 
