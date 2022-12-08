@@ -563,7 +563,7 @@ class GameMap(SavedObject):
         self.saved = True
         self.game.ui.new_sys_message(f"Сохранение", draw_now=True)
 
-        file_p = CWDIR + f'data/maps/game_map-{num}.pclv'
+        file_p = GAMEMAPS_PATH + f'game_map-{num}.pclv'
         print(f"GamaMap: '{file_p}' - SAVING...")
         self.num_save_map = num
         # try:
@@ -587,7 +587,7 @@ class GameMap(SavedObject):
     def open_game_map(self, game, num=0):
         self.game.ui.new_sys_message(f"Загрузка карты #{num}", draw_now=True)
 
-        file_p = CWDIR + f'/data/maps/game_map-{num}.pclv'
+        file_p = GAMEMAPS_PATH + f'game_map-{num}.pclv'
         self.num_save_map = num
         print(f"GamaMap: '{file_p}' - LOADING...")
         # try:
@@ -614,8 +614,7 @@ class GameMap(SavedObject):
         return file_p
 
     def get_list_maps(self):
-        path = CWDIR + '/data/maps/'
-        files = glob.glob(path + '*.pclv', recursive=False)
+        files = glob.glob(GAMEMAPS_PATH + '*.pclv', recursive=False)
         return files
 
     def get_list_num_maps(self):

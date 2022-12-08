@@ -71,7 +71,6 @@ class Furnace(Tile):
         self.input_cell = Inventory(self.game_map, self, [1, 1], items_update_event=self.check_cells_and_start)
         self.result_cell = Inventory(self.game_map, self, [1, 1], items_update_event=self.check_cells_and_start)
         # self.result_cell.flag_not_put_in = True
-        self.inventories = [self.fuel_cell, self.input_cell, self.result_cell]
         self.burning = None
         self.progress = 0
         self.timer = 0
@@ -123,7 +122,8 @@ class Furnace(Tile):
             return self.animation.get_frame()
 
     def items_of_break(self):
-        return sum([inv.items_of_break() for inv in self.inventories], [])
+        inventories = [self.fuel_cell, self.input_cell, self.result_cell]
+        return sum([inv.items_of_break() for inv in inventories], [])
 
 
 classes = {Chest, Furnace}

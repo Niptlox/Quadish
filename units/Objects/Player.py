@@ -206,7 +206,7 @@ class Player(PhysicalObject):
     def tp_random(self):
         self.tp_to((random.randint(-1e9, 1e9), random.randint(-1e9, 1e9)))
         self.tp_to((random.randint(-1e9, 1e9), random.randint(-TSIZE * 10000, TSIZE * 10000)))
-        # self.tp_to((2 ** 31 - 1500, 2 ** 31 - 1500))
+        self.tp_to((2 ** 31 - 1500, 2 ** 31 - 1500))
 
     def tp_to(self, pos):
         self.rect.center = pos[0] + TSIZE // 2, pos[1] + TSIZE // 2

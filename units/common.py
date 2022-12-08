@@ -11,12 +11,6 @@ import pygame as pg
 import units.config as config
 
 # DEBUG ====================================================
-# DEBUG = True
-DEBUG = False
-show_chunk_grid = False or DEBUG
-show_entity_border = False or DEBUG
-show_group_obj = True or DEBUG
-show_info_menu = True or DEBUG
 
 CHUNK_BD_COLOR = (230, 20, 20)
 
@@ -27,7 +21,7 @@ CWDIR = os.getcwd() + "/"
 pygame.mixer.pre_init(44100, -16, 1, 512)
 pygame.init()  # initiate pygame
 
-FPS = 30
+FPS = 60
 flags = pygame.SCALED
 desktop_size = pygame.display.get_desktop_sizes()[0]
 print("INIT GAME VARS")
@@ -227,6 +221,9 @@ class SavedObject:
                     isinstance(value, (list, tuple)) and value and isinstance(value[0], pg.Surface)):
                 warning(f"Не контроллируемый {key}: {value}, удален из сохранения!")
                 d.pop(key)
+            elif isinstance(value, (list, tuple)) and value and isinstance(value[0], SavedObject):
+                warning(f"Не контроллируемый списочный SavedObject {key}: {value}, удален из сохранения!")
+                d.pop(key)
         # print(self.__class__, d)
         # pickle.dumps(d)
         return d
@@ -239,3 +236,11 @@ class SavedObject:
                 self.__dict__[var_name].set_vars(var_value)
             else:
                 self.__dict__[var_name] = var_value
+
+
+#  ===============================
+
+GAMEMAPS_PATH = CWDIR + "data/maps/"
+
+if not os.path.exists(GAMEMAPS_PATH):
+    os.mkdir(GAMEMAPS_PATH)
