@@ -4,8 +4,8 @@ from units.Objects.Player import Player
 from units.UI.UI import GameUI
 from units.Map.GameMap import GameMap
 from units.Map.ScreenMap import ScreenMap
-from units.App.Scenes import TitleScene, OpenMapScenePopupMenu, SaveMapScenePopupMenu, PauseScenePopupMenu, EndSceneUI,\
-    AchievementsSceneUI
+from units.App.Scenes import TitleScene, OpenMapScenePopupMenu, SaveMapScenePopupMenu, PauseScenePopupMenu, EndSceneUI, \
+    AchievementsSceneUI, HelpSceneUI
 import subprocess
 
 from units.sound import sounds_background, get_random_sound_of
@@ -24,6 +24,7 @@ class Game(App):
         self.pause_scene = PauseScenePopupMenu(self)
         self.end_scene = EndSceneUI(self)
         self.achievements_scene = AchievementsSceneUI(self)
+        self.help_scene = HelpSceneUI(self)
         super().__init__(self.title_scene)
 
     @classmethod

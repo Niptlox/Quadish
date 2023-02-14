@@ -53,6 +53,12 @@ def get_translated_dict_text(dict_text):
     return {i: get_translated_text(text) for i, text in dict_text.items()}
 
 
+def get_translated_help():
+    _path_to_file = os.path.join(TRANSLATIONS_PATH, "help_" + lang + ".md")
+    with open(_path_to_file, "r", encoding="utf-8") as f:
+        return f.read()
+
+
 lang = config.GameSettings.language
 print("Language:", lang)
 path_to_translate = os.path.join(TRANSLATIONS_PATH, lang + ".json")

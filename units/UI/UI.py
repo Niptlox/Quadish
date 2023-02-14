@@ -4,7 +4,8 @@ from units.UI.ClassUI import *
 from units.UI.InventoryUI import *
 from units.UI.ColorsUI import *
 from units.UI.FontsUI import *
-from units.UI.Translate import get_translated_text, get_translated_lst_text, get_translated_text_to_lang
+from units.UI.Translate import get_translated_text, get_translated_lst_text, get_translated_text_to_lang, \
+    get_translated_help
 
 from units.Graphics.Texture import WHITE
 from units.Tiles import live_imgs, bg_live_img, goldlive_imgs, bg_livecreative_img, \
@@ -19,6 +20,7 @@ bool_dict = {ru_bool_lst[0]: eng_bool_lst[0], ru_bool_lst[1]: eng_bool_lst[1]}
 
 
 class SysMessege:
+    # полупрозрачное всплывающие  сообщение внизу экрана
     bg = (82, 82, 91, 220)
     rect = pg.Rect((WSIZE[0] - 330, WSIZE[1] - 45), (300, 32))
     width = 300
@@ -76,6 +78,7 @@ class SysMessege:
 
 
 class AchievementMessege(SysMessege):
+    # все тоже самое что и SysMessege но для ачивок
     rect = pg.Rect((WSIZE[0] - 330, WSIZE[1] - 75), (300, 62))
     font_title = pygame.font.SysFont("Fenix", 28, )  # yes rus
     font_text = pygame.font.SysFont("Fenix", 24, )  # yes rus
@@ -98,6 +101,7 @@ class AchievementMessege(SysMessege):
 # =============================================================
 
 class GameUI(UI):
+    # UI для отрисовки во время процесса игры
     def __init__(self, scene) -> None:
         super().__init__(scene)
         self.info_surface = SurfaceUI((0, 0, 250, 100)).convert_alpha()
@@ -196,6 +200,7 @@ class GameUI(UI):
 
 
 class TitleUI(UI):
+    # заставка игры
     color_sky = "#a5f3fc"
     background = title_background
     background_layer_2 = title_background_layer_2
@@ -308,6 +313,7 @@ class TitleUI(UI):
 
 
 class MainSettingsUI(TitleUI):
+    # меню с основными настройками
     window_sizes_lst = ["1240,720", "720,480"]
 
     def __init__(self, scene):
@@ -430,7 +436,7 @@ class SwitchMapUI(UI):
 
         n = self.scene.game.game_map.save_slots
         tr_text = get_translated_text("Мир")
-        imgs = [createImagesButton(btn_rect.size, tr_text+f" #{i}", font=textfont_btn)
+        imgs = [createImagesButton(btn_rect.size, tr_text + f" #{i}", font=textfont_btn)
                 for i in range(n)]
         self.img_btns = imgs
         funcs = [lambda b, i=i: self.open_map(b, i) for i in range(n)]
@@ -548,7 +554,7 @@ class PauseUI(UI):
             ("Сохранить мир", lambda _: self.scene.set_scene(self.scene.app.savem_scene)),
             ("Открыть мир", lambda _: self.scene.set_scene(self.scene.app.openm_scene)),
             ("Достижения", lambda _: self.scene.set_scene(self.scene.app.achievements_scene)),
-            ("Как играть", lambda _: self.scene.app.open_help()),
+            ("Как играть", lambda _: self.scene.set_scene(self.scene.app.help_scene)),
             ("Телепорт домой", lambda _: self.scene.tp_to_home()),
             ("Сохранить и выйти в меню", lambda _: self.scene.save_and_to_main_menu()),
         ]
@@ -577,9 +583,9 @@ class PauseUI(UI):
 
 class AchievementsUI(UI):
     bg = (82, 82, 91, 150)
-    font_title = pygame.font.Font('data/fonts/xenoa.ttf', 28, )
-    font_text = pygame.font.Font('data/fonts/xenoa.ttf', 21, )
-    font_action = pygame.font.Font('data/fonts/xenoa.ttf', 14, )
+    font_title = pygame.font.Font(CWDIR+'data/fonts/xenoa.ttf', 28, )
+    font_text = pygame.font.Font(CWDIR+'data/fonts/xenoa.ttf', 21, )
+    font_action = pygame.font.Font(CWDIR+'data/fonts/xenoa.ttf', 14, )
 
     def __init__(self, scene, player_achievements):
         super(AchievementsUI, self).__init__(scene)
@@ -628,4 +634,24 @@ class AchievementsUI(UI):
         self.surface.blit(self.surface_achievements, (0, 35))
 
         self.screen.blit(self.surface, self.rect)
+        pg.display.flip()
+
+
+class HelpUI(UI):
+    bg = (82, 82, 91, 220)
+    font_text = pygame.font.Font(CWDIR+'data/fonts/xenoa.ttf', 15, )
+
+    def __init__(self, scene):
+        super(HelpUI, self).__init__(scene)
+        # self.achievements = player_achievements
+        tr_text = get_translated_help()
+        self.text_ui = MultilineText((0, 0, 0, 0), tr_text, self.font_text, "#FFFFFF",
+                                     auto_size=True, background=self.bg, padding=4)
+
+        self.text_ui.rect.center = self.rect.center
+        self.rect = self.text_ui.rect
+
+    def draw(self):
+        self.screen.blit(self.display, (0, 0))
+        self.text_ui.draw(self.screen)
         pg.display.flip()

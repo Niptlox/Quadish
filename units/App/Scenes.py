@@ -1,7 +1,7 @@
 import webbrowser
 
 from units.App.App import *
-from units.UI.UI import SwitchMapUI, EndUI, PauseUI, AchievementsUI, TitleUI, MainSettingsUI, SoundSettingsUI
+from units.UI.UI import SwitchMapUI, EndUI, PauseUI, AchievementsUI, TitleUI, MainSettingsUI, SoundSettingsUI, HelpUI
 from units.config import Window
 
 
@@ -113,3 +113,8 @@ class AchievementsSceneUI(ScenePopupMenu):
     def __init__(self, app: App) -> None:
         self.game = app.game_scene
         super().__init__(app, lambda app: AchievementsUI(app, self.game.player.achievements))
+
+
+class HelpSceneUI(ScenePopupMenu):
+    def __init__(self, app: App) -> None:
+        super().__init__(app, HelpUI)

@@ -171,3 +171,71 @@ class ScrollSurface(SurfaceUI):
     def set_size(self, size):
         self.scroll_surface.set_size(size)
         super(ScrollSurface, self).set_size(size)
+
+
+class Text(SurfaceUI):
+    def __init__(self, rect, text, font, color, background="black", align="left", padding=5, auto_size=False):
+        super().__init__(rect)
+        self.convert_alpha()
+        self.text = text
+        self.font = font
+        self.color = color
+        self.background = background
+        self.align = align
+        self.padding = padding
+        self.auto_size = auto_size
+        self.set_text(text)
+
+    def set_text(self, text):
+        self.text = text
+        text_surface = self.font.render(text, True, self.color)
+        if self.auto_size:
+            self.set_size((text_surface.get_width() + self.padding * 2, text_surface.get_height() + self.padding * 2))
+
+        self.fill(self.background)
+        if self.align == "left":
+            self.blit(text_surface, (self.padding, self.padding))
+        if self.align == "center":
+            self.blit(text_surface, (self.rect.w // 2, self.padding))
+        elif self.align == "right":
+            self.blit(text_surface, (self.rect.w - text_surface.get_width() - self.padding, self.padding))
+
+    def draw(self, surface):
+        surface.blit(self, self.rect)
+
+    def pg_event(self, event: pg.event.Event):
+        pass
+
+
+class MultilineText(Text):
+    def __init__(self, rect, text, font, color, background="black", align="left", padding=5, auto_size=False,
+                 line_spacing=0):
+        self.line_spacing = line_spacing
+        self.lines = text.splitlines()
+        self.text_surfaces = []
+        super().__init__(rect, text, font, color, background, align, padding, auto_size)
+
+    def set_text(self, text: str):
+        self.text = text
+        self.lines = text.splitlines()
+        size = self.rect.size
+        self.text_surfaces = []
+        y = 0
+        for i, line in enumerate(self.lines):
+            text_surface = self.font.render(line, True, self.color)
+            self.text_surfaces.append((text_surface, y))
+            y += text_surface.get_height() + self.line_spacing
+            if size[0] < text_surface.get_width() + self.padding * 2:
+                size = (text_surface.get_width() + self.padding * 2, size[1])
+            if size[1] < text_surface.get_height() * len(self.lines) + self.padding * 2:
+                size = (size[0], text_surface.get_height() * len(self.lines) + self.padding * 2)
+        self.set_size(size)
+
+        self.fill(self.background)
+        for text_surface, y in self.text_surfaces:
+            if self.align == "left":
+                self.blit(text_surface, (self.padding, self.padding + y))
+            elif self.align == "center":
+                self.blit(text_surface, (self.rect.w // 2, self.padding + y))
+            elif self.align == "right":
+                self.blit(text_surface, (self.rect.w - text_surface.get_width() - self.padding, self.padding + y))
