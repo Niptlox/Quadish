@@ -33,8 +33,8 @@ class Items(PhysicalObject):
     def copy(self):
         return self.__copy__()
 
-    def update(self, tact):
-        if not super().update(tact):
+    def update(self, tact, elapsed_time):
+        if not super().update(tact, elapsed_time):
             return False
         if self.physical_vector.xy != (0, 0):
             _, dynamic = collision_test(self.game_map, self.rect, {}, self.game.screen_map.dynamic_tiles)

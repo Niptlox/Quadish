@@ -33,10 +33,10 @@ class Dynamite(PhysicalObject):
         print("d", x, y)
         super().__init__(game, x, y, TSIZE, TSIZE, use_physics=True)
         self.game = game
-        self.arise_tact = -1  # такт повления
-        self.last_tact = 0
+        self.arise_time = -1  # время повления
+        self.last_time = 0
         self.period = 10  # период мигания
-        self.boom_tact = FPS * 2
+        self.boom_time = 2000  # время взрыва
         self.image_state = 0
         self.detonation_state = 0
 
@@ -44,20 +44,20 @@ class Dynamite(PhysicalObject):
         super().set_vars(vrs)
         self.sprite = tnt_imgs[self.image_state]
 
-    def update(self, tact):
-        if self.arise_tact == -1:
-            self.arise_tact = tact
-        if tact - self.arise_tact >= self.boom_tact:
+    def update(self, tact, elapsed_time):
+        if self.arise_time == -1:
+            self.arise_time = self.game.total_time
+        if self.game.total_time - self.arise_time >= self.boom_time:
             if self.detonation_obj():
                 self.alive = False
                 return False
             return True
-        if tact - self.last_tact >= self.period:
-            self.last_tact = tact
+        if self.game.total_time - self.last_time >= self.period:
+            self.last_time = self.game.total_time
             self.image_state ^= 1
             self.sprite = tnt_imgs[self.image_state]
             self.period -= 1
-        self.update_physics()
+        self.update_physics(elapsed_time)
         return True
 
     def detonation_obj(self):
@@ -122,7 +122,7 @@ class PortalMainGate(PhysicalObject):
         self.spawn_player_tact = 20
 
     def draw(self, surface, pos):
-        self.animation.update()
+        self.animation.update(self.game.elapsed_time)
         self.animation.draw(surface, pos)
         self.alive = self.animation.animation
         self.spawn_player_tact -= 1

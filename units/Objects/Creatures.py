@@ -44,8 +44,9 @@ class Creature(PhysicalObject):
         self.last_punch_time = 0
         self.death_animation = get_death_animation(self.rect.size)
 
-    def update(self, tact):
-        self.update_physics()
+    def update(self, tact, elapsed_time):
+        self.update_physics(elapsed_time)
+        self.death_animation.update(self.game.elapsed_time)
         if self.enemy:
             if self.rect.colliderect(self.game.player.rect):
                 if time() > self.punch_reload_time + self.last_punch_time:
@@ -57,7 +58,7 @@ class Creature(PhysicalObject):
 
     def draw(self, surface, pos):
         super().draw(surface, pos)
-        self.death_animation.update()
+
         self.death_animation.draw(surface, pos)
         if self.lives != self.max_lives:
             self.draw_lives(surface, pos)
@@ -145,7 +146,7 @@ class Slime(MovingCreature):
     punch_damage_hard = 15
     max_lives = 20
     drop_items = [(ItemsTile, (51, (1, 2)))]
-    jump_speed = 8
+    jump_speed = 6
     move_speed = 2
     height_of_abyss = 4
     width_of_abyss = 1
@@ -168,7 +169,7 @@ class Slime(MovingCreature):
             self.lives = self.max_lives_hard
             self.punch_damage = self.punch_damage_hard
             self.width, self.height = TSIZE * 2, TSIZE * 2 - 8
-            self.jump_speed = 12
+            self.jump_speed = 10
             self.reduction_step = 6
             self.move_speed = 4
             self.drop_items = [(ItemsTile, (51, (10, 15))), (ItemsTile, (63, (0, 2))), (ItemsTile, (66, (0, 1)))]
@@ -183,8 +184,8 @@ class Slime(MovingCreature):
         self.sprite = self.sprites[self.i_sprite]
         self.lives_surface = pg.Surface((self.width, 6)).convert_alpha()
 
-    def update(self, tact):
-        super().update(tact)
+    def update(self, tact, elapsed_time):
+        super().update(tact, elapsed_time)
         self.death_animation.set_resize(self.rect.size)
         if self.collisions["bottom"]:
             if self.jump_state == 1:
@@ -230,10 +231,10 @@ class Cow(MovingCreature):
         self.color = random.choice(self.colors)
         self.sprite = pg.Surface((self.rect.w, self.rect.h))
         self.sprite.fill(self.color)
-        self.jump_speed = 7
+        self.jump_speed = 5
 
-    def update(self, tact):
-        self.update_physics()
+    def update(self, tact, elapsed_time):
+        super().update(tact, elapsed_time)
         # if self.collisions["bottom"]:
         self.check_abyss()
         self.movement_vector.x += self.move_direction * self.move_speed
@@ -258,7 +259,7 @@ class Wolf(MovingCreature):
     drop_items = [(ItemsTile, (56, (1, 3))), (ItemsTile, (58, (1)))]
 
     move_speed = 3.5
-    jump_speed = 8
+    jump_speed = 5
 
     enemy = True
     punch_damage = 8
@@ -278,8 +279,8 @@ class Wolf(MovingCreature):
 
         self.angry_player = None
 
-    def update(self, tact):
-        super().update(tact)
+    def update(self, tact, elapsed_time):
+        super().update(tact, elapsed_time)
         self.check_abyss()
         if self.angry:
             self.movement_vector.x += self.move_direction * self.move_speed_angry
@@ -330,7 +331,7 @@ class SlimeBigBoss(Slime):
     punch_damage = 35
     width, height = TSIZE * 3, TSIZE * 3 - 15
     reduction_step = 12
-    jump_speed = 12
+    jump_speed = 10
     move_speed = 4
     height_of_abyss = 9
     width_of_abyss = 3
@@ -347,8 +348,8 @@ class SlimeBigBoss(Slime):
         super(SlimeBigBoss, self).__init__(game, pos)
         self.angry_rect = pg.Rect((0, 0), self.angry_rect_size)
 
-    def update(self, tact):
-        super(SlimeBigBoss, self).update(tact)
+    def update(self, tact, elapsed_time):
+        super(SlimeBigBoss, self).update(tact, elapsed_time)
         self.angry_rect.center = self.rect.center
 
         if self.angry:

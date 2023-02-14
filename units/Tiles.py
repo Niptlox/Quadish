@@ -1,6 +1,7 @@
 import random
 
 from units.Graphics.Image import *
+from units.UI.Translate import get_translated_dict_text, get_translated_tiles
 
 DEBUG_DRAW_TILES = False
 
@@ -343,7 +344,7 @@ tile_hand_imgs[130] = bedroll_of_pelts_item_img
 
 # INIT_TILES ====================================================
 
-tile_words = {None: "None",
+original_tile_words = {None: "None",
               0: "None",
               1: "Дёрн",
               2: "Земля",
@@ -416,6 +417,8 @@ tile_words = {None: "None",
               801: "Палка",
               1003: "Панелька камня"
               }
+tile_words = get_translated_tiles(original_tile_words)
+
 # Прочность блоков
 TILES_SOLIDITY = {
     1: 15,
@@ -543,3 +546,11 @@ def debug_draw():
 
 if DEBUG_DRAW_TILES:
     debug_draw()
+
+if __name__ == '__main__':
+    print("tile_words = ")
+    print(*list(original_tile_words.values()), sep=";")
+    translate_tiles_list = input("translate_tiles = ").split(";")
+    print("translate_tiles_json")
+    print(str({rus: eng for rus, eng in zip(original_tile_words.values(), translate_tiles_list)}).replace("'", '"'))
+

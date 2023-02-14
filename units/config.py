@@ -2,6 +2,7 @@ import os
 
 from configparser import ConfigParser
 
+os.chdir(__file__.replace("config.py", "") + "../")
 config_filename = os.getcwd() + '\settings.ini'
 print("config_filename", config_filename)
 config = ConfigParser()
@@ -57,6 +58,14 @@ class GameSettings(__Settings):
     vertical_tunel = config.getboolean(section, 'vertical_tunel')
     start_pos = tuple(map(int, config.get(section, 'start_pos').split(",")))
     view_item_index = config.getboolean(section, 'view_item_index')
+    all_languages = config.get(section, 'all_languages').replace(" ", "").split(",")
+    language = config.get(section, 'language')
+    if language not in all_languages:
+        language = "en"
+
+    @classmethod
+    def set_language(cls, language):
+        cls.set("language", language)
 
     @classmethod
     def set_clouds_state(cls, state):
@@ -78,9 +87,6 @@ class VolumeSettings(__Settings):
     player_volume = config.getfloat(section, 'player_volume')
     creatures_volume = config.getfloat(section, 'creatures_volume')
     background_volume = config.getfloat(section, 'background_volume')
-
-
-
 
 # https://stackoverflow.com/questions/8884188/how-to-read-and-write-ini-file-with-python3
 # string_val = config.get('section_a', 'string_val')

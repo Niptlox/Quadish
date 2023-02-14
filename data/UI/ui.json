@@ -1,0 +1,62 @@
+{
+  "ButtonNewWorld": {
+    "text": "Новый мир"
+  },
+  "ButtonLoadWorld": {
+    "text": "Загрузить мир"
+  },
+  "ButtonSettings": {
+    "text": "Настройки"
+  },
+  "ButtonExit": {
+    "text": "Выход"
+  },
+  "ButtonBack": {
+    "text": "Назад"
+  },
+  "ButtonCreateWorld": {
+    "text": "Создать мир"
+  },
+  "ButtonDeleteWorld": {
+    "text": "Удалить мир"
+  },
+  "ButtonPlay": {
+    "text": "Играть"
+  },
+  "ButtonSave": {
+    "text": "Сохранить"
+  },
+  "ButtonCancel": {
+    "text": "Отмена"
+  },
+  "ButtonYes": {
+    "text": "Да"
+  },
+  "ButtonNo": {
+    "text": "Нет"
+  },
+  "ButtonLanguage": {
+    "text": "Язык"
+  },
+  "ButtonGraphics": {
+    "text": "Графика"
+  },
+  "ButtonSound": {
+    "text": "Звук"
+  },
+  "ButtonControls": {
+    "text": "Управление"
+  },
+  "ButtonGameplay": {
+    "text": "Игровой процесс"
+  },
+  "ButtonBackToMenu": {
+    "text": "Вернуться в меню"
+  },
+  "ButtonBackToGame": {
+    "text": "Вернуться в игру"
+  },
+  "ButtonBackToSettings": {
+    "text": "Вернуться в настройки"
+  }
+}

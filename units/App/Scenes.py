@@ -29,7 +29,7 @@ class TitleScene(SceneMenu):
 class OpenMapScenePopupMenu(ScenePopupMenu):
     def __init__(self, app: App) -> None:
         self.game = app.game_scene
-        super().__init__(app, lambda _app: SwitchMapUI(_app, "Открыть карту"))
+        super().__init__(app, lambda _app: SwitchMapUI(_app, "Открыть мир"))
 
     def open_map(self, num=0):
         self.set_scene(self.app.game_scene)
@@ -45,7 +45,7 @@ class OpenMapScenePopupMenu(ScenePopupMenu):
 class SaveMapScenePopupMenu(ScenePopupMenu):
     def __init__(self, app: App) -> None:
         self.game = app.game_scene
-        super().__init__(app, lambda app: SwitchMapUI(app, "Сохранить карту"))
+        super().__init__(app, lambda app: SwitchMapUI(app, "Сохранить мир"))
 
     def open_map(self, num=0):
         self.set_scene(None)

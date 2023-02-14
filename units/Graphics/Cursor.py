@@ -23,7 +23,11 @@ def set_cursor(num):
     global __cursor_num
     if num != __cursor_num:
         __cursor_num = num
-        pygame.mouse.set_cursor(pg.cursors.Cursor(cursors[num]))
+        for i in range(10):
+            try:
+                pygame.mouse.set_cursor(pg.cursors.Cursor(cursors[num]))
+            except Exception as e:
+                print("Cursor error", e)
 
 
 cur_size = (25, 25)

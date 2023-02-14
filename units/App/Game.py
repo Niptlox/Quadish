@@ -41,6 +41,7 @@ class GameScene(Scene):
         self.screen_map.teleport_to_player()
         self.ui.init_ui()
         self.tact = 0
+        self.total_time = 0
         self.ctrl_on = False
         self.first_start = False
         self.hided_ui = False
@@ -99,13 +100,17 @@ class GameScene(Scene):
             self.first_start = False
 
     def update(self):
+        self.elapsed_time = min(self.elapsed_time, 120)
+        self.total_time += self.elapsed_time
         # self.ui.draw_sky()
         self.screen_map.draw_sky()
 
-        self.screen_map.update(self.tact)
-        if not self.player.update(self.tact):
+        self.screen_map.update(self.tact, self.elapsed_time)
+        self.player.update(self.tact, self.elapsed_time)
+        if not self.player.alive:
             self.running = False
             self.new_scene = self.app.end_scene
+
 
         if not self.hided_ui:
             if self.player.chest_ui.opened:

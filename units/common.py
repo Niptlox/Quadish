@@ -1,5 +1,9 @@
-import math
 import os
+
+from units.UI.Translate import get_translated_text
+
+os.chdir(__file__.replace("common.py", "") + "../")
+import math
 import pickle
 import sys
 from logging import warning, debug
@@ -15,22 +19,26 @@ import units.config as config
 CHUNK_BD_COLOR = (230, 20, 20)
 
 #  current working directory.
+
 CWDIR = os.getcwd() + "/"
+print(CWDIR)
 
 # INIT GAME ==============================================
 pygame.mixer.pre_init(44100, -16, 1, 512)
 pygame.init()  # initiate pygame
 
-FPS = 60
-flags = pygame.SCALED
-desktop_size = pygame.display.get_desktop_sizes()[0]
+FPS = 120
+# flags = pygame.SCALED
+flags = 0
 print("INIT GAME VARS")
 last_versions = ["0.9.1", "0.1.3-alpha", "0.1.5-alpha", "0.1.6-alpha"]
 GAME_VERSION = "0.1.7-alpha"
 
 WINDOW_SIZE = tuple(map(int, config.Window.size.split(",")))
 FULLSCREEN = config.Window.fullscreen
+desktop_size = pygame.display.get_desktop_sizes()[0]
 if FULLSCREEN:
+    # WINDOW_SIZE = desktop_size[0] // 2, desktop_size[1] // 2
     WINDOW_SIZE = desktop_size
     # flags |= pygame.FULLSCREEN
 
@@ -46,9 +54,6 @@ pygame.display.set_icon(Icon)
 
 screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags, vsync=1)
 display_ = pygame.Surface(WINDOW_SIZE)
-
-screen_.blit(pygame.font.SysFont("", 40).render("Загрузка...", True, "white"), (35, WSIZE[1] - 50))
-pygame.display.flip()
 
 print(pg.display.get_allow_screensaver())
 
@@ -141,8 +146,9 @@ NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K
 HAND_SIZE = int(TILE_SIZE // 1.5)
 HAND_RECT = (HAND_SIZE, HAND_SIZE)
 
-FALL_SPEED = 0.7
-MAX_FALL_SPEED = 100000
+FALL_SPEED = 0.021
+FALL_SPEED = 0.017
+MAX_FALL_SPEED = 50
 AUTO_BUILD = True  # копать ближайший если мышка далеко
 
 CREATIVE_MODE = False
@@ -184,7 +190,7 @@ Chest_size_table = 5, 4
 
 # DEFS ======================================================================
 
-def pygame_mainloop(f_iter_loop, f_pgevent=None, rect=WSIZE):
+def pygame_mainloop(f_iter_loop, f_pgevent=None, rect=WSIZE, fps=FPS):
     # screen = pygame.display.set_mode((rect[0], rect[1]), 0, 32)
     clock = pg.time.Clock()
     while True:
@@ -194,7 +200,7 @@ def pygame_mainloop(f_iter_loop, f_pgevent=None, rect=WSIZE):
                 sys.exit()
             if f_pgevent:
                 f_pgevent(event)
-        clock.tick(FPS)
+        clock.tick(fps)
         f_iter_loop(screen_)
         pygame.display.flip()
 
@@ -222,7 +228,7 @@ class SavedObject:
                 warning(f"Не контроллируемый {key}: {value}, удален из сохранения!")
                 d.pop(key)
             elif isinstance(value, (list, tuple)) and value and isinstance(value[0], SavedObject):
-                warning(f"Не контроллируемый списочный SavedObject {key}: {value}, удален из сохранения!")
+                warning(f"В {self}. Не контроллируемый списочный SavedObject {key}: {value}, удален из сохранения!")
                 d.pop(key)
         # print(self.__class__, d)
         # pickle.dumps(d)
@@ -232,15 +238,22 @@ class SavedObject:
         if "__class__" in vrs:
             vrs.pop("__class__")
         for var_name, var_value in vrs.items():
+            if var_name in self.not_save_vars:
+                continue
             if isinstance(var_value, dict) and var_value.get("__class__"):
                 self.__dict__[var_name].set_vars(var_value)
             else:
                 self.__dict__[var_name] = var_value
 
 
-#  ===============================
+#  =============================== GameMap ===============================
 
 GAMEMAPS_PATH = CWDIR + "data/maps/"
 
 if not os.path.exists(GAMEMAPS_PATH):
     os.mkdir(GAMEMAPS_PATH)
+
+# Loadings screen ==================================================================
+text = get_translated_text("Загрузка...")
+screen_.blit(pygame.font.SysFont("", 40).render(text, True, "white"), (35, WSIZE[1] - 50))
+pygame.display.flip()

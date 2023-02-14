@@ -4,6 +4,7 @@ from units.UI.ClassUI import *
 from units.UI.InventoryUI import *
 from units.UI.ColorsUI import *
 from units.UI.FontsUI import *
+from units.UI.Translate import get_translated_text, get_translated_lst_text, get_translated_text_to_lang
 
 from units.Graphics.Texture import WHITE
 from units.Tiles import live_imgs, bg_live_img, goldlive_imgs, bg_livecreative_img, \
@@ -12,28 +13,50 @@ from units.Tiles import live_imgs, bg_live_img, goldlive_imgs, bg_livecreative_i
 from units.Graphics.outline import add_outline_to_image
 from units.sound import set_category_volume
 
-
-ru_bool_lst = ["Вкл", "Выкл"]
+ru_bool_lst = ["On", "Off"]
 eng_bool_lst = [True, False]
 bool_dict = {ru_bool_lst[0]: eng_bool_lst[0], ru_bool_lst[1]: eng_bool_lst[1]}
 
 
 class SysMessege:
-    bg = (82, 82, 91, 150)
+    bg = (82, 82, 91, 220)
     rect = pg.Rect((WSIZE[0] - 330, WSIZE[1] - 45), (300, 32))
+    width = 300
+    height = 35
 
-    def __init__(self):
+    def __init__(self, align="bottom_right"):
+        self.align = align
+        self.surface = pg.Surface(self.rect.size).convert_alpha()
         self.left_tact = 0
         self.count_tact = 0
+        self.update_rect()
+
+    def update_rect(self):
+        if self.align == "bottom_right":
+            self.rect = pg.Rect((WSIZE[0] - self.width - 30, WSIZE[1] - self.height - 20), (self.width, self.height))
+        if self.align == "bottom_center":
+            self.rect = pg.Rect(((WSIZE[0] - self.width) // 2, WSIZE[1] - self.height - 20), (self.width, self.height))
         self.surface = pg.Surface(self.rect.size).convert_alpha()
 
     def new(self, text, count_tact=FPS * 3):
+        tr_text = get_translated_text(text)
+        text_msg = textfont_sys_msg.render(tr_text, True, "#FDE047")
+        self.width = max(300, text_msg.get_width() + 20)
+        self.update_rect()
+
         self.left_tact = count_tact
         self.count_tact = count_tact
         self.surface.set_alpha(255)
         self.surface.fill(self.bg)
-        text_msg = textfont_sys_msg.render(text, True, "#FDE047")
-        self.surface.blit(text_msg, (5, 5))
+        self.surface.blit(text_msg, (10, 5))
+
+    def send_reload_game_for_change(self):
+        text = get_translated_text_to_lang("Перезапустите игру для применения изменений", config.GameSettings.language)
+        self.new(text)
+
+    def clear(self):
+        self.left_tact = 0
+        self.count_tact = 0
 
     def draw(self, surface):
         if self.left_tact > 0:
@@ -45,11 +68,18 @@ class SysMessege:
 
             surface.blit(self.surface, self.rect)
 
+    def update(self):
+        pass
+
+    def pg_event(self, event):
+        pass
+
 
 class AchievementMessege(SysMessege):
     rect = pg.Rect((WSIZE[0] - 330, WSIZE[1] - 75), (300, 62))
     font_title = pygame.font.SysFont("Fenix", 28, )  # yes rus
     font_text = pygame.font.SysFont("Fenix", 24, )  # yes rus
+    height = 62
 
     def new(self, id_name):
         count_tact = FPS * 3
@@ -111,9 +141,10 @@ class GameUI(UI):
 
     def redraw_info(self):
         true_fps = self.scene.clock.get_fps()
+
         self.info_surface.fill(bg_color)
         text_fps = textfont_info.render(
-            f" fps: {int(true_fps)}", True, "white")
+            f" fps: {int(true_fps)}     {self.scene.elapsed_time}", True, "white")
         text_pos_real = textfont_info.render(
             f"rpos: {self.scene.player.rect.x, self.scene.player.rect.y}", True, "white")
         text_pos = textfont_info.render(
@@ -176,7 +207,9 @@ class TitleUI(UI):
 
     def __init__(self, scn):
         super(TitleUI, self).__init__(scn)
+        self.sys_message = SysMessege(align="bottom_center")
         self.objects = GroupUI([])
+
         print(self.scene, self)
 
         self.bg_x, self.bg_y = 0, 0
@@ -205,11 +238,18 @@ class TitleUI(UI):
                                        screen_position=(self.rect.x, self.rect.y))  # кнопки открывающие карты
 
         self.objects.add_lst(obj_btns)
-        _font_dev_btn = pygame.font.Font('data/fonts/xenoa.ttf', 23, )
+        _font_dev_btn = pygame.font.Font(MAIN_FONT_PATH, 23, )
         dev_but = Button(lambda _: self.scene.open_developers(),
                          (self.rect.w - 200, self.rect.h - 60, 175, 35),
                          *createImagesButton((175, 35), "Разработчики", font=_font_dev_btn))
         self.objects.add(dev_but)
+        lang_but = ChangeTextButton(self.change_lang,
+                                    (25, self.rect.h - 60, 175, 35),
+                                    "Language: {}", states_text_lst=config.GameSettings.all_languages,
+                                    start_state_text=config.GameSettings.language,
+                                    font=_font_dev_btn)
+        self.objects.add(lang_but)
+
         self.tts = title_text_surf = SurfaceUI(((0, 0), self.game_title_text.get_size()))
         title_text_surf.blit(self.game_title_text, (0, 0))
         title_text_surf.set_colorkey(self.color_sky)
@@ -219,6 +259,7 @@ class TitleUI(UI):
         self.tts_speed = 0.005
         self.tts_size = self.tts.rect.size
         self.objects.add(title_text_surf)
+        self.objects.add(self.sys_message)
         print("objects", self.objects.components)
 
     def draw_background(self):
@@ -260,6 +301,10 @@ class TitleUI(UI):
     def pg_event(self, event: pg.event.Event):
         self.objects.pg_event(event)
 
+    def change_lang(self, button, lang):
+        config.GameSettings.set_language(lang)
+        self.sys_message.send_reload_game_for_change()
+
 
 class MainSettingsUI(TitleUI):
     window_sizes_lst = ["1240,720", "720,480"]
@@ -286,10 +331,11 @@ class MainSettingsUI(TitleUI):
         title_text_surf.blit(self.game_title_text, (0, 0))
         title_text_surf.set_colorkey(self.color_sky)
         title_text_surf.rect.topleft = center_pos_2lens(title_text_surf.rect.w, self.rect.w), \
-                                       center_pos_2lens(title_text_surf.rect.h, self.rect.h) - 220
+            center_pos_2lens(title_text_surf.rect.h, self.rect.h) - 220
         self.tts_y = title_text_surf.rect.top
 
         self.objects.add(title_text_surf)
+        self.objects.add(self.sys_message)
 
     def get_pre_buttons(self, btn_rect):
         if config.Window.size in self.window_sizes_lst:
@@ -299,9 +345,9 @@ class MainSettingsUI(TitleUI):
             size_start_state_index = len(self.window_sizes_lst) - 1
 
         btns = [
-            ChangeTextButton(lambda _, state: config.Window.set_size(state), btn_rect, "Размер ({})",
+            ChangeTextButton(self.set_window_size, btn_rect, "Размер: ({})",
                              states_text_lst=self.window_sizes_lst, start_state_index=size_start_state_index),
-            ChangeTextButton(lambda _, state: config.Window.set_fullscreen(bool_dict[state]), btn_rect,
+            ChangeTextButton(self.set_fullscreen, btn_rect,
                              "Полноэкранный режим: {}", states_text_lst=ru_bool_lst,
                              start_state_index=eng_bool_lst.index(config.Window.fullscreen)),
             ChangeTextButton(lambda _, state: config.GameSettings.set_clouds_state(bool_dict[state]), btn_rect,
@@ -318,6 +364,14 @@ class MainSettingsUI(TitleUI):
 
         ]
         return btns
+
+    def set_window_size(self, button, size):
+        config.Window.set_size(size)
+        self.sys_message.send_reload_game_for_change()
+
+    def set_fullscreen(self, button, state):
+        config.Window.set_fullscreen(state)
+        self.sys_message.send_reload_game_for_change()
 
 
 categories_sounds = {
@@ -358,7 +412,7 @@ class SwitchMapUI(UI):
     bg = (82, 82, 91, 150)
 
     def __init__(self, scene, title) -> None:
-        self.title = title
+        self.title = get_translated_text(title)
         super().__init__(scene)
         w, h = 300, 500
         self.rect = pg.Rect(0, 0, w, h)
@@ -367,14 +421,15 @@ class SwitchMapUI(UI):
 
         self.title_surf = pg.Surface((w, 40)).convert_alpha()
         self.title_surf.fill((82, 82, 91))
-        self.title_surf.blit(textfont_btn.render(self.title, True, WHITE), (10, 10))
+        self.title_surf.blit(textfont_btn.render(self.title, True, WHITE), (10, 5))
 
         btn_rect = pg.Rect(0, 20 + 40, 200, 35)
         self.btns_scroll = [(w - btn_rect.w) // 2 - 15, btn_rect.y]
         self.btns_scroll_step = 20 + btn_rect.height
 
         n = self.scene.game.game_map.save_slots
-        imgs = [createImagesButton(btn_rect.size, f"Карта #{i}", font=textfont_btn)
+        tr_text = get_translated_text("Мир")
+        imgs = [createImagesButton(btn_rect.size, tr_text+f" #{i}", font=textfont_btn)
                 for i in range(n)]
         self.img_btns = imgs
         funcs = [lambda b, i=i: self.open_map(b, i) for i in range(n)]
@@ -412,7 +467,7 @@ class SwitchMapUI(UI):
         for btn in self.btns:
             btn.draw(self.btns_surf)
         self.surface.blit(self.btns_surf, self.btns_scroll)
-        self.surface.blit(self.title_surf, (0, 0))
+        self.surface.blit(self.title_surf, (0, -5))
 
         self.screen.blit(self.surface, self.rect)
 
@@ -479,7 +534,7 @@ class PauseUI(UI):
         self.surface.fill((82, 82, 91, 150))
 
         text = textfont_btn.render(
-            f"Пауза", True, "white")
+            get_translated_text(f"Пауза"), True, "white")
         t_w, t_h = text.get_size()
         self.surface.blit(text, (10, 10))
         # end surf
@@ -489,8 +544,8 @@ class PauseUI(UI):
         btn_rect = pg.Rect(btn_pos, btn_size)
 
         btns = [
-            ("Сохранить карту", lambda _: self.scene.set_scene(self.scene.app.savem_scene)),
-            ("Открыть карту", lambda _: self.scene.set_scene(self.scene.app.openm_scene)),
+            ("Сохранить мир", lambda _: self.scene.set_scene(self.scene.app.savem_scene)),
+            ("Открыть мир", lambda _: self.scene.set_scene(self.scene.app.openm_scene)),
             ("Достижения", lambda _: self.scene.set_scene(self.scene.app.achievements_scene)),
             ("Как играть", lambda _: self.scene.app.open_help()),
             ("Телепорт домой", lambda _: self.scene.tp_to_home()),
@@ -566,7 +621,7 @@ class AchievementsUI(UI):
         self.redraw_achievements()
         self.screen.blit(self.display, (0, 0))
         self.surface.fill(self.bg)
-        title = textfont_btn.render("Достижения", True, "#FFFFFF")
+        title = textfont_btn.render(get_translated_text("Достижения"), True, "#FFFFFF")
         self.surface.blit(title, (10, 10))
 
         self.surface.blit(self.surface_achievements, (0, 35))

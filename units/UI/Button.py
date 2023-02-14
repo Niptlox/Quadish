@@ -1,6 +1,6 @@
 from units.Graphics.Texture import *
 from units.sound import sound_click
-
+from units.UI.Translate import get_translated_text, get_translated_lst_text
 
 DARK = "#27272A"
 DEF_COLOR_SCHEME_BUT = ((WHITE, GRAY, DARK), (BLACK, BLACK, WHITE))
@@ -15,11 +15,11 @@ def openImagesButton(nameImg: str, colorkey=COLORKEY):
 
 
 def createImageButton(size, text="", bg=BLACK, font=TEXTFONT_BTN, text_color=WHITE, colorkey=COLORKEY, border=3):
+    text = get_translated_text(text)
     surf = get_texture_size(bg, size, colorkey=colorkey)
     if border:
         surf.fill("black")
-        pygame.draw.rect(surf, bg, (border, 0, size[0]-border*2, size[1]))
-
+        pygame.draw.rect(surf, bg, (border, 0, size[0] - border * 2, size[1]))
 
     textframe = font.render(text, True, text_color)
     textframe_rect = pygame.Rect(((0, 0), textframe.get_size()))
@@ -64,7 +64,8 @@ def createVSteckTextButtons(size, center_x, start_y, step, text_func_buttons, sc
             but.redraw_text()
         else:
             text_button, func = _btn
-            but = TextButton(func, ((x, y), size), text_button, screenXY=(screen_position[0] + x, screen_position[1] + y),
+            but = TextButton(func, ((x, y), size), text_button,
+                             screenXY=(screen_position[0] + x, screen_position[1] + y),
                              color_schema=color_schema, font=font)
         y += step
         buts.append(but)
@@ -186,15 +187,16 @@ class TextButton(Button):
     def __init__(self, func, rect, text, group=None, screenXY=None, disabled=False, color_schema=DEF_COLOR_SCHEME_BUT,
                  font=TEXTFONT_BTN):
         rect = pygame.Rect(rect)
-        self.text = text
+        tr_text = get_translated_text(text)
+        self.text = tr_text
         self.color_schema = color_schema
         self.font = font
-        imgUpB, imgInB, imgDownB = createImagesButton(rect.size, text, color_schema=color_schema, font=font)
+        imgUpB, imgInB, imgDownB = createImagesButton(rect.size, tr_text, color_schema=color_schema, font=font)
         super(TextButton, self).__init__(func, rect, imgUpB, imgInB, imgDownB, group=group, screenXY=screenXY,
                                          disabled=disabled)
 
     def set_text(self, text):
-        self.text = text
+        self.text = get_translated_text(text)
         self.redraw_text()
 
     def redraw_text(self):
@@ -206,14 +208,17 @@ class TextButton(Button):
 
 class ChangeTextButton(TextButton):
     def __init__(self, func, rect, text: str, group=None, screenXY=None, disabled=False,
-                 states_text_lst=[], start_state_index=0,
+                 states_text_lst=[], start_state_index=0, start_state_text=None,
                  color_schema=DEF_COLOR_SCHEME_BUT, font=TEXTFONT_BTN):
-        self.format_text = text
-        self.states_text_lst = states_text_lst
+        tr_text = get_translated_text(text)
+        self.format_text = tr_text
+        self.states_text_lst = get_translated_lst_text(states_text_lst)
+        if start_state_text:
+            start_state_index = self.states_text_lst.index(start_state_text)
         self.state_index = start_state_index
-        text = text.format(states_text_lst[start_state_index])
+        tr_text = tr_text.format(self.states_text_lst[start_state_index])
         n_func = lambda btn: self.change_state(btn, func)
-        super(ChangeTextButton, self).__init__(n_func, rect, text, group=group, screenXY=screenXY, disabled=disabled,
+        super(ChangeTextButton, self).__init__(n_func, rect, tr_text, group=group, screenXY=screenXY, disabled=disabled,
                                                color_schema=color_schema, font=font)
 
     def change_state(self, btn, func):
@@ -221,4 +226,3 @@ class ChangeTextButton(TextButton):
         state = self.states_text_lst[self.state_index]
         self.set_text(self.format_text.format(state))
         func(btn, state)
-

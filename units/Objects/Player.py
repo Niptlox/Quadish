@@ -22,7 +22,11 @@ from units.common import *
 
 class Player(PhysicalObject):
     not_save_vars = PhysicalObject.not_save_vars | {"game_map", "game", "ui", "hand_img", "lives_surface", "toolHand",
-                                                    "toolCreativeHand", "tool", "chest_ui", "furnace_ui"}
+                                                    "toolCreativeHand", "tool", "chest_ui", "furnace_ui",
+                                                    "inventory_ui", "inventory", "achievements", "dig_rect", "dig_rect_img",
+                                                    "dig_pos", "dig_dist", "set_dist", "set", "dig", "sitting", "moving_left",
+                                                    "moving_right", "on_wall", "tact", "eat", "jump_speed", "max_speed",
+                                                    "accelerate_x", "fall_speed", "max_fall_speed", "fly_speed"}
     class_obj = OBJ_PLAYER
     width, height = max(1, TSIZE - 10), max(1, TSIZE - 2)
     player_img = player_img
@@ -76,18 +80,18 @@ class Player(PhysicalObject):
 
         self.spawn_point = (0, 0)
         self.vertical_momentum = 0
-        self.jump_speed = 10
+        self.jump_speed = 0.275
         self.jump_count = 0
         self.max_jump_count = 2
         self.fall_speed = FALL_SPEED
         self.max_fall_speed = MAX_FALL_SPEED
         self.speed = 0
-        self.accelerate_x = 2  # ускорение шага
-        self.max_speed = 11
+        self.accelerate_x = 0.06 # ускорение шага
+        self.max_speed = 0.33
         self.running = True
         self.air_timer = 0
         self.first_fall = True
-        self.fly_speed = 60
+        self.fly_speed = 1.8
         self.flying = False
         self.on_up = False
         self.on_down = False
@@ -206,7 +210,7 @@ class Player(PhysicalObject):
     def tp_random(self):
         self.tp_to((random.randint(-1e9, 1e9), random.randint(-1e9, 1e9)))
         self.tp_to((random.randint(-1e9, 1e9), random.randint(-TSIZE * 10000, TSIZE * 10000)))
-        self.tp_to((2 ** 31 - 1500, 2 ** 31 - 1500))
+        # self.tp_to((2 ** 31 - 1500, 2 ** 31 - 1500))
 
     def tp_to(self, pos):
         self.rect.center = pos[0] + TSIZE // 2, pos[1] + TSIZE // 2
@@ -230,16 +234,17 @@ class Player(PhysicalObject):
         self.death_animation.stop()
         print("relive", self.lives)
 
-    def update(self, tact):
+    def update(self, tact, elapsed_time):
         if not self.active:
             return True
         self.tact = tact
+        self.death_animation.update(elapsed_time)
         self.draw(self.ui.display)
 
         if not self.alive:
             return False
         if not self.sitting:
-            self.moving()
+            self.moving(elapsed_time)
 
         if not self.creative_mode:
             self.flying = False
@@ -336,7 +341,7 @@ class Player(PhysicalObject):
         if pos:
             self.rect.x, self.rect.bottom = pos
 
-    def moving(self):
+    def moving(self, elapsed_time):
         player_movement = pg.Vector2(0, 0)
         if self.moving_right:
             self.flip = False
@@ -356,8 +361,8 @@ class Player(PhysicalObject):
         else:
             self.speed //= 2
             if self.speed == -1: self.speed = 0
-        player_movement[0] += self.speed
-        player_movement[1] += self.vertical_momentum
+        player_movement[0] += self.speed * elapsed_time
+        player_movement[1] += self.vertical_momentum * elapsed_time
         if self.flying:
             if self.on_up:
                 self.vertical_momentum = -self.fly_speed
@@ -383,7 +388,7 @@ class Player(PhysicalObject):
         elif {121, 125} & self.collisions_ttile:
             self.inventory.update_available_create_items()
         if collisions['bottom']:
-            if not self.first_fall and self.vertical_momentum > 25:
+            if not self.first_fall and self.vertical_momentum > 0.75:
                 self.damage(int(self.vertical_momentum // 5))
             self.air_timer = 0
             self.jump_count = 0
@@ -416,7 +421,7 @@ class Player(PhysicalObject):
         player_display_pos = (min(WSIZE[0], max(-TSIZE, self.rect.x - scroll[0])),
                               min(WSIZE[0], max(-TSIZE, self.rect.y - scroll[1])))
         surface.blit(self.player_img, player_display_pos)
-        self.death_animation.update()
+
         self.death_animation.draw(surface, player_display_pos)
         if self.tool:
             self.tool.draw(self.ui.display, player_display_pos[0] + self.rect.w // 2,

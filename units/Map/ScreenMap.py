@@ -24,6 +24,8 @@ class ScreenMap:
         self.true_scroll = [player.rect.x, player.rect.y]
         self.scroll = [0, 0]
         self.tact = 0
+        self.elapsed_time = 0
+        self.last_div = 4  # последний делитель для scroll y
         # ===================================================
         self.static_tiles = {}
         self.dynamic_tiles = []
@@ -85,8 +87,9 @@ class ScreenMap:
         # print("COLOR SKY", color)
         self.display.fill(color)
 
-    def update(self, tact):
+    def update(self, tact, elapsed_time):
         self.tact = tact
+        self.elapsed_time = elapsed_time
         tt = time()
         p = self.player
         self.game_map.saved = False
@@ -99,12 +102,24 @@ class ScreenMap:
         # if abs(offset_y) > TSIZE * 3:
         #     offset_y *= min(abs(offset_y) / (2 * TSIZE), 10)
         # self.true_scroll[1] += float(offset_y / 20)
+        cof = max(2, 30 * 12 / elapsed_time)
+        self.true_scroll[0] += (p.rect.x - self.true_scroll[0] - WSIZE[0] // 2) / cof
 
-        self.true_scroll[0] += (p.rect.x - self.true_scroll[0] - WSIZE[0] // 2) / 15
-
+        max_offset_y = 3 * TSIZE
         offset_y = abs(p.rect.y - self.true_scroll[1] - WSIZE[1] // 2)
-        div = max(1, 32 / max(1, offset_y ** 0.5))
+        # div = max(0.001, 30 * 6 / elapsed_time)
+        div = max(3, max(1, 48 / max(1, offset_y ** 0.5)) * 30 / elapsed_time)
+        div_offset = 0.2
+        if div - self.last_div > div_offset:
+            div = self.last_div + div_offset
+        elif div - self.last_div < -div_offset:
+            div = self.last_div - div_offset
+        self.last_div = div
+        # print("DIV", elapsed_time, div, offset_y, offset_y ** 0.5, 64 / max(1, offset_y ** 0.5))
         self.true_scroll[1] += (p.rect.y - self.true_scroll[1] - WSIZE[1] // 2) / div
+        offset_y = (p.rect.y - self.true_scroll[1] - WSIZE[1] // 2)
+        if offset_y > max_offset_y:
+            self.true_scroll[1] += (offset_y - max_offset_y)
 
         # self.true_scroll[1] = self.player.rect.y - WSIZE[1] // 2
         self.scroll = scroll = [int(self.true_scroll[0]), int(self.true_scroll[1])]
@@ -156,6 +171,7 @@ class ScreenMap:
                     dynamic_tiles += chunk[1]
                     group_handlers.update(chunk[2])
                     index = 0
+                    biome_index = 0
                     backtile_index = 0
                     tile_y = chunk_y * CSIZE
                     i = 0
@@ -179,7 +195,7 @@ class ScreenMap:
                                     else:
                                         img = tile_imgs[tile_type]
                                     if tile_type == 1:
-                                        biome = self.game_map.get_tile_climate(tile_x, tile_y)[0]
+                                        biome = chunk[4][biome_index]
                                         if biome not in ground_imgs:
                                             biome = None
                                         img = ground_imgs[biome][0]
@@ -227,6 +243,7 @@ class ScreenMap:
                                 static_tiles[(tile_x, tile_y)] = tile_type
                             index += self.game_map.tile_data_size
                             backtile_index += 1
+                            biome_index += 1
                             tile_x += 1
                             i += 1
                         tile_y += 1
@@ -245,7 +262,7 @@ class ScreenMap:
         i = 0
         while i < len(self.dynamic_tiles):
             dtile = self.dynamic_tiles[i]
-            dtile.update(self.tact)
+            dtile.update(self.tact, self.elapsed_time)
             if not dtile.alive:
                 self.game_map.del_dinamic_obj(*GameMap.to_chunk_xy(*GameMap.to_tile_xy(*dtile.rect.topleft)), dtile)
                 self.dynamic_tiles.pop(i)
@@ -258,7 +275,7 @@ class ScreenMap:
         i = 0
         while i < len(self.game_map.particles):
             particle = self.game_map.particles[i]
-            particle.update(self.tact)
+            particle.update(self.tact, self.elapsed_time)
             if not particle.alive:
                 self.game_map.del_particle_of_idx(i)
                 continue

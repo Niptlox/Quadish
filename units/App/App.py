@@ -48,6 +48,7 @@ class Scene(App):
         self.app = app
         self.new_scene = None
         self.display = display_
+        self.elapsed_time = 0
 
     def pg_events(self):
         for event in pygame.event.get():
@@ -61,7 +62,7 @@ class Scene(App):
     def main(self):
         self.running = True
         while self.running:
-            self.clock.tick(FPS)
+            self.elapsed_time = self.clock.tick(FPS)
             self.pg_events()
             self.update()
         if self.running is EXIT:

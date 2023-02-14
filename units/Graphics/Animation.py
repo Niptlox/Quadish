@@ -36,7 +36,7 @@ def load_animation(path):
 class Animation(SavedObject):
     is_not_saving = True
 
-    def __init__(self, frames, speed=20, looped=False, start_frame=0, centered=False):
+    def __init__(self, frames, speed=300, looped=False, start_frame=0, centered=False):
         self.animation = False
         # массив картинок
         self.centered = centered
@@ -70,9 +70,10 @@ class Animation(SavedObject):
     def set_resize(self, size):
         self.resize = size
 
-    def update(self):
+    def update(self, elapsed_time):
         if self.animation:
-            self.frame_index += self.speed_one_tick
+            # print(self.frame_index, self.speed_one_tick, self.speed * elapsed_time / 1000, elapsed_time, FPS)
+            self.frame_index += self.speed * elapsed_time / 1000
             if self.frame_index >= self.frame_count:
                 if self.looped:
                     self.frame_index %= self.frame_count
@@ -113,11 +114,11 @@ class AnimationSLE(SavedObject):
         return self.animations[self.state].get_frame()
 
     def next_state(self):
-        self.set_state(self.state+1)
+        self.set_state(self.state + 1)
 
-    def update(self):
+    def update(self, elapsed_time):
         if self.animation:
-            self.animations[self.state].update()
+            self.animations[self.state].update(elapsed_time)
             if not self.animations[self.state].animation:
                 self.next_state()
 
@@ -142,28 +143,33 @@ class AnimationSLE(SavedObject):
                 self.animations[self.state].start(restart=True)
 
 
-
-
-
-def get_death_animation(size, color=(185, 28, 28), speed=10, time=2, start_alpha=200):
-    count = FPS * time // speed
+def get_death_animation(size, color=(185, 28, 28), speed=15, time=0.3, start_alpha=200):
+    count = 10
+    count = int(1000 * time // speed)
     arr = []
-    for i in range(count):
+    for i in range(1, count):
         surf = pg.Surface(size)
         surf.fill(color)
-        surf.set_alpha(start_alpha * i / count)
+        surf.set_alpha(start_alpha * (i ** 3) / (count ** 3))
+        # print(start_alpha * (i ** 3) / (count ** 3), (i ** 3) / (count ** 3), count, i)
         arr.append(surf)
     return Animation(arr[::-1], speed=speed, looped=False)
 
 
 def test_loop(surface):
     surface.fill("black")
-    anim.update()
+    anim.update(100)
     # surface.blit(anim.frames[0], (0, 0))
     anim.draw(surface, (30, 30))
 
+def pg_event(event):
+    if event.type == pg.KEYDOWN:
+        print(event.key, event.unicode, event.mod, event.scancode)
+
 
 if __name__ == '__main__':
+    pg.key.set_repeat(100, 100)
     anim = load_animation("data/animations/portal_anim_nebula.json")
+    anim = get_death_animation((100, 100))
     anim.start()
-    pygame_mainloop(test_loop)
+    pygame_mainloop(test_loop, pg_event)

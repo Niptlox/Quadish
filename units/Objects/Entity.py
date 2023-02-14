@@ -141,15 +141,15 @@ class PhysicalObject(SavedObject):
         self.rect.x += movement[0]
         self.rect.y += movement[1]
 
-    def update(self, tact):
+    def update(self, tact, elapsed_time):
         if not self.alive:
             return False
-        self.update_physics()
+        self.update_physics(elapsed_time)
         return True
 
-    def update_physics(self):
+    def update_physics(self, elapsed_time):
         if self.use_gravity:
-            self.physical_vector.y += self.fall_speed
+            self.physical_vector.y += self.fall_speed * elapsed_time
             if self.physical_vector.y > self.max_fall_speed:
                 self.physical_vector.y = self.max_fall_speed
         movement = (self.physical_vector + self.movement_vector).xy

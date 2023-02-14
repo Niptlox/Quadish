@@ -568,7 +568,7 @@ class GameMap(SavedObject):
         self.num_save_map = num
         # try:
         data = {"game_map_vars": self.get_vars(), "player_vars": game.player.get_vars(),
-                "game_version": GAME_VERSION, "game_tact": game.tact}
+                "game_version": GAME_VERSION, "game_tact": game.tact, "game_total_time": game.total_time}
         with open("save_data.json", 'w') as f:
             f.write(str(data))
         t = pickle.dumps(data)
@@ -603,6 +603,7 @@ class GameMap(SavedObject):
         player = data["player_vars"]
         game.player.set_vars(player)
         game.tact = data.get("game_tact", 0)
+        game.total_time = data.get("game_total_time", 0)
         print(game.player.rect.center)
         if abs(game.player.rect.x) > 10000 or abs(game.player.rect.y) > 10000:
             game.screen_map.teleport_to_player()
