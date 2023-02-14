@@ -15,6 +15,7 @@ class ToolHand(ToolPickaxe):
     capability = Pickaxes_capability[-1]
     Animation = AnimationHand
     discard_distance = 5
+    reload_half_time_cof = 0.05
 
     def __init__(self, owner):
         super().__init__(owner)

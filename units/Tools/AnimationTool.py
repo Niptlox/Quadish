@@ -43,21 +43,23 @@ class AnimationHand(AnimationTool):
     def draw(self, surface, x, y):
         if self.sprite:
             vec: Vector2 = Vector2(self.tool.vector_to_mouse)
+            dist = self.distance_start + (self.max_distance - self.distance_start) * self.tool.process_percent
             if vec.x == vec.y == 0:
-                vec = Vector2(self.dist, 0)
+                vec = Vector2(dist, 0)
             else:
-                vec.scale_to_length(self.dist)
+                vec.scale_to_length(dist)
             vec -= Vector2(HAND_SIZE // 2, HAND_SIZE // 2)
             surface.blit(self.sprite, (x + int(vec.x), y + int(vec.y)))
 
     def update(self):
-        if self.animation:
-            self.dist += self.speed * self.direction
-            if self.dist >= self.max_distance:
-                self.direction *= -1
-            elif self.dist <= self.distance_norm:
-                self.animation = False
-                self.dist = self.distance_norm
+        pass
+        # if self.animation:
+        #     self.dist += self.speed * self.direction
+        #     if self.dist >= self.max_distance:
+        #         self.direction *= -1
+        #     elif self.dist <= self.distance_norm:
+        #         self.animation = False
+        #         self.dist = self.distance_norm
 
 
 class AnimationSword(AnimationTool):

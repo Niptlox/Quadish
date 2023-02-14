@@ -265,6 +265,7 @@ class TitleUI(UI):
     def draw_background(self):
         self.screen.fill(self.color_sky)
         x, y = pg.mouse.get_pos()
+        x, y = self.rect.w - x, self.rect.h - y
         c = 4
         nx, ny = x // 40 - self.rect.w // 2, y // 40 - self.rect.h // 2
         if self.bg2_x == 0 and self.bg2_y == 0:

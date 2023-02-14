@@ -10,11 +10,13 @@ class ToolSword(Tool):
     discard_distance = 10
     index = 501
     sprite = tile_imgs[index]
+    reload_half_time_cof = 0.5
 
     def __init__(self, owner):
         super().__init__(owner)
-        self.reload_half_time = self.reload_time / 2
+        self.reload_half_time = self.reload_time * self.reload_half_time_cof
         self.action_rect = pg.Rect((0, 0, self.distance, self.distance * 2 - 1))
+        self.process_percent = 0
 
     def left_button(self, vector_to_mouse):
         if time() < self.reload_time + self.last_action_time:
@@ -27,8 +29,12 @@ class ToolSword(Tool):
     def update(self, vector_to_mouse):
         super().update(vector_to_mouse)
         if self.action:
+            self.process_percent = (time() - self.last_action_time) / self.reload_half_time
             if time() >= self.reload_half_time + self.last_action_time:
                 self.punch()
+        else:
+            t = time() - (self.last_action_time + self.reload_half_time)
+            self.process_percent = t / (self.reload_time - self.reload_half_time) if t > 0 else 0
 
     def punch(self):
         # смещение удара в ту сторону куда смотрит мышь

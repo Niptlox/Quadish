@@ -30,9 +30,10 @@ def load_translates(path_to_translate):
 
 
 def get_translated_tiles(tiles):
-    _path_to_translate = os.path.join(TRANSLATIONS_PATH, "tiles_"+lang + ".json")
+    _path_to_translate = os.path.join(TRANSLATIONS_PATH, "game_" + lang + ".json")
     _translates_tiles = load_translates(_path_to_translate)["tiles"]
     return {i: _translates_tiles.get(text, text) for i, text in tiles.items()}
+
 
 def get_translated_text_to_lang(text, lang):
     _path_to_translate = os.path.join(TRANSLATIONS_PATH, lang + ".json")
