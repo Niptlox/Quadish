@@ -49,8 +49,8 @@ sounds_ui = Sounds([sound_click])
 sounds_set_volume(sounds_ui, VolumeSettings.ui_volume)
 
 # ======= PLAYER =======
-sounds_step_dry = load_sounds("data/audio/FootStep/StepGrass{}.wav", 2, 1)
-sounds_step_stomp = load_sounds("data/audio/FootStep/Stomp{}.wav", 2, 4)
+sounds_step_dry = load_sounds("data/audio/steps/StepGrassN{}.wav", 2, 1)
+sounds_step_stomp = load_sounds("data/audio/steps/StompN{}.wav", 3, 1)
 sounds_pickaxe = load_sounds("data/audio/tools/Pickaxe-{}.ogg", 4, 1)
 sounds_axe = load_sounds("data/audio/tools/Axe-{}.ogg", 2, 1)
 sounds_eat = load_sounds("data/audio/food/EatingFood{}.ogg", 2, 1)
