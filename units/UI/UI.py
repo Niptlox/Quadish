@@ -314,7 +314,7 @@ class TitleUI(UI):
 
 class MainSettingsUI(TitleUI):
     # меню с основными настройками
-    window_sizes_lst = ["1240,720", "720,480"]
+    window_sizes_lst = ["1240,720", "1054,612", "720,480"]
 
     def __init__(self, scene):
         super(MainSettingsUI, self).__init__(scene)
