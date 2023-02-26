@@ -1,8 +1,8 @@
 import os
 
 from configparser import ConfigParser
-
-os.chdir(__file__.replace("config.py", "") + "../")
+if "\\units" in os.getcwd():
+    os.chdir(__file__.replace("config.py", "") + "../")
 config_filename = os.getcwd() + '\settings.ini'
 print("config_filename", config_filename)
 config = ConfigParser()

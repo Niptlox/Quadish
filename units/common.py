@@ -2,7 +2,8 @@ import os
 
 from units.UI.Translate import get_translated_text
 
-os.chdir(__file__.replace("common.py", "") + "../")
+if "//units" in os.getcwd():
+    os.chdir(__file__.replace("common.py", "") + "../")
 import math
 import pickle
 import sys
