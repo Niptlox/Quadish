@@ -110,7 +110,7 @@ class GameUI(UI):
         # self.playerui = SurfaceAlphaUI((0, 0, 280, 120))
         self.playerui = SurfaceUI((0, 0, 450, 420)).convert_alpha()
         self.playerui.rect.bottom = self.rect.bottom
-        self.new_sys_message("Привет игрок")
+        self.new_sys_message("Привет игрок. Нажми [E]")
 
     def draw_sky(self):
         # self.display.blit(self.sky_surface, (0, 0))

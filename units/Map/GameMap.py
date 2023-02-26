@@ -575,7 +575,7 @@ class GameMap(SavedObject):
         with open(file_p, 'wb') as f:
             f.write(t)
         print("GamaMap - SAVE!")
-        self.game.ui.new_sys_message(f"Карта сохранена #{num}", draw_now=True)
+        self.game.ui.new_sys_message(get_translated_text("Карта сохранена #") + f"{num}", draw_now=True)
         # except Exception as exc:
         #     print("Ошибка сохранения:", exc)
         #     self.game.ui.new_sys_message(f"Ошибка {exc}")
@@ -585,7 +585,7 @@ class GameMap(SavedObject):
         #     return True
 
     def open_game_map(self, game, num=0):
-        self.game.ui.new_sys_message(f"Загрузка карты #{num}", draw_now=True)
+        self.game.ui.new_sys_message(get_translated_text("Загрузка карты #") + f"{num}", draw_now=True)
 
         file_p = GAMEMAPS_PATH + f'game_map-{num}.pclv'
         self.num_save_map = num

@@ -10,7 +10,7 @@
   "Удалить": "Delete",
   "Назад": "Back",
   "Слот": "Slot",
-  "Сохранение": "Save",
+  "Сохранение": "Saving",
   "Загрузка": "Load",
   "Создание": "Create",
   "Удаление": "Delete",
@@ -67,5 +67,9 @@
   "Выключить": "Disable",
   "Режим создателя включен": "Creator mode enabled",
   "Режим создателя выключен": "Creator mode disabled",
-  "Режим создателя": "Creator mode"
+  "Режим создателя": "Creator mode",
+  "Конфликт версий с картой": "Version conflict with the map",
+  "Загрузка карты #": "Loading the map #",
+  "Карта сохранена #": "Map saved #",
+  "Привет игрок. Нажми [E]": "Hello player. Press [E]"
 }
