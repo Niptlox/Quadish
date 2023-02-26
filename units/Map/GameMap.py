@@ -569,8 +569,8 @@ class GameMap(SavedObject):
         # try:
         data = {"game_map_vars": self.get_vars(), "player_vars": game.player.get_vars(),
                 "game_version": GAME_VERSION, "game_tact": game.tact, "game_total_time": game.total_time}
-        with open("save_data.json", 'w') as f:
-            f.write(str(data))
+        # with open("save_data.json", 'w') as f:
+        #     f.write(str(data))
         t = pickle.dumps(data)
         with open(file_p, 'wb') as f:
             f.write(t)
