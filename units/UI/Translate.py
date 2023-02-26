@@ -25,7 +25,8 @@ class Translate:
 
 def load_translates(path_to_translate):
     with open(path_to_translate, "r", encoding="utf-8") as f:
-        _translates = json.load(f, encoding="utf-8", )
+        txt = f.read().encode("utf-8")
+        _translates = json.loads(txt)
     return _translates
 
 
