@@ -25,7 +25,8 @@ class ScreenMap:
         self.scroll = [0, 0]
         self.tact = 0
         self.elapsed_time = 0
-        self.last_div = 4  # последний делитель для scroll y
+        self.last_scrollx_div = 4 # последний делитель для scroll x
+        self.last_scrolly_div = 4  # последний делитель для scroll y
         # ===================================================
         self.static_tiles = {}
         self.dynamic_tiles = []
@@ -102,19 +103,28 @@ class ScreenMap:
         # if abs(offset_y) > TSIZE * 3:
         #     offset_y *= min(abs(offset_y) / (2 * TSIZE), 10)
         # self.true_scroll[1] += float(offset_y / 20)
-        cof = max(2, 30 * 12 / elapsed_time)
-        self.true_scroll[0] += (p.rect.x - self.true_scroll[0] - WSIZE[0] // 2) / cof
+
+        scrollx_div = max(10, 30 * 12 / elapsed_time)
+        max_divx_delta = 0.3
+        if scrollx_div - self.last_scrollx_div > max_divx_delta:
+            scrollx_div = self.last_scrollx_div + max_divx_delta
+        elif scrollx_div - self.last_scrollx_div < -max_divx_delta:
+            scrollx_div = self.last_scrollx_div - max_divx_delta
+        # scrollx_avg_div = self.last_scrollx_div + (scrollx_div - self.last_scrollx_div) / 5
+        self.true_scroll[0] += (p.rect.x - self.true_scroll[0] - WSIZE[0] // 2) / scrollx_div
+        self.last_scrollx_div = scrollx_div
+
 
         max_offset_y = 3 * TSIZE
         offset_y = abs(p.rect.y - self.true_scroll[1] - WSIZE[1] // 2)
         # div = max(0.001, 30 * 6 / elapsed_time)
         div = max(3, max(1, 48 / max(1, offset_y ** 0.5)) * 30 / elapsed_time)
         div_offset = 0.2
-        if div - self.last_div > div_offset:
-            div = self.last_div + div_offset
-        elif div - self.last_div < -div_offset:
-            div = self.last_div - div_offset
-        self.last_div = div
+        if div - self.last_scrolly_div > div_offset:
+            div = self.last_scrolly_div + div_offset
+        elif div - self.last_scrolly_div < -div_offset:
+            div = self.last_scrolly_div - div_offset
+        self.last_scrolly_div = div
         # print("DIV", elapsed_time, div, offset_y, offset_y ** 0.5, 64 / max(1, offset_y ** 0.5))
         self.true_scroll[1] += (p.rect.y - self.true_scroll[1] - WSIZE[1] // 2) / div
         offset_y = (p.rect.y - self.true_scroll[1] - WSIZE[1] // 2)

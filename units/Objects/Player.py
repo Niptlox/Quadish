@@ -344,16 +344,19 @@ class Player(PhysicalObject):
     def moving(self, elapsed_time):
         player_movement = pg.Vector2(0, 0)
         if self.moving_right:
+            # print(self.speed, self.accelerate_x)
+
             self.flip = False
             if self.speed < 0:
-                self.speed //= 2
+                self.speed /= 2
             self.speed += self.accelerate_x
             if self.speed > self.max_speed:
                 self.speed = self.max_speed
         elif self.moving_left:
+            # print("left", self.speed)
             self.flip = True
             if self.speed > 0:
-                self.speed //= 2
+                self.speed /= 2
                 if self.speed == -1: self.speed = 0
             self.speed -= self.accelerate_x
             if self.speed < -self.max_speed:

@@ -8,6 +8,7 @@ from units.App.Scenes import TitleScene, OpenMapScenePopupMenu, SaveMapScenePopu
     AchievementsSceneUI, HelpSceneUI
 import subprocess
 
+from units.config import GameSettings
 from units.sound import sounds_background, get_random_sound_of
 
 set_cursor(CURSOR_NORMAL)
@@ -29,7 +30,8 @@ class Game(App):
 
     @classmethod
     def open_help(cls):
-        subprocess.Popen(('start', 'help.txt'), shell=True, cwd=CWDIR)
+        path = CWDIR + f"data/translations/help_{GameSettings.language}.md"
+        subprocess.Popen(('start', path), shell=True, cwd=CWDIR)
 
 
 class GameScene(Scene):
