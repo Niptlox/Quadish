@@ -304,7 +304,7 @@ class ScreenMap:
                     # tile[3] = tact --> тк срез
                     chunk[0][index + 3][TILE_TIMER] += random.randint(FPS * 60, FPS * 120)
         elif tile_type in CLASS_UPDATING_TILES:
-            return self.game_map.get_tile_obj(chunk_x, chunk_y, tile[3]).update()
+            return self.game_map.get_tile_obj(chunk_x, chunk_y, tile[3]).update(self.elapsed_time)
 
         elif tile_type == 102:
             # дерево

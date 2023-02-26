@@ -112,13 +112,13 @@ class Furnace(Tile):
                     return True
         return False
 
-    def update(self):
+    def update(self, elapsed_time):
         if self.burning:
             self.timer += 1
             self.progress = self.timer / self.burn_time
             if self.timer >= self.burn_time:
                 self.__finish_burning()
-            self.animation.update()
+            self.animation.update(elapsed_time)
             return self.animation.get_frame()
 
     def items_of_break(self):
