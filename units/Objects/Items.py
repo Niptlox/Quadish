@@ -1,7 +1,7 @@
 from random import randint
 
 from units.Objects.Entity import PhysicalObject, collision_test
-from units.Tiles import tile_hand_imgs, Eats
+from units.Tiles import tile_hand_imgs, Eats, tile_imgs
 from units.common import *
 
 
@@ -63,6 +63,7 @@ class ItemsTile(Items):
     def __init__(self, game, index=None, pos=(0, 0), count=1):
         super().__init__(game, index, pos, count)
         self.sprite = tile_hand_imgs.get(index, self.sprite)
+        self.full_sprite = tile_imgs.get(index, self.sprite)
         self.rect.size = self.sprite.get_size()
 
     def set_vars(self, vrs):

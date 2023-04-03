@@ -89,6 +89,7 @@ class SceneMenu(Scene):
             self.ui = ui
 
     def pg_events(self):
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = EXIT

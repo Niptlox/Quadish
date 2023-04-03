@@ -60,7 +60,7 @@ class InventoryUI(SurfaceUI):
                              (x, y, self.cell_size, self.cell_size), 1)
             cell = self.inventory[i]
             if cell is not None:
-                img = cell.sprite
+                img = cell.full_sprite
                 iw, ih = img.get_size()
                 self.table_inventory.blit(img, (x + cell_size_2 - iw // 2, y + cell_size_2 - ih // 2))
                 res = str(cell.count)
@@ -212,7 +212,7 @@ class InventoryPlayerUI(InventoryUI):
 
         self.all_tiles = ScrollSurfaceAllTiles(self.inventory, self.recipes.rect)
 
-        self.opened_full_inventory = False
+        self.opened = False
 
     def redraw_table_inventory(self):
         self.table_inventory.fill(bg_color)
@@ -235,7 +235,7 @@ class InventoryPlayerUI(InventoryUI):
                              (x, y, self.cell_size, self.cell_size), 1)
             cell = self.inventory[i]
             if cell is not None:
-                img = cell.sprite
+                img = cell.full_sprite
                 iw, ih = img.get_size()
                 self.table_inventory.blit(img, (x + cell_size_2 - iw // 2, y + cell_size_2 - ih // 2))
                 res = str(cell.count)
@@ -263,7 +263,7 @@ class InventoryPlayerUI(InventoryUI):
                              (x, 0, self.cell_size, self.cell_size), 1)
             cell = self.inventory[i]
             if cell is not None:
-                img = cell.sprite
+                img = cell.full_sprite
                 iw, ih = img.get_size()
                 self.work_inventory.blit(img, (x + cell_size_2 - iw // 2, cell_size_2 - ih // 2))
                 res = str(cell.count)
@@ -280,7 +280,7 @@ class InventoryPlayerUI(InventoryUI):
         self.fill(color_none)
 
         self.work_inventory.draw(self)
-        if self.opened_full_inventory:
+        if self.opened:
             # pg.draw.rect(self, bg_color, self.rect)
             self.table_inventory.draw(self)
             if self.inventory.owner.creative_mode:
@@ -317,20 +317,14 @@ class InventoryPlayerUI(InventoryUI):
         return i
 
     def pg_event(self, event: pg.event.Event):
-        if self.opened_full_inventory:
+        if self.opened:
             if self.inventory.owner.creative_mode:
                 if self.all_tiles.pg_event(event):
                     return True
             else:
                 if self.recipes.pg_event(event):
                     return True
-        if event.type == pg.KEYDOWN and event.key == pg.K_e:
-            # OPEN OR CLOSE  full INVENTORY
-            self.opened_full_inventory = not self.opened_full_inventory
-            self.recipes.info_index = None
-            self.inventory_info_index = -1
-            return True
-        if self.opened_full_inventory:
+        if self.opened:
             if super(InventoryPlayerUI, self).pg_event(event):
                 return True
         else:
@@ -348,6 +342,15 @@ class InventoryPlayerUI(InventoryUI):
                 else:
                     self.inventory_info_index = -1
         return False
+
+    def close(self):
+        self.opened = False
+        self.recipes.info_index = None
+        self.inventory_info_index = -1
+
+    def open(self):
+        self.close()
+        self.opened = True
 
 
 

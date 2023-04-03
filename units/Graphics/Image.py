@@ -44,8 +44,9 @@ def convert_img(img, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_
     return img
 
 
-def load_imgs(path, count, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_tile=False):
-    return [load_img(path.format(i), size, colorkey, alpha, scale=scale, is_tile=is_tile) for i in range(count)]
+def load_imgs(path, count, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_tile=False, start_num=0):
+    return [load_img(path.format(i), size, colorkey, alpha, scale=scale, is_tile=is_tile) for i in
+            range(start_num, start_num + count)]
 
 
 def load_imgs_of_animation(path, table, count, size=None, colorkey=COLORKEY, alpha=None, scale=1, is_tile=False,

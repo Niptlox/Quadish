@@ -38,7 +38,7 @@ def get_random_sound_of(sounds_list) -> pg.mixer.Sound:
 
 def sounds_set_volume(lst_sounds, volume):
     for snd in lst_sounds:
-        snd.set_volume(float(volume))
+        snd.set_volume(float(volume) * VolumeSettings.game_volume)
 
 
 # ====== UI ========
@@ -68,6 +68,7 @@ sounds_set_volume(sounds_background, VolumeSettings.background_volume)
 # ====== CREATURES ======
 sound_gate = load_sound("data/audio/gate/Fire4.wav")
 sounds_creatures = Sounds([sound_gate])
+sounds_set_volume(sounds_creatures, VolumeSettings.creatures_volume)
 
 # ====== GAME ======
 sounds_game = Sounds()
@@ -85,6 +86,6 @@ categories_sounds = {
 
 def set_category_volume(category, volume):
     if category in categories_sounds:
-        categories_sounds[category].set_volume(volume)
+        categories_sounds[category].set_volume(volume )
         name_var = category + "_volume"
         VolumeSettings.set(name_var, volume)

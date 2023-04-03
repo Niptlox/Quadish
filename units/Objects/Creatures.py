@@ -80,7 +80,7 @@ class Creature(PhysicalObject):
 
     def damage(self, lives):
         lives = min(lives, self.lives)
-        particle = DamageParticle(self.game, (self.rect.centerx, self.rect.top-25), (lives))
+        particle = DamageParticle(self.game, (self.rect.centerx, self.rect.top - 25), (lives))
         self.game_map.add_particle(particle)
         self.death_animation.start()
         return super(Creature, self).damage(lives)
@@ -369,3 +369,4 @@ class SlimeBigBoss(Slime):
 
 
 CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss, Snake]
+CREATURES_D = {cls.__name__: cls for cls in CREATURES}

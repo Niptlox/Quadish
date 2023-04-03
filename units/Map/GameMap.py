@@ -6,7 +6,7 @@ from units.Objects.Creatures import Slime, Cow, Wolf, SlimeBigBoss, Snake
 from units.Objects.Entities import PortalMainGate
 from units.Objects.Entity import PhysicalObject
 from units.Objects.Items import ItemsTile
-from units.Objects.TilesClass import tiles_class
+from units.Objects.TileClasses import tiles_class
 from units.Tools import TOOLS
 from units.biomes import biome_of_pos
 from units.Map.Structures import Structures_chance, Structures, Structures_all, structure_start
@@ -248,8 +248,8 @@ class GameMap(SavedObject):
             return True
         return False
 
-    def add_dinamic_obj(self, chunk_x, chunk_y, obj):
-        chunk = self.chunk((chunk_x, chunk_y))
+    def add_dinamic_obj(self, chunk_x, chunk_y, obj, create_chunk=True):
+        chunk = self.chunk((chunk_x, chunk_y), create_chunk=create_chunk)
         if chunk:
             if obj.class_obj & OBJ_CREATURE:
                 chunk[3][1] += 1
@@ -393,7 +393,8 @@ class GameMap(SavedObject):
         state = {}
         state_img = 0
         if ttile in PLANT_WITH_RANDOM_SPRITE:
-            state_img = random.randint(0, PLANT_WITH_RANDOM_SPRITE[ttile])
+            # -1 тк это количество
+            state_img = random.randint(0, PLANT_WITH_RANDOM_SPRITE[ttile]-1)
         if ttile in PLANT_WITH_RANDOM_LOCAL_POS:
             img = tile_imgs[ttile]
             state[TILE_LOCAL_POS] = (random.randint(0, TSIZE - img.get_width()),
@@ -640,7 +641,7 @@ class GameMap(SavedObject):
     def new_world(self, base_generation=None):
         self.__init__(self.game, self.gen_type, base_generation)
         self.set_structure((-10, -13), structure_start)
-        self.game.player.__init__(self.game, 0, 0)
+        self.game.reinit_player()
         self.game.player.tp_to(config.GameSettings.start_pos)
         self.spawn_gate()
 
@@ -667,7 +668,7 @@ def random_plant_selection(biome=None):
                 state_img = 2  # вырастить мгновено дерево
 
         if plant_tile_type in PLANT_WITH_RANDOM_SPRITE:
-            state_img = random.randint(0, PLANT_WITH_RANDOM_SPRITE[plant_tile_type])
+            state_img = random.randint(0, PLANT_WITH_RANDOM_SPRITE[plant_tile_type]-1)
         if plant_tile_type in PLANT_WITH_RANDOM_LOCAL_POS:
             img = tile_imgs[plant_tile_type]
             lx, ly = random.randint(0, max(0, TSIZE - img.get_width())), TSIZE - img.get_height()

@@ -12,13 +12,12 @@ from units.Objects.Items import Items
 from units.Graphics.Particle import DamageParticle
 from units.Tiles import hand_pass_img, player_img, dig_rect_img
 from units.Tools import ToolHand, ItemTool, ToolCreativeHand
-from units.UI.BlocksUI import InventoryPlayerChestUI, InventoryPlayerFurnaceUI
+from units.UI.BlocksUI import InventoryPlayerChestUI, InventoryPlayerFurnaceUI, BLOCKS_UI_SET
 from units.sound import *
 from units.common import *
 
 
 # from units.Cursor import set_cursor, cursor_add_img, CURSOR_DIG, CURSOR_NORMAL, CURSOR_SET
-
 
 class Player(PhysicalObject):
     not_save_vars = PhysicalObject.not_save_vars | {"game_map", "game", "ui", "hand_img", "lives_surface", "toolHand",
@@ -113,18 +112,18 @@ class Player(PhysicalObject):
         self.tool = self.toolHand
         self.vector = Vector2(0)
 
-        self.chest_ui = InventoryPlayerChestUI(self.inventory)
-        self.furnace_ui = InventoryPlayerFurnaceUI(self.inventory)
         self.tile_ui = None
 
         # ====================================
         self.state_step_sound = 0
 
         # self.game_map.set_static_tile(0, 0, self.game_map.get_tile_ttile(131))
+    def reinit(self):
+        self.__init__(self.game, 0, 0)
 
     def set_vars(self, vrs):
         # self.inventory.set_vars(vrs.pop("inventory"))
-        self.chest_ui = InventoryPlayerChestUI(self.inventory)
+
         # vrs["max_fall_speed"] = self.max_fall_speed
         vrs["rect"].size = self.rect.size
 
@@ -135,10 +134,6 @@ class Player(PhysicalObject):
         self.game.screen_map.teleport_to_player()
 
     def pg_event(self, event):
-        if self.chest_ui.opened and self.chest_ui.pg_event(event):
-            return True
-        if self.furnace_ui.opened and self.furnace_ui.pg_event(event):
-            return True
         if self.inventory.pg_event(event):
             return True
         if event.type == EVENT_END_OF_STEP_SOUND:
@@ -390,6 +385,12 @@ class Player(PhysicalObject):
             self.vertical_momentum /= 1.5
         elif {121, 125} & self.collisions_ttile:
             self.inventory.update_available_create_items()
+
+        # if self.game.blocks_ui_manager.opened:
+        #     dist2 = (Vector2(self.game.blocks_ui_manager.opened.rect.center) - Vector2(self.rect.center)).length_squared()
+        #     if dist2 > TSIZE * 16:
+        #         self.game.blocks_ui_manager.close()
+        #         self.inventory.ui.open()
         if collisions['bottom']:
             if not self.first_fall and self.vertical_momentum > 0.75:
                 self.damage(int(self.vertical_momentum // 5))
@@ -450,7 +451,7 @@ class Player(PhysicalObject):
     def kill(self, owner="Unknown"):
         self.alive = False
         self.killer = owner
-        self.inventory.ui.opened_full_inventory = False
+        self.inventory.ui.opened = False
 
     def discard(self, vector):
         # self.physical_vector.x += vector[0]

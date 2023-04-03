@@ -1,28 +1,16 @@
+from units.CommandBlock.CommandBlock import CommandBlock
 from units.Graphics.Animation import Animation
 from units.Inventory import Inventory
 from units.Objects.Items import Items, ItemsTile
+from units.Objects.TileClass import Tile
 from units.Tiles import WOOD_TILES, furnace_imgs
 from units.common import *
-
-
-class Tile(SavedObject):
-    not_save_vars = {"game", "game_map"} | SavedObject.not_save_vars
-    index = 0
-
-    def __init__(self, game, tile_pos):
-        self.id = id(self)
-        self.game = game
-        self.game_map = game.game_map
-        self.tx, self.ty = tile_pos
-        self.rect = pg.Rect((self.tx * TSIZE, self.ty * TSIZE), (TSIZE, TSIZE))
-
-    def items_of_break(self):
-        return [(self.index, 1)]
 
 
 class Chest(Tile):
     not_save_vars = {"inventory"} | Tile.not_save_vars
     index = 129
+    view_interface_on_click = True
     size_table = Chest_size_table
 
     def __init__(self, game, tile_pos):
@@ -37,10 +25,6 @@ class Chest(Tile):
     def set_vars(self, d):
         # tile_pos уже установлен и удлен из списка
         self.inventory.set_vars(d)
-
-    def right_click(self, mouse_local_pos):
-        self.game.player.chest_ui.set_block(self, view=True)
-        # self.game.player.chest_ui.opened = True
 
     def items_of_break(self):
         return self.inventory.items_of_break()
@@ -63,6 +47,7 @@ class Furnace(Tile):
     not_save_vars = Tile.not_save_vars | {"animation"}
     index = 131
     burn_time = FPS
+    view_interface_on_click = True
 
     def __init__(self, game, tile_pos):
         super(Furnace, self).__init__(game, tile_pos)
@@ -74,10 +59,7 @@ class Furnace(Tile):
         self.burning = None
         self.progress = 0
         self.timer = 0
-        self.animation = Animation(furnace_imgs[1:], looped=True)
-
-    def right_click(self, mouse_local_pos):
-        self.game.player.furnace_ui.set_block(self, view=True)
+        self.animation = Animation(furnace_imgs[1:], looped=True, fps=30)
 
     def __start_burning(self):
         self.progress = 0
@@ -114,11 +96,11 @@ class Furnace(Tile):
 
     def update(self, elapsed_time):
         if self.burning:
-            self.timer += 1
+            self.timer += 0.5
             self.progress = self.timer / self.burn_time
             if self.timer >= self.burn_time:
                 self.__finish_burning()
-            self.animation.update(elapsed_time)
+            self.animation.update(elapsed_time * 0.5)
             return self.animation.get_frame()
 
     def items_of_break(self):
@@ -126,5 +108,5 @@ class Furnace(Tile):
         return sum([inv.items_of_break() for inv in inventories], [])
 
 
-classes = {Chest, Furnace}
+classes = {Chest, Furnace, CommandBlock}
 tiles_class = {cls.index: cls for cls in classes}

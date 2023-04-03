@@ -29,14 +29,14 @@ def load_animation(path):
         frame = pg.transform.scale(frames[i], fsize)
         frame.set_alpha(255 * (1 - i / n))
         nframes.append(frame)
-    return Animation(nframes, speed=data.get("speed", 20), looped=data.get("looped", False),
+    return Animation(nframes, fps=data.get("speed", 20), looped=data.get("looped", False),
                      centered=data.get("centered", False))
 
 
 class Animation(SavedObject):
     is_not_saving = True
 
-    def __init__(self, frames, speed=300, looped=False, start_frame=0, centered=False):
+    def __init__(self, frames, fps=30, ms_per_frame=None, looped=False, start_frame=0, centered=False, start=False, ):
         self.animation = False
         # массив картинок
         self.centered = centered
@@ -45,10 +45,15 @@ class Animation(SavedObject):
         self.frame_index = start_frame
         self.looped = looped
         # кадров в секунду
-        self.speed = speed
+        if ms_per_frame is not None:
+            self.speed = 1000 / ms_per_frame
+        else:
+            self.speed = fps
         # кадров на тик
-        self.speed_one_tick = speed / FPS
+        # self.speed_one_tick = speed / FPS
         self.resize = None
+        if start:
+            self.start(restart=True)
 
     def draw(self, surface, pos):
         if self.animation:
@@ -73,6 +78,7 @@ class Animation(SavedObject):
     def update(self, elapsed_time):
         if self.animation:
             # print(self.frame_index, self.speed_one_tick, self.speed * elapsed_time / 1000, elapsed_time, FPS)
+            # print("s", self.speed * elapsed_time / 1000, elapsed_time, self.speed)
             self.frame_index += self.speed * elapsed_time / 1000
             if self.frame_index >= self.frame_count:
                 if self.looped:
@@ -153,7 +159,7 @@ def get_death_animation(size, color=(185, 28, 28), speed=15, time=0.3, start_alp
         surf.set_alpha(start_alpha * (i ** 3) / (count ** 3))
         # print(start_alpha * (i ** 3) / (count ** 3), (i ** 3) / (count ** 3), count, i)
         arr.append(surf)
-    return Animation(arr[::-1], speed=speed, looped=False)
+    return Animation(arr[::-1], fps=speed, looped=False)
 
 
 def test_loop(surface):

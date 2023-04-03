@@ -49,8 +49,10 @@ class GroupUI:
             self.add(obj)
 
     def pg_event(self, event):
+        res = False
         for component in self.components:
-            component.pg_event(event)
+            res = component.pg_event(event) or res
+        return res
 
     def draw(self, surface):
         for component in self.components:
@@ -239,3 +241,90 @@ class MultilineText(Text):
                 self.blit(text_surface, (self.rect.w // 2, self.padding + y))
             elif self.align == "right":
                 self.blit(text_surface, (self.rect.w - text_surface.get_width() - self.padding, self.padding + y))
+
+
+class MultilineEditText(MultilineText):
+    def __init__(self, rect, text, font: pg.font.Font, color, background="black", line_spacing=0,
+                 cursor_color=None, cursor_pos=(0, 0), cursor_enable=True,
+                 active_typing=False, enable_typing=True, on_finish_typing=lambda text: None, ui_owner=None):
+        super().__init__(rect, text, font, color, background=background, line_spacing=line_spacing)
+        self.ui_owner = ui_owner
+        self.cursor_enable = cursor_enable
+        self.cursor_pos = list(cursor_pos)
+        self.cursor_xy = (0, 0)
+        self.cursor_img = pg.Surface((1, font.render("|", True, "white").get_height() + 2))
+        self.cursor_img.fill(cursor_color or color)
+        self.cursor_timer = 0
+        self.cursor_time = 30
+        # происходит набор тескта
+        self.active_typing = active_typing
+        # можно ли набирать текст
+        self.enable_typing = enable_typing
+        self.on_finish_typing = on_finish_typing
+        if enable_typing:
+            self.finish_typing()
+
+    def pg_event(self, event: pg.event.Event):
+
+        if not self.enable_typing:
+            self.active_typing = False
+        if self.enable_typing:
+            if event.type == pg.MOUSEBUTTONDOWN:
+                pos = event.pos
+                if self.ui_owner:
+                    offset_ui = self.ui_owner.get_onscreen_pos()
+                    pos = pos[0] - offset_ui[0], pos[1] - offset_ui[1]
+
+                if self.rect.collidepoint(*pos):
+                    self.active_typing = True
+                    self.cursor_timer = 0
+
+                elif self.active_typing:
+                    self.finish_typing()
+        if event.type == pg.KEYDOWN:
+            if self.active_typing:
+                line = self.text[self.cursor_pos[1]]
+
+                if event.key == pg.K_KP_ENTER:
+                    pass
+                if event.key == pg.K_LEFT:
+                    self.cursor_pos[0] = max(0, self.cursor_pos[0] - 1)
+                elif event.key == pg.K_RIGHT:
+                    self.cursor_pos[0] = min(len(line), self.cursor_pos[0] + 1)
+                elif event.key == pg.K_HOME:
+                    self.cursor_pos[0] = 0
+                elif event.key == pg.K_END:
+                    self.cursor_pos[0] = len(line)
+                elif event.key == pg.K_BACKSPACE and self.cursor_pos[0] != 0:
+                    self.lines[self.cursor_pos[1]] = line[:self.cursor_pos[0] - 1] + line[self.cursor_pos[0]:]
+                    self.cursor_pos[0] = max(0, self.cursor_pos[0] - 1)
+                elif event.key == pg.K_DELETE and self.cursor_pos[0] != len(line):
+                    self.lines[self.cursor_pos[1]] = line[:self.cursor_pos[0]] + line[self.cursor_pos[0] + 1:]
+                elif len(pg.key.name(event.key)) == 1:
+                    symbol = event.unicode
+                    self.lines[self.cursor_pos[1]] = line[:self.cursor_pos[0]] + symbol + line[self.cursor_pos[0]:]
+                    self.cursor_pos[0] = max(0, self.cursor_pos[0] - 1)
+                else:
+                    return
+                self.cursor_timer = 0
+                self.render_text()
+                self.finish_typing()
+
+    def render_text(self):
+        self.fill(self.background)
+        text = self.font.render(self.text, True, self.color)
+        self.text_pos = self.get_text_position(text)
+        self.blit(text, self.text_pos)
+        text = self.font.render(self.text[:self.cursor_pos], True, self.color)
+        self.cursor_xy = self.text_pos[0] + text.get_width() - 1, 2
+
+    def finish_typing(self):
+        self.on_finish_typing("\n".join(self.lines))
+
+    def draw(self, display):
+        surface = self.copy()
+        if self.cursor_enable and self.active_typing:
+            self.cursor_timer = (self.cursor_timer + 1) % self.cursor_time
+            if self.cursor_timer < (self.cursor_time // 2):
+                surface.blit(self.cursor_img, self.cursor_xy)
+        display.blit(surface, self.rect)

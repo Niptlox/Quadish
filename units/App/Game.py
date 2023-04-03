@@ -1,6 +1,8 @@
+from units import Tiles
 from units.App.App import *
 from units.Graphics.Cursor import set_cursor, CURSOR_NORMAL
 from units.Objects.Player import Player
+from units.UI.BlocksUI import BlocksUIManger
 from units.UI.UI import GameUI
 from units.Map.GameMap import GameMap
 from units.Map.ScreenMap import ScreenMap
@@ -16,7 +18,7 @@ choice_pos1 = None
 choice_pos2 = None
 
 
-class Game(App):
+class GameApp(App):
     def __init__(self) -> None:
         self.title_scene = TitleScene(self)
         self.game_scene = GameScene(self)
@@ -34,7 +36,12 @@ class Game(App):
         subprocess.Popen(('start', path), shell=True, cwd=CWDIR)
 
 
+f = open("fff.txt", "w")
+
+
 class GameScene(Scene):
+    _Tiles = Tiles
+
     def __init__(self, app) -> None:
         super().__init__(app)
         self.game_map = GameMap(self, Generate_type)
@@ -42,6 +49,7 @@ class GameScene(Scene):
         self.player = Player(self, *config.GameSettings.start_pos)
         self.screen_map = ScreenMap(self.display, self.game_map, self.player)
         self.screen_map.teleport_to_player()
+        self.blocks_ui_manager = BlocksUIManger(self.player)
         self.ui.init_ui()
         self.tact = 0
         self.total_time = 0
@@ -49,6 +57,12 @@ class GameScene(Scene):
         self.first_start = False
         self.hided_ui = False
         self.background_sound = get_random_sound_of(sounds_background).play(loops=-1, )
+        print(self, self.player.inventory, file=f)
+        # print(list(self.blocks_ui_manager.blocks_ui.values())[0])
+
+    def reinit_player(self):
+        self.player.reinit()
+        self.blocks_ui_manager = BlocksUIManger(self.player)
 
     def pg_events(self):
         for event in pygame.event.get():
@@ -71,6 +85,16 @@ class GameScene(Scene):
                     self.tact += FPS * 60
                 elif event.key == K_z and pg.key.get_mods() & KMOD_ALT and self.player.creative_mode:
                     self.tact += FPS * 60 * 10
+                if event.key == pg.K_e:
+                    # OPEN OR CLOSE  full INVENTORY
+                    if self.player.inventory.ui.opened:
+                        self.player.inventory.ui.close()
+                    elif self.blocks_ui_manager.opened:
+                        self.blocks_ui_manager.close()
+                    else:
+                        self.player.inventory.ui.open()
+                    return True
+
                 elif event.key == K_g and pg.key.get_mods() & KMOD_CTRL:
                     global choice_pos1, choice_pos2
                     print("Choice of world")
@@ -97,12 +121,15 @@ class GameScene(Scene):
             elif event.type == EVENT_100_MSEC:
                 if show_info_menu:
                     self.ui.redraw_info()
-            self.player.pg_event(event)
+            if not self.blocks_ui_manager.pg_event(event):
+                self.player.pg_event(event)
         if self.first_start:
             self.set_scene(self.app.pause_scene)
             self.first_start = False
 
     def update(self):
+        # print(self, self.inventory, file=f)
+
         self.elapsed_time = min(self.elapsed_time, 120)
         self.total_time += self.elapsed_time
         # self.ui.draw_sky()
@@ -114,16 +141,9 @@ class GameScene(Scene):
             self.running = False
             self.new_scene = self.app.end_scene
 
-
         if not self.hided_ui:
-            if self.player.chest_ui.opened:
-                self.player.chest_ui.draw(self.display)
-            elif self.player.furnace_ui.opened:
-                self.player.furnace_ui.draw(self.display)
-            else:
-                self.player.inventory.ui.draw(self.display)
+            self.blocks_ui_manager.draw(self.display)
+            self.player.inventory.ui.draw(self.display)
             self.ui.draw()
         self.ui.flip()
         self.tact += 1
-
-

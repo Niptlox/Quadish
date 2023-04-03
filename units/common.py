@@ -144,7 +144,7 @@ START_HELL_Y = BOTTOM_MIDDLE_WORLD + 350
 
 NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9, pg.K_0]
 
-HAND_SIZE = int(TILE_SIZE // 1.5)
+HAND_SIZE = int(TILE_SIZE // 2)
 HAND_RECT = (HAND_SIZE, HAND_SIZE)
 
 FALL_SPEED = 0.021
