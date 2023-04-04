@@ -1,3 +1,5 @@
+import string
+
 import pygame as pg
 
 
@@ -214,6 +216,8 @@ class MultilineText(Text):
                  line_spacing=0):
         self.line_spacing = line_spacing
         self.lines = text.splitlines()
+        if not self.lines:
+            self.lines = [""]
         self.text_surfaces = []
         super().__init__(rect, text, font, color, background, align, padding, auto_size)
 
@@ -243,14 +247,19 @@ class MultilineText(Text):
                 self.blit(text_surface, (self.rect.w - text_surface.get_width() - self.padding, self.padding + y))
 
 
+TAB_LEN = 4
+
+
 class MultilineEditText(MultilineText):
+    # Python Code Editor
     def __init__(self, rect, text, font: pg.font.Font, color, background="black", line_spacing=0,
                  cursor_color=None, cursor_pos=(0, 0), cursor_enable=True,
                  active_typing=False, enable_typing=True, on_finish_typing=lambda text: None, ui_owner=None):
+        self.cursor_pos = list(cursor_pos)
         super().__init__(rect, text, font, color, background=background, line_spacing=line_spacing)
+        del self.text
         self.ui_owner = ui_owner
         self.cursor_enable = cursor_enable
-        self.cursor_pos = list(cursor_pos)
         self.cursor_xy = (0, 0)
         self.cursor_img = pg.Surface((1, font.render("|", True, "white").get_height() + 2))
         self.cursor_img.fill(cursor_color or color)
@@ -263,9 +272,13 @@ class MultilineEditText(MultilineText):
         self.on_finish_typing = on_finish_typing
         if enable_typing:
             self.finish_typing()
+        self.set_text(text)
+        self.render_text()
+
+    def get_text(self):
+        return "\n".join(self.lines)
 
     def pg_event(self, event: pg.event.Event):
-
         if not self.enable_typing:
             self.active_typing = False
         if self.enable_typing:
@@ -278,48 +291,120 @@ class MultilineEditText(MultilineText):
                 if self.rect.collidepoint(*pos):
                     self.active_typing = True
                     self.cursor_timer = 0
+                    return True
 
                 elif self.active_typing:
                     self.finish_typing()
         if event.type == pg.KEYDOWN:
             if self.active_typing:
-                line = self.text[self.cursor_pos[1]]
+                print(self.lines, self.cursor_pos)
+                line = self.lines[self.cursor_pos[1]]
 
-                if event.key == pg.K_KP_ENTER:
-                    pass
-                if event.key == pg.K_LEFT:
-                    self.cursor_pos[0] = max(0, self.cursor_pos[0] - 1)
+                if event.key == pg.K_RETURN:
+                    space_c = len(line) - len(line.lstrip(" "))
+                    cut_line = line[self.cursor_pos[0]:]
+                    line = self.lines[self.cursor_pos[1]] = self.lines[self.cursor_pos[1]][:self.cursor_pos[0]]
+                    if line and line.rstrip()[-1] == ":":
+                        space_c += TAB_LEN
+                    # если че " " * 0 == ""
+                    self.cursor_pos[1] += 1
+                    self.lines.insert(self.cursor_pos[1], " " * space_c + cut_line)
+                    self.cursor_pos[0] = space_c
+                elif event.key == pg.K_LEFT:
+                    if event.mod & pg.KMOD_CTRL:
+                        space_c = len(line) - len(line.lstrip(" "))
+                        if self.cursor_pos[0] <= space_c:
+                            i = 0
+                        else:
+                            i = line[:self.cursor_pos[0]].rfind(" ", 1)
+                    else:
+                        i = self.cursor_pos[0] - 1
+                    self.cursor_pos[0] = max(0, i)
                 elif event.key == pg.K_RIGHT:
-                    self.cursor_pos[0] = min(len(line), self.cursor_pos[0] + 1)
+                    if event.mod & pg.KMOD_CTRL:
+                        print(line[self.cursor_pos[0]:], line[self.cursor_pos[0]:].find(" ", 1))
+                        ii = line[self.cursor_pos[0]:].find(" ", 1)
+                        i = self.cursor_pos[0] + 1 if ii == -1 else self.cursor_pos[0] + ii + 1
+                    else:
+                        i = self.cursor_pos[0] + 1
+                    self.cursor_pos[0] = min(len(line), i)
+                elif event.key == pg.K_UP:
+                    self.cursor_pos[1] = max(0, self.cursor_pos[1] - 1)
+                    self.cursor_pos[0] = min(len(self.lines[self.cursor_pos[1]]), self.cursor_pos[0])
+                elif event.key == pg.K_DOWN:
+                    self.cursor_pos[1] = min(len(self.lines) - 1, self.cursor_pos[1] + 1)
+                    self.cursor_pos[0] = min(len(self.lines[self.cursor_pos[1]]), self.cursor_pos[0])
                 elif event.key == pg.K_HOME:
                     self.cursor_pos[0] = 0
                 elif event.key == pg.K_END:
                     self.cursor_pos[0] = len(line)
-                elif event.key == pg.K_BACKSPACE and self.cursor_pos[0] != 0:
-                    self.lines[self.cursor_pos[1]] = line[:self.cursor_pos[0] - 1] + line[self.cursor_pos[0]:]
-                    self.cursor_pos[0] = max(0, self.cursor_pos[0] - 1)
-                elif event.key == pg.K_DELETE and self.cursor_pos[0] != len(line):
-                    self.lines[self.cursor_pos[1]] = line[:self.cursor_pos[0]] + line[self.cursor_pos[0] + 1:]
-                elif len(pg.key.name(event.key)) == 1:
-                    symbol = event.unicode
+                elif event.key == pg.K_BACKSPACE:
+                    if self.cursor_pos[0] != 0:
+                        if event.mod & pg.KMOD_CTRL:
+                            space_c = len(line) - len(line.lstrip(" "))
+                            if self.cursor_pos[0] <= space_c:
+                                i = 0
+                            else:
+                                i = line[:self.cursor_pos[0]].rfind(" ", 1)
+                                if i == -1:
+                                    i = 0
+                        else:
+                            i = self.cursor_pos[0] - 1
+                        self.lines[self.cursor_pos[1]] = line[:i] + line[self.cursor_pos[0]:]
+                        self.cursor_pos[0] = i
+                    elif self.cursor_pos[1] != 0:
+                        del_line = self.lines.pop(self.cursor_pos[1])
+                        self.cursor_pos[1] -= 1
+                        self.cursor_pos[0] = len(self.lines[self.cursor_pos[1]])
+                        self.lines[self.cursor_pos[1]] += del_line
+                elif event.key == pg.K_DELETE:
+                    if self.cursor_pos[0] != len(line):
+                        self.lines[self.cursor_pos[1]] = line[:self.cursor_pos[0]] + line[self.cursor_pos[0] + 1:]
+                    if self.cursor_pos[1] != len(self.lines) - 1:
+                        del_line = self.lines.pop(self.cursor_pos[1] + 1)
+                        self.lines[self.cursor_pos[1]] += del_line
+
+                elif event.unicode and event.unicode in string.printable:
+                    symbol = event.unicode.replace("\t", " " * TAB_LEN)
                     self.lines[self.cursor_pos[1]] = line[:self.cursor_pos[0]] + symbol + line[self.cursor_pos[0]:]
-                    self.cursor_pos[0] = max(0, self.cursor_pos[0] - 1)
+                    print("key", f"'{symbol}'", line, self.lines[self.cursor_pos[1]], self.cursor_pos)
+                    self.cursor_pos[0] += len(symbol)
                 else:
                     return
                 self.cursor_timer = 0
                 self.render_text()
                 self.finish_typing()
+                return True
 
     def render_text(self):
         self.fill(self.background)
-        text = self.font.render(self.text, True, self.color)
-        self.text_pos = self.get_text_position(text)
-        self.blit(text, self.text_pos)
-        text = self.font.render(self.text[:self.cursor_pos], True, self.color)
-        self.cursor_xy = self.text_pos[0] + text.get_width() - 1, 2
+        # line = self.lines[0]
+        # print("render_text", line)
+        # text = self.font.render(line, True, self.color)
+        # self.text_pos = self.get_text_position(text)
+        # self.blit(text, self.text_pos)
+        # text = self.font.render(line[:self.cursor_pos[0]], True, self.color)
+        # self.cursor_xy = self.text_pos[0] + text.get_width() - 1, 2
+        #
+        # self.lines = text.splitlines()
+        # size = self.rect.size
+        # self.text_surfaces = []
+        y = 0
+        for i, line in enumerate(self.lines):
+            text_surface = self.font.render(line, True, self.color)
+            self.blit(text_surface, (self.padding, self.padding + y))
+            if i == self.cursor_pos[1]:
+                text_surface_cur = self.font.render(line[:self.cursor_pos[0]], True, "white")
+                self.cursor_xy = self.padding + text_surface_cur.get_width() - 1, y + self.padding
+            y += text_surface.get_height() + self.line_spacing
+
+    def get_text_position(self, img):
+        w, h = img.get_size()
+        x, y = 2, 2
+        return x, y
 
     def finish_typing(self):
-        self.on_finish_typing("\n".join(self.lines))
+        self.on_finish_typing(self.get_text())
 
     def draw(self, display):
         surface = self.copy()
@@ -328,3 +413,8 @@ class MultilineEditText(MultilineText):
             if self.cursor_timer < (self.cursor_time // 2):
                 surface.blit(self.cursor_img, self.cursor_xy)
         display.blit(surface, self.rect)
+
+    def set_text(self, text: str):
+        print("text", text, )
+        self.lines = text.split("\n")
+        self.render_text()

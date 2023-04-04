@@ -13,7 +13,7 @@ class ProgramEnvironment:
         self.player: Player = game.player
         self.__functions = {self.set_block, self.get_block, self.set_block,
                             self.get_player, self.get_player_pos, self.set_player_pos,
-                            self.debug}
+                            self.debug, self.summon}
         self.functions = {f.__name__: f for f in self.__functions}
         self.constants = {"ALL_BLOCKS": Tiles.all_tiles, "ALL_CREATURES": set(Creatures.CREATURES_D.values())}
         if init_vars:
@@ -25,11 +25,13 @@ class ProgramEnvironment:
         self.result = ""
 
     def run_code(self, code):
+        print("run_code", code)
         self.result = ""
         try:
             exec(code, self.environment)
             return self.result
         except Exception as exc:
+            print("Run exc", exc)
             return str(exc)
 
     def debug(self, st):
@@ -48,7 +50,8 @@ class ProgramEnvironment:
         block_id = self.game_map.get_static_tile(x, y)
         return block_id
 
-    def set_block(self, x, y, block_id):
+    def set_block(self, x, y, block_id: int):
+        print("set_block", x, y, block_id)
         if block_id in Tiles.all_tiles:
             self.game_map.set_static_tile(x, y, block_id, create_chunk=True)
         else:

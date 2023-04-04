@@ -21,7 +21,7 @@ def checking_abyss(pos, game_map, height_of_abyss=3, convert_to_tile_pos=False):
 
 
 class Creature(PhysicalObject):
-    not_save_vars = PhysicalObject.not_save_vars | {"lives_surface", }
+    not_save_vars = PhysicalObject.not_save_vars | {"lives_surface", "angry_player"}
     bio_kingdom = KINGDOM_CREATURAE
     bio_species = "creature"
     bio_subspecies = "ordinary creature"
@@ -324,6 +324,7 @@ class Snake(Wolf):
 
 
 class SlimeBigBoss(Slime):
+    not_save_vars = Slime.not_save_vars | {"angry", "angry_player"}
     bio_subspecies = "huge slime"
     colors = ["#ff9d00"]
     max_lives = 250

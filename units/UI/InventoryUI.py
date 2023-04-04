@@ -60,7 +60,7 @@ class InventoryUI(SurfaceUI):
                              (x, y, self.cell_size, self.cell_size), 1)
             cell = self.inventory[i]
             if cell is not None:
-                img = cell.full_sprite
+                img = cell.inv_sprite
                 iw, ih = img.get_size()
                 self.table_inventory.blit(img, (x + cell_size_2 - iw // 2, y + cell_size_2 - ih // 2))
                 res = str(cell.count)
@@ -235,7 +235,7 @@ class InventoryPlayerUI(InventoryUI):
                              (x, y, self.cell_size, self.cell_size), 1)
             cell = self.inventory[i]
             if cell is not None:
-                img = cell.full_sprite
+                img = cell.inv_sprite
                 iw, ih = img.get_size()
                 self.table_inventory.blit(img, (x + cell_size_2 - iw // 2, y + cell_size_2 - ih // 2))
                 res = str(cell.count)
@@ -263,7 +263,7 @@ class InventoryPlayerUI(InventoryUI):
                              (x, 0, self.cell_size, self.cell_size), 1)
             cell = self.inventory[i]
             if cell is not None:
-                img = cell.full_sprite
+                img = cell.inv_sprite
                 iw, ih = img.get_size()
                 self.work_inventory.blit(img, (x + cell_size_2 - iw // 2, cell_size_2 - ih // 2))
                 res = str(cell.count)

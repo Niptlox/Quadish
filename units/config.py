@@ -58,6 +58,7 @@ class GameSettings(__Settings):
     vertical_tunel = config.getboolean(section, 'vertical_tunel')
     start_pos = tuple(map(int, config.get(section, 'start_pos').split(",")))
     view_item_index = config.getboolean(section, 'view_item_index')
+    debug_open_map = config.getboolean(section, 'debug_open_map')
     all_languages = config.get(section, 'all_languages').replace(" ", "").split(",")
     language = config.get(section, 'language')
     if language not in all_languages:

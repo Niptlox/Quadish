@@ -1,4 +1,5 @@
 import glob
+from typing import Union
 
 from noise import snoise2 as noise2
 
@@ -15,6 +16,7 @@ from units.sound import sound_gate
 
 
 class GameMap(SavedObject):
+    not_save_vars = SavedObject.not_save_vars | {"gate"}
     save_slots = 16
 
     def __init__(self, game, generate_type, base_generation=None) -> None:
@@ -146,11 +148,13 @@ class GameMap(SavedObject):
         i = self.convert_pos_to_i(x, y)
         return chunk[0][i]
 
-    def set_static_tile(self, x, y, tile, create_chunk=True):
+    def set_static_tile(self, x, y, tile: Union[int, list], create_chunk=True):
         chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE), create_chunk=create_chunk)
         if chunk is not None:
             if tile is None:
                 tile = [0, 0, 0, 0]
+            if type(tile) is int:
+                tile = self.get_tile_ttile(tile)
             if tile[0] in CLASS_TILE:  # chest
                 obj = tiles_class[tile[0]](self.game, (x, y))
                 self.add_tile_obj_to_chunk(chunk, obj)

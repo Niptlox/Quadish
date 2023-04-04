@@ -14,7 +14,7 @@ class CommandBlock(Tile):
         super(CommandBlock, self).__init__(game, tile_pos)
         self.animation = Animation(commandblock_imgs, looped=True, ms_per_frame=50, start=True)
         self.program_environment = ProgramEnvironment(self.game, init_vars={})
-        self.code = ""
+        self.code = "set_block(0, 0, 1)\nprint(1)"
 
     def update(self, elapsed_time):
         self.animation.update(elapsed_time)
@@ -22,7 +22,7 @@ class CommandBlock(Tile):
 
     def run_code(self):
         res = self.program_environment.run_code(self.code)
-        print("run_code", res)
+        print("run_code_", res)
         return res
 
     def set_code(self, code):

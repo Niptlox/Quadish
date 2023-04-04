@@ -24,7 +24,7 @@ class ItemTool(Items):
         tool = self._Tool(None)
         self.class_item += tool.tool_cls
         super().__init__(game, tool.index, pos, 1)
-        self.sprite = tool.sprite
+        self.__set_sprite(tool.sprite)
         self.tool = tool
 
     def __copy__(self):
@@ -37,7 +37,7 @@ class ItemTool(Items):
     def set_vars(self, vrs):
         print(vrs)
         self.tool = vrs.get("_Tool")(None)
-        self.sprite = self.tool.sprite
+        self.__set_sprite(self.tool.sprite)
         super().set_vars(vrs)
 
     def get_vars(self):
@@ -45,6 +45,9 @@ class ItemTool(Items):
         d.pop("tool")
         # d["_tool"] = d.pop("tool")
         return d
+
+    def __set_sprite(self, sprite):
+        self.sprite = self.inv_sprite = sprite
 
 
 #

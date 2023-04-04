@@ -16,7 +16,6 @@ class Items(PhysicalObject):
     def __init__(self, game, index=None, pos=(0, 0), count: int or tuple = 1):
         super().__init__(game, pos[0], pos[1], self.width, self.height, use_physics=True)
         self.index = index
-
         if index in Eats:
             self.class_item = CLS_EAT
             self.recovery_lives = Eats[index]
@@ -25,6 +24,7 @@ class Items(PhysicalObject):
         if count <= 0:
             self.kill()
         self.count = count
+        self.inv_sprite = self.sprite
 
     def __copy__(self):
         obj = self.__class__(self.game, self.index, self.rect.topleft, self.count)
@@ -63,7 +63,7 @@ class ItemsTile(Items):
     def __init__(self, game, index=None, pos=(0, 0), count=1):
         super().__init__(game, index, pos, count)
         self.sprite = tile_hand_imgs.get(index, self.sprite)
-        self.full_sprite = tile_imgs.get(index, self.sprite)
+        self.inv_sprite = tile_imgs.get(index, self.sprite)
         self.rect.size = self.sprite.get_size()
 
     def set_vars(self, vrs):

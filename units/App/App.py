@@ -93,6 +93,8 @@ class SceneMenu(Scene):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = EXIT
+            # if event.type == pygame.KEYDOWN:
+            #     print("s", event.key, "'"+event.unicode+"'", event.scancode, chr(event.scancode))
             self.ui.pg_event(event)
             self.pg_event(event)
 

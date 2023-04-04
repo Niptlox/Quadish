@@ -28,7 +28,10 @@ class GameApp(App):
         self.end_scene = EndSceneUI(self)
         self.achievements_scene = AchievementsSceneUI(self)
         self.help_scene = HelpSceneUI(self)
-        super().__init__(self.title_scene)
+        if GameSettings.debug_open_map:
+            super().__init__(self.game_scene)
+        else:
+            super().__init__(self.title_scene)
 
     @classmethod
     def open_help(cls):
@@ -53,11 +56,12 @@ class GameScene(Scene):
         self.ui.init_ui()
         self.tact = 0
         self.total_time = 0
-        self.ctrl_on = False
         self.first_start = False
         self.hided_ui = False
         self.background_sound = get_random_sound_of(sounds_background).play(loops=-1, )
         print(self, self.player.inventory, file=f)
+        if GameSettings.debug_open_map:
+            self.game_map.open_game_map(self, 0)
         # print(list(self.blocks_ui_manager.blocks_ui.values())[0])
 
     def reinit_player(self):
@@ -68,6 +72,8 @@ class GameScene(Scene):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = EXIT
+            if self.blocks_ui_manager.pg_event(event):
+                continue
             if self.ui.pg_event(event):
                 continue
             if event.type == KEYDOWN:
@@ -76,8 +82,6 @@ class GameScene(Scene):
                     self.set_scene(self.app.pause_scene)
                 elif event.key == K_ESCAPE:
                     self.set_scene(self.app.pause_scene)
-                elif event.key == K_LCTRL:
-                    self.ctrl_on = True
                 elif event.key == K_c and pg.key.get_mods() & KMOD_ALT:
                     make_screenshot(self.screen)
                     self.ui.new_sys_message("Скриншот сохранён")
@@ -89,9 +93,7 @@ class GameScene(Scene):
                     # OPEN OR CLOSE  full INVENTORY
                     if self.player.inventory.ui.opened:
                         self.player.inventory.ui.close()
-                    elif self.blocks_ui_manager.opened:
-                        self.blocks_ui_manager.close()
-                    else:
+                    elif not self.blocks_ui_manager.opened:
                         self.player.inventory.ui.open()
                     return True
 
@@ -112,17 +114,14 @@ class GameScene(Scene):
                         print(out)
                         self.ui.new_sys_message(f"Структура: {(choice_pos1, out[0])}")
                         choice_pos1 = choice_pos2 = None
-                if event.key == K_s and self.ctrl_on:
+                if event.key == K_s and event.mod & pg.KMOD_CTRL:
                     self.game_map.save_current_game_map()
 
-            elif event.type == KEYUP:
-                if event.key == K_LCTRL:
-                    self.ctrl_on = False
             elif event.type == EVENT_100_MSEC:
                 if show_info_menu:
                     self.ui.redraw_info()
-            if not self.blocks_ui_manager.pg_event(event):
-                self.player.pg_event(event)
+
+            self.player.pg_event(event)
         if self.first_start:
             self.set_scene(self.app.pause_scene)
             self.first_start = False

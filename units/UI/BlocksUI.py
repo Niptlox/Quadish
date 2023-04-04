@@ -35,6 +35,15 @@ class BlockUI(SurfaceUI):
         if self.block_obj:
             self.block_obj.update(elapsed_time)
 
+    def pg_event(self, event: pg.event.Event):
+        if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
+            self.close()
+            return True
+
+    def check_mouse_event(self, event):
+        if event.type == pg.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos):
+            return True
+
 
 class BlocksUIManger:
     def __init__(self, player):
@@ -74,23 +83,28 @@ class BlocksUIManger:
 
 class CommandBlockUI(BlockUI):
     background = bg_color
-    font = pg.font.SysFont("", 18)
+    font = pg.font.Font(CWDIR + "data/fonts/bedstead.otf", 14)
     index = 200
 
     def __init__(self, player):
-        rect = pg.Rect(0, 0, cell_size * 6, cell_size * 4)
+        rect = pg.Rect(0, 0, WSIZE[0] // 2, WSIZE[1] // 2)
         rect.center = WSIZE[0] // 2, WSIZE[1] // 2
         super(CommandBlockUI, self).__init__(rect)
         self.convert_alpha()
-        y = rect.h // 2
-        self.code_text = MultilineEditText(pg.Rect(10, 10, rect.w - 20, y), "set_block(0, 0, 10)\n", self.font, "white",
+        y = rect.h - 70
+        self.code_text = MultilineEditText(pg.Rect(10, 10, rect.w - 20, y), "", self.font, "white",
                                            ui_owner=self, on_finish_typing=self.set_code)
-        self.button_run = TextButton(lambda _: self.run_code(), pg.Rect(10, y + 10, 200, 30), "Запустить",
+        self.button_run = TextButton(lambda _: self.run_code(), pg.Rect(10, y + 20, 200, 30), "Запустить",
                                      screenXY=Vector2(self.get_onscreen_pos().topleft) + Vector2(10, y + 10))
         self.components_ui = GroupUI([self.code_text, self.button_run])
 
+    def set_block(self, obj):
+        super().set_block(obj)
+        self.code_text.set_text(obj.code)
+
     def run_code(self):
         # if self.block_obj:
+        self.block_obj.set_code(self.code_text.get_text())
         self.block_obj.run_code()
 
     def set_code(self, text):
@@ -103,20 +117,30 @@ class CommandBlockUI(BlockUI):
         surface.blit(self, self.rect)
 
     def pg_event(self, event: pg.event.Event):
-        return self.components_ui.pg_event(event)
+        if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
+            self.close()
+            return True
+        return self.components_ui.pg_event(event) or self.check_mouse_event(event)
 
 
-class ChestUI(InventoryUI, BlockUI):
+class ChestUI(BlockUI):
     def __init__(self):
-        super(ChestUI, self).__init__(None, Chest_size_table)
+        self.inventory_ui = InventoryUI(None, Chest_size_table)
+        super(ChestUI, self).__init__(self.inventory_ui.rect)
 
     def set_chest_inventory(self, chest_inventory):
-        self.inventory = chest_inventory
-        self.redraw_table_inventory()
+        self.inventory_ui.inventory = chest_inventory
+        self.inventory_ui.redraw_table_inventory()
 
     def set_block(self, block_obj):
         super().set_block(block_obj)
         self.set_chest_inventory(block_obj.inventory)
+
+    def pg_event(self, event: pg.event.Event):
+        return super().pg_event(event) or self.inventory_ui.pg_event(event) or self.check_mouse_event(event)
+
+    def draw(self, surface):
+        return self.inventory_ui.draw(surface)
 
 
 class FurnaceUI(BlockUI):
@@ -156,16 +180,18 @@ class FurnaceUI(BlockUI):
         self.result_inventory_ui.inventory = block_obj.result_cell
 
     def pg_event(self, event: pg.event.Event):
+        if super().pg_event(event):
+            return True
         res = False
         for inv in self.inventories:
             res = inv.pg_event(event) or res
-        return res
+        return res or self.check_mouse_event(event)
 
 
 # Player inventory with Blocks
 
 
-class InventoryPlayerWithBlockUI(SurfaceUI):
+class InventoryPlayerWithBlockUI(BlockUI):
     def __init__(self, player, block_ui: BlockUI):
         super(InventoryPlayerWithBlockUI, self).__init__(((0, 0), WSIZE))
         self.player_inventory_ui = InventoryPlayerUI(player.inventory)
@@ -200,6 +226,7 @@ class InventoryPlayerWithBlockUI(SurfaceUI):
         self.opened = self.player_inventory_ui.opened
 
     def pg_event(self, event: pg.event.Event):
+        super().pg_event(event)
         res = self.player_inventory_ui.pg_event(event)
         res = self.block_ui.pg_event(event) or res
         return res

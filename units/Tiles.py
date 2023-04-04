@@ -127,6 +127,7 @@ bedroll_of_pelts_item_img = load_img("data/sprites/tiles/bedroll_of_pelts_item.p
 group_img = load_img("data/sprites/tiles/group.png")
 build_img = load_img("data/sprites/tiles/build.png")
 structure_pass_img = load_img("data/sprites/tiles/structure_pass.png")
+activator_img = load_img("data/sprites/tiles/activator.png")
 commandblock_img = load_img("data/sprites/tiles/commandblock.png")
 commandblock_imgs = load_imgs("data/sprites/tiles/commandblock/commandblock_{}.png", 14)
 
@@ -226,6 +227,7 @@ tile_imgs = {None: none_img,
              152: build_img,
              181: cloud_img,
              200: commandblock_img,
+             210: activator_img,
              251: watermelon_img,
              # 203: tnt_1_img,
              301: poison_item_img,
@@ -410,6 +412,7 @@ original_tile_words = {None: "None",
                        151: "Группа обектов",
                        181: "Облако",
                        200: "Командный блок",
+                       210: "Активационный блок",
                        251: "Арбуз",
                        301: "Ядовитая железа",
                        351: "Зелье нового прыжка",
@@ -469,7 +472,7 @@ TILES_SOLIDITY = {
     251: 45,
 }
 
-DYNAMITE_NOT_BREAK = {5, 120}  # granite water
+DYNAMITE_NOT_BREAK = {5, 120, 200, 210}  # granite water
 
 # INIT PICKAXE ==================================================
 # 61: "Блоровая руда",
