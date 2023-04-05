@@ -1,7 +1,7 @@
 from pygame import Vector2
 
 from units.UI.Button import TextButton
-from units.UI.ClassUI import SurfaceUI, MultilineText, MultilineEditText, GroupUI
+from units.UI.ClassUI import SurfaceUI, MultilineText, MultilineEditText, GroupUI, Text
 from units.UI.ColorsUI import *
 from units.UI.InventoryUI import InventoryUI, cell_size, InventoryPlayerUI
 from units.UI.ItemInMouse import *
@@ -84,19 +84,22 @@ class BlocksUIManger:
 class CommandBlockUI(BlockUI):
     background = bg_color
     font = pg.font.Font(CWDIR + "data/fonts/bedstead.otf", 14)
+    b_font = pg.font.Font(CWDIR + "data/fonts/bedstead.otf", 20)
     index = 200
 
     def __init__(self, player):
-        rect = pg.Rect(0, 0, WSIZE[0] // 2, WSIZE[1] // 2)
+        rect = pg.Rect(0, 0, WSIZE[0] // 2, WSIZE[1] // 2 + 10)
         rect.center = WSIZE[0] // 2, WSIZE[1] // 2
         super(CommandBlockUI, self).__init__(rect)
         self.convert_alpha()
-        y = rect.h - 70
+        y = rect.h - 80
         self.code_text = MultilineEditText(pg.Rect(10, 10, rect.w - 20, y), "", self.font, "white",
                                            ui_owner=self, on_finish_typing=self.set_code)
-        self.button_run = TextButton(lambda _: self.run_code(), pg.Rect(10, y + 20, 200, 30), "Запустить",
-                                     screenXY=Vector2(self.get_onscreen_pos().topleft) + Vector2(10, y + 10))
-        self.components_ui = GroupUI([self.code_text, self.button_run])
+        self.result_text = Text(pg.Rect(10, y + 15, rect.w - 20, 23), "", self.font, "white",)
+        self.button_run = TextButton(lambda _: self.run_code(), pg.Rect(10, y + 45, 200, 26), "Запустить",
+                                     font=self.b_font,
+                                     screenXY=Vector2(self.get_onscreen_pos().topleft) + Vector2(10, y + 45))
+        self.components_ui = GroupUI([self.code_text, self.button_run, self.result_text])
 
     def set_block(self, obj):
         super().set_block(obj)
@@ -105,7 +108,8 @@ class CommandBlockUI(BlockUI):
     def run_code(self):
         # if self.block_obj:
         self.block_obj.set_code(self.code_text.get_text())
-        self.block_obj.run_code()
+        result = self.block_obj.run_code()
+        self.result_text.set_text(str(result))
 
     def set_code(self, text):
         if self.block_obj:

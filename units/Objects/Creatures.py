@@ -166,8 +166,8 @@ class Slime(MovingCreature):
         self.is_boss = False
         if random.randint(0, 100) < 2:
             self.init_boss()
+            self.lives = self.max_lives_hard
 
-        self.lives = self.max_lives_hard
         self.sprites = slime_animation(self.color, self.rect.size, self.reduction_step)
         self.sprite = self.sprites[0]
 
