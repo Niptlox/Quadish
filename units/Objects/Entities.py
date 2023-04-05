@@ -24,6 +24,13 @@ def create_circle_pattern(radius):
     return ar
 
 
+def activate_dynamite(game_map, x, y, ttile):
+    if ttile == 9:
+        obj = Dynamite(game_map.game, x * TSIZE, y * TSIZE)
+        game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), obj)
+        game_map.set_static_tile(x, y, None)
+
+
 class Dynamite(PhysicalObject):
     class_obj = OBJ_TILE
     boom_radius = 5

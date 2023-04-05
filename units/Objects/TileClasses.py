@@ -1,9 +1,10 @@
 from units.CommandBlock.CommandBlock import CommandBlock
 from units.Graphics.Animation import Animation
 from units.Inventory import Inventory
+from units.Objects import Entities
 from units.Objects.Items import Items, ItemsTile
 from units.Objects.TileClass import Tile
-from units.Tiles import WOOD_TILES, furnace_imgs
+from units.Tiles import WOOD_TILES, furnace_imgs, ACTIVATE_TILES
 from units.common import *
 
 
@@ -28,6 +29,41 @@ class Chest(Tile):
 
     def items_of_break(self):
         return self.inventory.items_of_break()
+
+cccc = 0
+class Activator(Tile):
+    index = 210
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.activating = False
+
+    def activate_nearby_tiles(self):
+        global cccc
+        print("activate_nearby_tiles", cccc)
+        cccc += 1
+        self.activating = True
+        for i in range(-1, 2):
+            for j in range(-1, 2):
+                if i == 0 and j == 0:
+                    continue
+                x, y = self.tx + i, self.ty + j
+                tile, tile_obj = self.game_map.get_tile_and_obj(x, y)
+                if tile[0] in ACTIVATE_TILES:
+                    if tile_obj:
+                        tile_obj.activate()
+                    elif tile[0] == 9:
+                        Entities.activate_dynamite(self.game_map, x, y, tile[0])
+
+    def activate(self):
+        if not self.activating:
+            self.activate_nearby_tiles()
+
+    def update(self, elapsed_time):
+        self.activating = False
+
+    def right_click(self, mouse_local_pos):
+        self.activate_nearby_tiles()
 
 
 furnace_burn_tiles = {
@@ -108,5 +144,5 @@ class Furnace(Tile):
         return sum([inv.items_of_break() for inv in inventories], [])
 
 
-classes = {Chest, Furnace, CommandBlock}
+classes = {Chest, Furnace, CommandBlock, Activator}
 tiles_class = {cls.index: cls for cls in classes}

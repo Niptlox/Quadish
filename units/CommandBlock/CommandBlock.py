@@ -25,6 +25,9 @@ class CommandBlock(Tile):
         print("run_code_", res)
         return res
 
+    def activate(self):
+        self.run_code()
+
     def set_code(self, code):
         self.code = code
 

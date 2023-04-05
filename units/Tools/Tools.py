@@ -61,9 +61,7 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
     if ttile == 0:
         return False
     elif ttile == 9:
-        obj = Entities.Dynamite(game_map.game, x * TSIZE, y * TSIZE)
-        game_map.add_dinamic_obj(*game_map.to_chunk_xy(x, y), obj)
-        game_map.set_static_tile(x, y, None)
+        Entities.activate_dynamite(game_map, x, y, ttile)
     elif ttile == 126:
         tile = game_map.get_static_tile(x, y)
         if not tile[3]:

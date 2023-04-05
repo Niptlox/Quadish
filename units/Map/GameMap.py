@@ -134,6 +134,15 @@ class GameMap(SavedObject):
             return
         return chunk[4][(y % CHUNK_SIZE) * CHUNK_SIZE + (x % CHUNK_SIZE)]
 
+    def get_tile_and_obj(self, x, y, create_chunk=True):
+        tile = self.get_static_tile(x, y, create_chunk=create_chunk)
+        if tile:
+            if tile[3]:
+                return tile, self.get_tile_obj(*self.to_chunk_xy(x, y), tile[3])
+            else:
+                return tile, None
+        return None
+
     def get_static_tile(self, x, y, default=None, create_chunk=False):
         chunk = self.chunk(self.to_chunk_xy(x, y), create_chunk=create_chunk)
         if chunk is None:
@@ -696,6 +705,9 @@ def random_creature_selection():
     crt = random.choices([Slime, Cow, Snake, Wolf, SlimeBigBoss], [20, 5, 1, 0.7, 0.25], k=1)
     # print("random_creature_selection", crt)
     return crt[0]
+
+
+
 
 # from collections import Counter
 # Counter(random.choices(['Slime', 'Cow', 'Wolf', 'SlimeBigBoss'], [20, 5, 0.7, 0.25])[0]
