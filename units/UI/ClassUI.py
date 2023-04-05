@@ -360,9 +360,9 @@ class MultilineEditText(MultilineText):
                 elif event.key == pg.K_DELETE:
                     if self.cursor_pos[0] != len(line):
                         self.lines[self.cursor_pos[1]] = line[:self.cursor_pos[0]] + line[self.cursor_pos[0] + 1:]
-                    if self.cursor_pos[1] != len(self.lines) - 1:
-                        del_line = self.lines.pop(self.cursor_pos[1] + 1)
-                        self.lines[self.cursor_pos[1]] += del_line
+                    # if self.cursor_pos[1] != len(self.lines) - 1:
+                    #     del_line = self.lines.pop(self.cursor_pos[1] + 1)
+                    #     self.lines[self.cursor_pos[1]] += del_line
 
                 elif event.unicode and event.unicode in string.printable:
                     symbol = event.unicode.replace("\t", " " * TAB_LEN)
