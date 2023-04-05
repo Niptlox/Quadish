@@ -76,7 +76,6 @@ class GameMap(SavedObject):
             game_map[pos][2] = {key: (type(obj), obj.get_vars()) for key, obj in chunk[2].items()}
         d["game_map"] = game_map
         d.pop("game")
-        d.pop("particles")
         return d
 
     def chunk(self, xy, default=None, for_player=False, create_chunk=False):

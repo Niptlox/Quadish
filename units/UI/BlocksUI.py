@@ -123,10 +123,22 @@ class CommandBlockUI(BlockUI):
         return self.components_ui.pg_event(event) or self.check_mouse_event(event)
 
 
-class ChestUI(BlockUI):
+class ChestUI(InventoryUI, BlockUI):
     def __init__(self):
-        self.inventory_ui = InventoryUI(None, Chest_size_table)
-        super(ChestUI, self).__init__(self.inventory_ui.rect)
+        super(ChestUI, self).__init__(None, Chest_size_table)
+
+    def set_chest_inventory(self, chest_inventory):
+        self.inventory = chest_inventory
+        self.redraw_table_inventory()
+
+    def set_block(self, block_obj):
+        self.set_chest_inventory(block_obj.inventory)
+
+
+class _ChestUI(BlockUI):
+    def __init__(self):
+        self.inventory_ui = InventoryUI(None, Chest_size_table, ui_owner=self)
+        super(_ChestUI, self).__init__(self.inventory_ui.rect)
 
     def set_chest_inventory(self, chest_inventory):
         self.inventory_ui.inventory = chest_inventory
@@ -141,6 +153,9 @@ class ChestUI(BlockUI):
 
     def draw(self, surface):
         return self.inventory_ui.draw(surface)
+
+    def set_work_rect(self, value):
+        self.inventory_ui.set_work_rect(value)
 
 
 class FurnaceUI(BlockUI):
