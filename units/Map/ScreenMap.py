@@ -205,7 +205,7 @@ class ScreenMap:
                                     else:
                                         img = tile_imgs[tile_type]
                                     if tile_type == 1:
-                                        biome = chunk[4][biome_index]
+                                        biome = chunk[4][i][0]
                                         if biome not in ground_imgs:
                                             biome = None
                                         img = ground_imgs[biome][0]
