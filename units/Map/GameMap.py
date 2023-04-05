@@ -16,7 +16,7 @@ from units.sound import sound_gate
 
 
 class GameMap(SavedObject):
-    not_save_vars = SavedObject.not_save_vars | {"gate"}
+    not_save_vars = SavedObject.not_save_vars | {"gate", "particles"}
     save_slots = 16
 
     def __init__(self, game, generate_type, base_generation=None) -> None:

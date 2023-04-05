@@ -8,7 +8,7 @@ from units.creating_items import RECIPES
 
 
 class Inventory(SavedObject):
-    not_save_vars = SavedObject.not_save_vars | {"owner", "game_map", "items_update_event"}
+    not_save_vars = SavedObject.not_save_vars | {"owner", "game_map", "items_update_event", "inventory"}
     # cell_size = 1000
 
     def __init__(self, game_map, owner, size_table=(10, 5), items_update_event=None):

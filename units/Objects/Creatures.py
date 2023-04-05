@@ -162,27 +162,37 @@ class Slime(MovingCreature):
         self.i_sprite = 0
         self.jump_state = -1
         self.color = random.choice(self.colors)
-        if random.randint(0, 100) < 2:
-            # SLIME BOSS
-            self.color = self.color_hard
-            self.max_lives = self.max_lives_hard
-            self.lives = self.max_lives_hard
-            self.punch_damage = self.punch_damage_hard
-            self.width, self.height = TSIZE * 2, TSIZE * 2 - 8
-            self.jump_speed = 10
-            self.reduction_step = 6
-            self.move_speed = 4
-            self.drop_items = [(ItemsTile, (51, (10, 15))), (ItemsTile, (63, (0, 2))), (ItemsTile, (66, (0, 1)))]
-            super().__init__(game, (x, y))
 
+        self.is_boss = False
+        if random.randint(0, 100) < 2:
+            self.init_boss()
+
+        self.lives = self.max_lives_hard
         self.sprites = slime_animation(self.color, self.rect.size, self.reduction_step)
         self.sprite = self.sprites[0]
 
+    def init_boss(self):
+        # SLIME BOSS
+        self.is_boss = True
+        self.color = self.color_hard
+        self.max_lives = self.max_lives_hard
+        self.punch_damage = self.punch_damage_hard
+        self.width, self.height = TSIZE * 2, TSIZE * 2 - 8
+        self.jump_speed = 10
+        self.reduction_step = 6
+        self.move_speed = 4
+        self.drop_items = [(ItemsTile, (51, (10, 15))), (ItemsTile, (63, (0, 2))), (ItemsTile, (66, (0, 1)))]
+        super().__init__(self.game, self.rect.topleft)
+
     def set_vars(self, vrs):
         super(Slime, self).set_vars(vrs)
-        self.sprites = slime_animation(self.color, (self.width, self.height), self.reduction_step)
+        if self.rect.width > self.width:
+            self.is_boss = True
+        if self.is_boss:
+            self.init_boss()
+        self.sprites = slime_animation(self.color, self.rect.size, self.reduction_step)
         self.sprite = self.sprites[self.i_sprite]
-        self.lives_surface = pg.Surface((self.width, 6)).convert_alpha()
+        self.lives_surface = pg.Surface((self.rect.width, 6)).convert_alpha()
 
     def update(self, tact, elapsed_time):
         super().update(tact, elapsed_time)

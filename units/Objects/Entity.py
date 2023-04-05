@@ -50,7 +50,7 @@ def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic
 
 
 class PhysicalObject(SavedObject):
-    not_save_vars = SavedObject.not_save_vars | {"game_map", "game", "sprite", "full_sprite"}
+    not_save_vars = SavedObject.not_save_vars | {"game_map", "game", "sprite", "full_sprite", "inv_sprite"}
     class_obj = OBJ_NONE
     sprite = None
     max_lives = -1

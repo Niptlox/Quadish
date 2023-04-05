@@ -22,7 +22,7 @@ from units.common import *
 class Player(PhysicalObject):
     not_save_vars = PhysicalObject.not_save_vars | {"game_map", "game", "ui", "hand_img", "lives_surface", "toolHand",
                                                     "toolCreativeHand", "tool", "chest_ui", "furnace_ui",
-                                                    "inventory_ui", "inventory", "achievements", "dig_rect", "dig_rect_img",
+                                                    "inventory_ui", "achievements", "dig_rect", "dig_rect_img",
                                                     "dig_pos", "dig_dist", "set_dist", "set", "dig", "sitting", "moving_left",
                                                     "moving_right", "on_wall", "tact", "eat", "jump_speed", "max_speed",
                                                     "accelerate_x", "fall_speed", "max_fall_speed", "fly_speed"}
