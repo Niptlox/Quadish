@@ -9,7 +9,7 @@ textfont = pygame.font.Font(MAIN_FONT_PATH, 12, )  # yes rus
 textfont_sys_msg = pygame.font.Font(MAIN_FONT_PATH, 21, )  # yes rus
 # textfont = pygame.font.Font('data/fonts/Teletactile.ttf', 10, bold=True)
 textfont_info = pygame.font.Font('data/fonts/Teletactile.ttf', 10, )  # no rus
-textfont_btn = pygame.font.SysFont("Fenix", 35, )
+# textfont_btn = pygame.font.SysFont("Fenix", 35, )
 
 textfont_btn = pygame.font.Font(MAIN_FONT_PATH, 28, )  # rus
 

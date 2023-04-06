@@ -393,7 +393,8 @@ class Player(PhysicalObject):
         #         self.inventory.ui.open()
         if collisions['bottom']:
             if not self.first_fall and self.vertical_momentum > 0.75:
-                self.damage(int(self.vertical_momentum // 5))
+                print(self.vertical_momentum)
+                self.damage(int(self.vertical_momentum * 2) ** 2)
             self.air_timer = 0
             self.jump_count = 0
             self.vertical_momentum = 0
