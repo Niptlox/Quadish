@@ -13,3 +13,5 @@ plan.txt
 screenshot.png
 *.lnk
 *.exe
+sdlaudio.raw
+*.raw
