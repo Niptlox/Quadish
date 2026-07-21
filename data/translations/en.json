@@ -130,5 +130,8 @@
   "Обучение: у стола скрафть котёл (доска и железо) и поставь его": "Tutorial: at the table craft a cauldron (plank and iron) and place it",
   "Построй котёл": "Build a cauldron",
   "Обучение: встань у котла и свари зелье — рецепты в инвентаре [E]": "Tutorial: stand by the cauldron and brew a potion — recipes in the inventory [E]",
-  "Свари зелье у котла": "Brew a potion at the cauldron"
+  "Свари зелье у котла": "Brew a potion at the cauldron",
+  "Пройти обучение": "Play tutorial",
+  "Пока нет миров — начните с обучения": "No worlds yet — start with the tutorial",
+  "Esc — назад   •   колесо — прокрутка": "Esc — back   •   wheel — scroll"
 }

@@ -476,29 +476,52 @@ class SoundSettingsUI(MainSettingsUI):
 
 
 class WorldListUI(UI):
-    """Экран «Мои миры»: карточка на мир (имя, дата, наигранное время),
-    клик — играть, крестик — удалить (с подтверждением)."""
-    bg = (82, 82, 91, 240)
-    row_h = 40
-    row_step = 62  # высота карточки с подписью
-    font_sub = pygame.font.Font(MAIN_FONT_PATH, 16)
+    """Экран «Мои миры»: карточки миров (имя, дата, время в игре),
+    клик — играть, крестик — удалить с подтверждением. Сверху — «Назад»,
+    всегда доступны «Пройти обучение» и «Новый мир»."""
+    panel_bg = (39, 39, 42)
+    header_bg = (24, 24, 27)
+    card_bg = (63, 63, 70)
+    card_bg_hint = (82, 82, 91)
+    accent = "#FDE047"
+    text_color = "#FFFFFF"
+    sub_color = "#A1A1AA"
+    font_title = pygame.font.Font(MAIN_FONT_PATH, 26)
+    font_name = pygame.font.Font(MAIN_FONT_PATH, 22)
+    font_sub = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 15)
+    font_hint = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 14)
+    font_empty = pygame.font.Font(MAIN_FONT_PATH, 20)
+    header_h = 50
+    footer_h = 28
+    card_h = 56
+    card_gap = 10
 
     def __init__(self, scene) -> None:
         super().__init__(scene)
-        w, h = 460, 520
+        w = min(560, WSIZE[0] - 40)
+        h = min(600, WSIZE[1] - 40)
         self.rect = pg.Rect(0, 0, w, h)
         self.rect.center = WSIZE[0] // 2, WSIZE[1] // 2
-        self.surface = pg.Surface(self.rect.size).convert_alpha()
 
-        self.title_surf = pg.Surface((w, 40)).convert_alpha()
-        self.title_surf.fill((82, 82, 91))
-        self.title_surf.blit(textfont_btn.render(get_translated_text("Мои миры"), True, WHITE), (10, 5))
+        # фиксированные кнопки (координаты в экранной системе — рисуем на screen)
+        bx = self.rect.x
+        by = self.rect.y
+        self.btn_back = TextButton(lambda _: self.scene.back(),
+                                   (bx + self.rect.w - 110, by + 9, 92, 32), "Назад",
+                                   font=self.font_sub)
+        act_y = self.header_h + 10
+        half = (self.rect.w - 40 - 12) // 2
+        self.btn_tutorial = TextButton(lambda _: self.scene.create_tutorial_world(),
+                                       (bx + 20, by + act_y, half, 36), "Пройти обучение",
+                                       font=self.font_sub)
+        self.btn_new = TextButton(lambda _: self.scene.new_world(),
+                                  (bx + 20 + half + 12, by + act_y, half, 36), "+ Новый мир",
+                                  font=self.font_sub)
 
-        self.list_top = 55
+        self.list_top = act_y + 36 + 12
         self.scroll_y = 0
         self.worlds = []
-        self.btns = []
-        self.subtitles = []
+        self.card_btns = []      # (name_btn, del_btn, meta, base_y)
         self.confirm_delete_id = None
         self.reload_worlds()
 
@@ -510,33 +533,22 @@ class WorldListUI(UI):
         self._build()
 
     def _build(self):
-        from units.Map import WorldStorage
-        self.btns = []
-        self.subtitles = []  # (y, отрендеренный текст)
+        self.card_btns = []
         x = 20
-        y = self.list_top + self.scroll_y
         w = self.rect.w - 40
-        # кнопка нового мира
-        self.btns.append(TextButton(lambda _: self.scene.new_world(),
-                                    (x, y, w, self.row_h - 5), "+ Новый мир",
-                                    screenXY=(self.rect.x + x, self.rect.y + y)))
-        y += self.row_h + 10
-        for meta in self.worlds:
+        bx, by = self.rect.x, self.rect.y
+        for i, meta in enumerate(self.worlds):
             wid = meta["id"]
-            name = meta.get("name", wid)
-            self.btns.append(TextButton(lambda _, wid=wid: self.scene.play_world(wid),
-                                        (x, y, w - 45, self.row_h), name,
-                                        screenXY=(self.rect.x + x, self.rect.y + y)))
-            del_text = "Точно?" if self.confirm_delete_id == wid else "X"
-            self.btns.append(TextButton(lambda _, wid=wid: self.delete_world(wid),
-                                        (x + w - 40, y, 40, self.row_h), del_text,
-                                        screenXY=(self.rect.x + x + w - 40, self.rect.y + y)))
-            sub = f"{WorldStorage.format_last_played(meta.get('last_played'))}  •  " \
-                  f"{WorldStorage.format_playtime(meta.get('playtime'))}"
-            if meta.get("tutorial"):
-                sub = get_translated_text("обучение") + "  •  " + sub
-            self.subtitles.append((y + self.row_h + 2, self.font_sub.render(sub, True, "#D4D4D8")))
-            y += self.row_step
+            base_y = self.list_top + i * (self.card_h + self.card_gap)
+            sy = by + base_y + self.scroll_y  # экранный y
+            name_btn = TextButton(lambda _, wid=wid: self.scene.play_world(wid),
+                                  (bx + x, sy, w - 52, self.card_h - 22), meta.get("name", wid),
+                                  font=self.font_name)
+            del_text = "?" if self.confirm_delete_id == wid else "X"
+            del_btn = TextButton(lambda _, wid=wid: self.delete_world(wid),
+                                 (bx + x + w - 44, sy, 44, self.card_h - 12), del_text,
+                                 font=self.font_name)
+            self.card_btns.append((name_btn, del_btn, meta, base_y))
 
     def delete_world(self, wid):
         from units.Map import WorldStorage
@@ -544,14 +556,17 @@ class WorldListUI(UI):
             WorldStorage.delete_world(wid)
             self.reload_worlds()
         else:
-            # первый клик — просим подтвердить
-            self.confirm_delete_id = wid
+            self.confirm_delete_id = wid  # первый клик — просим подтвердить
             self._build()
 
+    @property
+    def _list_bottom(self):
+        return self.rect.h - self.footer_h - 6
+
     def scroll(self, dy):
-        # ограничение прокрутки: контент не выше первого и не ниже последнего
-        content_h = self.row_h + 10 + self.row_step * len(self.worlds)
-        min_scroll = min(0, self.rect.h - self.list_top - content_h - 15)
+        content_h = len(self.worlds) * (self.card_h + self.card_gap)
+        view_h = self._list_bottom - self.list_top
+        min_scroll = min(0, view_h - content_h)
         self.scroll_y = max(min_scroll, min(0, self.scroll_y + dy))
         self._build()
 
@@ -559,26 +574,56 @@ class WorldListUI(UI):
         if event.type == pg.MOUSEWHEEL:
             self.scroll(event.y * 40)
             return
-        if event.type == pg.MOUSEBUTTONDOWN:
-            if not self.rect.collidepoint(event.pos):
-                return
-        for btn in self.btns:
-            btn.pg_event(event)
+        self.btn_back.pg_event(event)
+        self.btn_tutorial.pg_event(event)
+        self.btn_new.pg_event(event)
+        for name_btn, del_btn, meta, base_y in self.card_btns:
+            # клики только по видимой области списка
+            if self.list_top <= base_y + self.scroll_y <= self._list_bottom - 10:
+                name_btn.pg_event(event)
+                del_btn.pg_event(event)
 
     def draw(self):
-        self.screen.fill((39, 39, 42))
-        self.surface.fill(self.bg)
+        self.screen.fill(self.header_bg)
+        # панель
+        pg.draw.rect(self.screen, self.panel_bg, self.rect, border_radius=14)
+        pg.draw.rect(self.screen, self.header_bg,
+                     (self.rect.x, self.rect.y, self.rect.w, self.header_h),
+                     border_top_left_radius=14, border_top_right_radius=14)
+        self.screen.blit(self.font_title.render(get_translated_text("Мои миры"), True, self.accent),
+                         (self.rect.x + 18, self.rect.y + 12))
+        self.btn_back.draw(self.screen)
+        self.btn_tutorial.draw(self.screen)
+        self.btn_new.draw(self.screen)
 
-        for btn in self.btns:
-            if self.list_top - self.row_h < btn.rect.y < self.rect.h:
-                btn.draw(self.surface)
-        for y, sub in self.subtitles:
-            if self.list_top < y < self.rect.h:
-                self.surface.blit(sub, (28, y))
-        self.surface.blit(self.title_surf, (0, 0))
+        if not self.worlds:
+            msg = self.font_empty.render(get_translated_text("Пока нет миров — начните с обучения"),
+                                         True, self.sub_color)
+            self.screen.blit(msg, (self.rect.centerx - msg.get_width() // 2,
+                                   self.rect.y + self.list_top + 30))
+        else:
+            top = self.rect.y + self.list_top
+            bottom = self.rect.y + self._list_bottom
+            for name_btn, del_btn, meta, base_y in self.card_btns:
+                cy = self.rect.y + base_y + self.scroll_y
+                if cy + self.card_h < top or cy > bottom:
+                    continue
+                # карточка-подложка
+                pg.draw.rect(self.screen, self.card_bg,
+                             (self.rect.x + 14, cy - 4, self.rect.w - 28, self.card_h), border_radius=8)
+                name_btn.draw(self.screen)
+                del_btn.draw(self.screen)
+                from units.Map import WorldStorage
+                sub = f"{WorldStorage.format_last_played(meta.get('last_played'))}  •  " \
+                      f"{WorldStorage.format_playtime(meta.get('playtime'))}"
+                if meta.get("tutorial"):
+                    sub = get_translated_text("обучение") + "  •  " + sub
+                self.screen.blit(self.font_sub.render(sub, True, self.sub_color),
+                                 (self.rect.x + 24, cy + self.card_h - 24))
 
-        self.screen.blit(self.surface, self.rect)
-
+        hint = self.font_hint.render(get_translated_text("Esc — назад   •   колесо — прокрутка"),
+                                     True, self.sub_color)
+        self.screen.blit(hint, (self.rect.x + 18, self.rect.y + self.rect.h - self.footer_h + 4))
         pygame.display.flip()
 
 

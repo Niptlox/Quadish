@@ -61,6 +61,20 @@ class WorldsScenePopupMenu(ScenePopupMenu):
         self.game.game_map.new_world()
         self.game.game_map.save_current_game_map()
 
+    def create_tutorial_world(self):
+        """Открыть мир обучения; если удалён или не создан — создать заново."""
+        from units.Map import WorldStorage
+        game = self.game
+        self.set_scene(game)
+        existing = WorldStorage.find_tutorial_world()
+        if existing and game.game_map.open_game_map(game, existing["id"]):
+            return
+        game.game_map.new_world(tutorial=True)
+        game.game_map.save_current_game_map()
+
+    def back(self):
+        self.set_scene(self.app.title_scene)
+
     def main(self):
         self.ui.reload_worlds()
         return super().main()
