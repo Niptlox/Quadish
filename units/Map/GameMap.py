@@ -10,6 +10,7 @@ from units.Objects.Items import ItemsTile
 from units.Objects.TileClasses import tiles_class
 from units.Tools import TOOLS
 from units.Map import WorldStorage
+from units.Trees import grow_tree
 from units.biomes import biome_of_pos
 from units.Map.Structures import Structures_chance, Structures, Structures_all, structure_start
 from units.Tiles import *
@@ -736,7 +737,25 @@ class GameMap(SavedObject):
         self.game.player.tp_to(config.GameSettings.start_pos)
         self.spawn_gate()
         if tutorial:
+            self._build_tutorial_island()
             self._place_tutorial_chest()
+
+    def _build_tutorial_island(self):
+        """Гарантированный островок с деревом у спавна — не зависит от генерации,
+        чтобы игроку всегда было куда встать и что срубить."""
+        sx = config.GameSettings.start_pos[0] // TSIZE
+        sy = config.GameSettings.start_pos[1] // TSIZE
+        top_y = sy + 3
+        for tx in range(sx - 7, sx + 9):
+            self.set_static_tile(tx, top_y, 1)          # трава сверху
+            for dy in range(1, 4):
+                self.set_static_tile(tx, top_y + dy, 2)  # земля под ней
+        # чистое небо над платформой, чтобы дерево росло свободно
+        for tx in range(sx - 7, sx + 9):
+            for dy in range(1, 9):
+                if self.get_static_tile_type(tx, top_y - dy, default=0, create_chunk=True) != 0:
+                    self.set_static_tile(tx, top_y - dy, None)
+        grow_tree((sx - 4, top_y - 1), game_map=self)   # дерево слева от спавна
 
     def _place_tutorial_chest(self):
         """Сундук с припасами для обучения (руда, кирпич, слизь, ягоды, рубины) —

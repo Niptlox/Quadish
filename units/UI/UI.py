@@ -28,16 +28,18 @@ class SysMessege:
 
     def __init__(self, align="bottom_right"):
         self.align = align
+        self.bottom_offset = 0  # приподнять над низом (чтобы не накладываться)
         self.surface = pg.Surface(self.rect.size).convert_alpha()
         self.left_tact = 0
         self.count_tact = 0
         self.update_rect()
 
     def update_rect(self):
+        off = 20 + self.bottom_offset
         if self.align == "bottom_right":
-            self.rect = pg.Rect((WSIZE[0] - self.width - 30, WSIZE[1] - self.height - 20), (self.width, self.height))
+            self.rect = pg.Rect((WSIZE[0] - self.width - 30, WSIZE[1] - self.height - off), (self.width, self.height))
         if self.align == "bottom_center":
-            self.rect = pg.Rect(((WSIZE[0] - self.width) // 2, WSIZE[1] - self.height - 20), (self.width, self.height))
+            self.rect = pg.Rect(((WSIZE[0] - self.width) // 2, WSIZE[1] - self.height - off), (self.width, self.height))
         self.surface = pg.Surface(self.rect.size).convert_alpha()
 
     def new(self, text, count_tact=FPS * 3):
@@ -107,6 +109,9 @@ class GameUI(UI):
         self.info_surface = SurfaceUI((0, 0, 250, 100)).convert_alpha()
         self.sys_message = SysMessege()
         self.achievement_message = AchievementMessege()
+        # ачивка встаёт над строкой сообщений/подсказок, а не поверх неё
+        self.achievement_message.bottom_offset = self.sys_message.height + 18
+        self.achievement_message.update_rect()
         # self.playerui = SurfaceAlphaUI((0, 0, 280, 120))
         self.playerui = SurfaceUI((0, 0, 450, 420)).convert_alpha()
         self.playerui.rect.bottom = self.rect.bottom
@@ -523,6 +528,13 @@ class WorldListUI(UI):
         self.worlds = []
         self.card_btns = []      # (name_btn, del_btn, meta, base_y)
         self.confirm_delete_id = None
+
+        # полупрозрачная панель со скруглением (фон — живой параллакс игры)
+        self._panel = pg.Surface(self.rect.size).convert_alpha()
+        self._panel.fill((0, 0, 0, 0))
+        pg.draw.rect(self._panel, (39, 39, 42, 228), (0, 0, self.rect.w, self.rect.h), border_radius=14)
+        pg.draw.rect(self._panel, (24, 24, 27, 240), (0, 0, self.rect.w, self.header_h),
+                     border_top_left_radius=14, border_top_right_radius=14)
         self.reload_worlds()
 
     def reload_worlds(self):
@@ -584,12 +596,12 @@ class WorldListUI(UI):
                 del_btn.pg_event(event)
 
     def draw(self):
-        self.screen.fill(self.header_bg)
-        # панель
-        pg.draw.rect(self.screen, self.panel_bg, self.rect, border_radius=14)
-        pg.draw.rect(self.screen, self.header_bg,
-                     (self.rect.x, self.rect.y, self.rect.w, self.header_h),
-                     border_top_left_radius=14, border_top_right_radius=14)
+        # живой фон игры (параллакс-острова), как в остальных меню
+        try:
+            self.scene.app.title_scene.title_ui.draw_background()
+        except Exception:
+            self.screen.fill(self.header_bg)
+        self.screen.blit(self._panel, self.rect)
         self.screen.blit(self.font_title.render(get_translated_text("Мои миры"), True, self.accent),
                          (self.rect.x + 18, self.rect.y + 12))
         self.btn_back.draw(self.screen)

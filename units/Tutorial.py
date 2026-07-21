@@ -32,6 +32,7 @@ POTION_ITEMS = (55, 351)  # зелье жизни, зелье прыжка
 MARKER_COLOR = "#FDE047"
 
 font_task = pg.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 18)
+font_esc = pg.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 15)
 
 
 def count_in_inventory(inventory, index):
@@ -58,6 +59,7 @@ class TutorialHints:
         self._steps = None
         self._task_text = None
         self._task_surf = None
+        self._esc_hint = None
 
     @property
     def state(self):
@@ -193,7 +195,17 @@ class TutorialHints:
             panel.fill((39, 39, 42, 210))
             panel.blit(t, (12, 6))
             self._task_surf = panel
-        display.blit(self._task_surf, ((WSIZE[0] - self._task_surf.get_width()) // 2, 8))
+        # задание — под хотбаром (10 верхних слотов), чтобы не накладываться
+        try:
+            task_top = game.player.inventory.ui.work_inventory.rect.bottom + 10
+        except Exception:
+            task_top = 70
+        display.blit(self._task_surf, ((WSIZE[0] - self._task_surf.get_width()) // 2, task_top))
+
+        # подсказка про Esc в углу (Esc открывает меню/паузу)
+        if self._esc_hint is None:
+            self._esc_hint = font_esc.render(get_translated_text("[Esc] — меню"), True, "#A1A1AA")
+        display.blit(self._esc_hint, (12, 10))
 
         # маркер цели
         if self.target_tile is None:
