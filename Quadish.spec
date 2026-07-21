@@ -11,7 +11,8 @@ a = Analysis(
         ('help.txt', '.'),
         ('README.md', '.'),
     ],
-    hiddenimports=[],
+    # команды `Quadish test` и `Quadish benchmark` работают и в сборке
+    hiddenimports=['tools.run_tests', 'tools.benchmark', 'tests.test_mechanics'],
     excludes=['tkinter'],
     noarchive=False,
 )
