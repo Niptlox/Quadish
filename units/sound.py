@@ -21,14 +21,46 @@ class Sounds(list):
         return self.__class__(super(Sounds, self).__add__(other))
 
 
+class _DummyChannel:
+    """Пустой канал воспроизведения (когда аудио недоступно)."""
+    def set_endevent(self, *a, **k):
+        pass
+
+    def set_volume(self, *a, **k):
+        pass
+
+    def stop(self, *a, **k):
+        pass
+
+    def get_busy(self):
+        return False
+
+
+_DUMMY_CHANNEL = _DummyChannel()
+
+
+class _DummySound:
+    """Заглушка звука: игра без аудиоустройства (WSL/сервер) не падает."""
+    def play(self, *a, **k):
+        return _DUMMY_CHANNEL
+
+    def set_volume(self, *a, **k):
+        pass
+
+    def stop(self, *a, **k):
+        pass
+
+
 def load_sound(path):
+    if not AUDIO_ENABLED:
+        return _DummySound()
     return pg.mixer.Sound(path)
 
 
 def load_sounds(path, count, index_start=0):
     ar = Sounds()
     for i in range(index_start, index_start + count):
-        ar.append(pygame.mixer.Sound(path.format(i)))
+        ar.append(_DummySound() if not AUDIO_ENABLED else pygame.mixer.Sound(path.format(i)))
     return ar
 
 

@@ -615,6 +615,27 @@ def test_tutorial_world_and_steps():
     assert WorldStorage.find_tutorial_world() is None, "мир обучения удаляем как обычный"
 
 
+def test_audio_optional():
+    """Игра без аудиоустройства (WSL/сервер) не должна падать на звуке."""
+    get_app()
+    from units import sound
+    # заглушки безопасны и поддерживают всю цепочку вызовов
+    ch = sound._DummySound().play(loops=-1)
+    ch.set_endevent(1)
+    ch.set_volume(0.5)
+    ch.stop()
+    assert ch.get_busy() is False
+    # при отключённом аудио load_sound/load_sounds возвращают заглушки
+    orig = sound.AUDIO_ENABLED
+    sound.AUDIO_ENABLED = False
+    try:
+        assert isinstance(sound.load_sound("data/audio/UI/click.wav"), sound._DummySound)
+        lst = sound.load_sounds("data/audio/UI/click.wav", 2, 0)
+        assert all(isinstance(s, sound._DummySound) for s in lst)
+    finally:
+        sound.AUDIO_ENABLED = orig
+
+
 def test_help_ui():
     import pygame
     app = get_app()

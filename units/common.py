@@ -27,6 +27,17 @@ print(CWDIR)
 pygame.mixer.pre_init(44100, -16, 1, 512)
 pygame.init()  # initiate pygame
 
+# Аудиоустройства может не быть (WSL, сервер, headless) — тогда игра
+# работает без звука вместо падения на pygame.mixer.Sound(...).
+try:
+    if pygame.mixer.get_init() is None:
+        pygame.mixer.init()
+    AUDIO_ENABLED = pygame.mixer.get_init() is not None
+except pygame.error:
+    AUDIO_ENABLED = False
+if not AUDIO_ENABLED:
+    print("Аудиоустройство недоступно — звук отключён")
+
 # Лимит кадров: настраивается в settings.ini ([game] max_fps) и в меню настроек.
 # 60 по умолчанию — вдвое меньше работы на слабом железе, чем прежние 120.
 FPS = config.GameSettings.max_fps

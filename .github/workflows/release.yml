@@ -82,14 +82,20 @@ jobs:
             echo "Нет собранных артефактов — релиз не создаётся"
             exit 1
           fi
-          gh release create "${{ steps.tag.outputs.tag }}" "${files[@]}" \
-            --repo "${{ github.repository }}" \
-            --title "Quadish ${{ steps.tag.outputs.tag }}" \
-            --prerelease \
-            --notes "Автоматическая сборка Quadish.
+          TAG="${{ steps.tag.outputs.tag }}"
+          REPO="${{ github.repository }}"
+          NOTES="Автоматическая сборка Quadish.
 
           **Скачать и запустить:**
           - **Windows** — \`Quadish-*-windows-x64.zip\`: распакуйте и запустите \`Quadish.exe\`
           - **Linux** — \`Quadish-*-linux-x64.tar.gz\`: распакуйте и запустите \`./Quadish\`
 
           Python не требуется. Собрано на Python 3.13. Проверьте \`Quadish test\` для самопроверки."
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            # релиз уже есть (повторный запуск тега) — обновляем архивы и описание
+            gh release upload "$TAG" "${files[@]}" --repo "$REPO" --clobber
+            gh release edit "$TAG" --repo "$REPO" --notes "$NOTES" --prerelease
+          else
+            gh release create "$TAG" "${files[@]}" --repo "$REPO" \
+              --title "Quadish $TAG" --prerelease --notes "$NOTES"
+          fi
