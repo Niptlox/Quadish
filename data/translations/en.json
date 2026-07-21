@@ -113,5 +113,12 @@
   "Включить и выключить творческий режим": "Toggle creative mode",
   "Полёт (в творческом режиме)": "Flight (in creative mode)",
   "Перемотать время на 1 минуту вперёд": "Fast-forward time by 1 minute",
-  "Перемотать время на 10 минут вперёд": "Fast-forward time by 10 minutes"
+  "Перемотать время на 10 минут вперёд": "Fast-forward time by 10 minutes",
+  "Осмотрись и попрыгай": "Look around and jump",
+  "Добудь дерево": "Get wood",
+  "Открой инвентарь — [E]": "Open the inventory — [E]",
+  "Скрафть доски": "Craft planks",
+  "Поставь блоки": "Place blocks",
+  "Обучение: добудь 3 дерева — зажми [ЛКМ] на стволе": "Tutorial: get 3 wood — hold [LMB] on a trunk",
+  "Обучение: построй что-нибудь — [ПКМ] ставит блок": "Tutorial: build something — [RMB] places a block"
 }

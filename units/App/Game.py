@@ -141,6 +141,7 @@ class GameScene(Scene):
             self.blocks_ui_manager.draw(self.display)
             self.player.inventory.ui.draw(self.display)
             self.ui.draw()
+            self.tutorial.draw(self.display)
         self.ui.flip()
         self.tact += 1
         if self.tact % 30 == 0:

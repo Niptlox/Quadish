@@ -523,24 +523,42 @@ def test_tutorial_world_and_steps():
     tut = game.tutorial
     tut.__init__(game)  # свежий трекинг
     inv = _empty_inventory(game)
+    game.player.blocks_placed_count = 0
     tut.update()  # показывает первую подсказку, шаг не двигается
     assert gm.tutorial_step == 0
+    tut.draw(game.display)  # панель задачи рисуется без падений
+    assert tut._task_surf is not None
 
     # шаг 0: движение + прыжок
     game.player.rect.x += TSIZE * 6
     tut.seen_jump = True
     tut.update()
     assert gm.tutorial_step == 1
-    # шаг 1: добыть дерево
+
+    # шаг 1: добыть 3 дерева; маркер находит ближайший ствол
+    px, py = game.player.rect.centerx // TSIZE, game.player.rect.centery // TSIZE
+    gm.set_static_tile(px + 3, py, 110)
+    game.elapsed_time = 16
+    game.pg_events()
+    game.update()  # заполняет static_tiles для поиска цели
+    tut.update()
+    assert tut.target_tile is not None, "маркер должен найти ствол дерева"
+    inv.put_to_inventory(ItemsTile(game, 12, count=2))
+    tut.update()
+    assert gm.tutorial_step == 1, "двух брёвен мало — нужно 3"
     inv.put_to_inventory(ItemsTile(game, 12, count=1))
     tut.update()
     assert gm.tutorial_step == 2
+    # прогресс в задаче
+    tut.draw(game.display)
+    assert tut._task_text is not None
+
     # шаг 2: инвентарь
     tut.seen_inventory = True
     tut.update()
     assert gm.tutorial_step == 3
-    # шаг 3: доски
-    inv.put_to_inventory(ItemsTile(game, 11, count=1))
+    # шаг 3: доски (2 шт — один крафт)
+    inv.put_to_inventory(ItemsTile(game, 11, count=2))
     tut.update()
     assert gm.tutorial_step == 4
     # шаг 4: блоки; финальный шаг закрывается сам
