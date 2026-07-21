@@ -2,7 +2,7 @@
 
 import numpy as np
 from PIL import Image
-from noise import snoise2
+from units.noise_compat import snoise2
 
 from units.Tiles import create_tile_image
 from units.common import *

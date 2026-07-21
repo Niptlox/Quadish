@@ -1,7 +1,7 @@
 import os
 from typing import Union
 
-from noise import snoise2 as noise2
+from units.noise_compat import snoise2 as noise2
 
 from units.Objects.Creatures import Slime, Cow, Wolf, SlimeBigBoss, Snake
 from units.Objects.Entities import PortalMainGate

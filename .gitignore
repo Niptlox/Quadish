@@ -4,11 +4,11 @@ data/maps/
 *.aseprite
 __pycache__
 venv
+.venv-build
 toexe.bat
 dist
 build
 desktop.ini
-quadish.spec
 plan.txt
 screenshot.png
 *.lnk
