@@ -388,6 +388,7 @@ class MainSettingsUI(TitleUI):
                              start_state_index=fps_values_lst.index(config.GameSettings.max_fps)
                              if config.GameSettings.max_fps in fps_values_lst else 1),
             ("Звуки и музыка...", lambda _: self.scene.set_ui(self.scene.sound_settings_ui)),
+            ("Создать мир обучения", lambda _: self.scene.create_tutorial_world()),
             ("В главное меню", lambda _: self.scene.set_ui(self.scene.title_ui)),
 
         ]
@@ -505,6 +506,8 @@ class WorldListUI(UI):
                                         screenXY=(self.rect.x + x + w - 40, self.rect.y + y)))
             sub = f"{WorldStorage.format_last_played(meta.get('last_played'))}  •  " \
                   f"{WorldStorage.format_playtime(meta.get('playtime'))}"
+            if meta.get("tutorial"):
+                sub = get_translated_text("обучение") + "  •  " + sub
             self.subtitles.append((y + self.row_h + 2, self.font_sub.render(sub, True, "#D4D4D8")))
             y += self.row_step
 

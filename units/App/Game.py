@@ -9,6 +9,7 @@ from units.Map.ScreenMap import ScreenMap
 from units.App.Scenes import TitleScene, WorldsScenePopupMenu, PauseScenePopupMenu, EndSceneUI, \
     AchievementsSceneUI, HelpSceneUI
 from units.Map import WorldStorage
+from units.Tutorial import TutorialHints
 
 from units.config import GameSettings
 from units.sound import sounds_background, get_random_sound_of
@@ -50,6 +51,7 @@ class GameScene(Scene):
         self.total_time = 0
         self.first_start = False
         self.hided_ui = False
+        self.tutorial = TutorialHints(self)
         self.background_sound = get_random_sound_of(sounds_background).play(loops=-1, )
         if GameSettings.debug_open_map:
             worlds = WorldStorage.list_worlds()
@@ -141,5 +143,7 @@ class GameScene(Scene):
             self.ui.draw()
         self.ui.flip()
         self.tact += 1
+        if self.tact % 30 == 0:
+            self.tutorial.update()
         if self.tact % AUTOSAVE_PERIOD_TACTS == 0 and self.game_map.world_id is not None:
             self.game_map.save_current_game_map()

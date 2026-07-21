@@ -78,6 +78,7 @@ class Player(PhysicalObject):
         self.punch_damage = 10
 
         self.spawn_point = (0, 0)
+        self.blocks_placed_count = 0  # для шагов обучения
         self.vertical_momentum = 0
         self.jump_speed = 0.275
         self.jump_count = 0

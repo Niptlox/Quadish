@@ -39,6 +39,7 @@ class GameMap(SavedObject):
         self.start_space_y = START_SPACE_Y
         self.start_hell_y = START_HELL_Y
         self.creative_mode = CREATIVE_MODE
+        self.tutorial_step = -1  # -1 = обучение неактивно; >=0 = номер шага
         self.gate = None
         if self.base_generation is None:
             self.new_base_generation()
@@ -660,9 +661,16 @@ class GameMap(SavedObject):
         self.game.player.active = False
         sound_gate.play()
 
-    def new_world(self, base_generation=None):
+    def new_world(self, base_generation=None, tutorial=False):
+        if tutorial and base_generation is None:
+            base_generation = 4242  # у мира обучения фиксированный сид
         self.__init__(self.game, self.gen_type, base_generation)
-        self.world_meta = WorldStorage.new_world_meta()
+        if tutorial:
+            self.world_meta = WorldStorage.new_world_meta(
+                name=get_translated_text("Обучение"), tutorial=True)
+            self.tutorial_step = 0
+        else:
+            self.world_meta = WorldStorage.new_world_meta()
         self.world_id = self.world_meta["id"]
         self.set_structure((-10, -13), structure_start)
         self.game.reinit_player()

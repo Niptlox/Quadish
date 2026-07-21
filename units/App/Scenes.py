@@ -20,6 +20,18 @@ class TitleScene(SceneMenu):
         # сразу создаём файл мира, чтобы он появился в списке
         self.app.game_scene.game_map.save_current_game_map()
 
+    def create_tutorial_world(self):
+        """Открыть мир обучения; если удалён или ещё не создан — создать заново."""
+        from units.Map import WorldStorage
+        game = self.app.game_scene
+        self.set_scene(game)
+        existing = WorldStorage.find_tutorial_world()
+        if existing:
+            if game.game_map.open_game_map(game, existing["id"]):
+                return
+        game.game_map.new_world(tutorial=True)
+        game.game_map.save_current_game_map()
+
     def open_worlds(self):
         self.set_scene(self.app.worlds_scene)
 

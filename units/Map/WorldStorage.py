@@ -67,7 +67,7 @@ def list_worlds():
     return worlds
 
 
-def new_world_meta(name=None):
+def new_world_meta(name=None, tutorial=False):
     """Создать папку и мету нового мира с автоименем 'Мир N'."""
     i = 1
     while os.path.exists(world_dir(f"world-{i}")):
@@ -77,8 +77,18 @@ def new_world_meta(name=None):
         name = f"Мир {i}"
     meta = {"id": world_id, "name": name, "created": time.time(),
             "last_played": time.time(), "playtime": 0, "game_version": GAME_VERSION}
+    if tutorial:
+        meta["tutorial"] = True
     save_meta(meta)
     return meta
+
+
+def find_tutorial_world():
+    """Мир обучения, если он существует (самый свежий)."""
+    for meta in list_worlds():
+        if meta.get("tutorial"):
+            return meta
+    return None
 
 
 def delete_world(world_id):

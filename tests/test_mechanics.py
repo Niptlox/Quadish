@@ -504,6 +504,63 @@ def test_world_list_ui():
         WS.delete_world(meta["id"])
 
 
+def test_tutorial_world_and_steps():
+    from units.common import TSIZE
+    from units.Objects.Items import ItemsTile
+    app = get_app()
+    from units.Map import WorldStorage
+    game = app.game_scene
+    random.seed(42)
+
+    game.game_map.new_world(tutorial=True)
+    gm = game.game_map
+    assert gm.tutorial_step == 0
+    assert gm.world_meta.get("tutorial")
+    assert gm.world_meta["name"], "у мира обучения должно быть имя"
+    gm.save_current_game_map()
+    assert WorldStorage.find_tutorial_world()["id"] == gm.world_id
+
+    tut = game.tutorial
+    tut.__init__(game)  # свежий трекинг
+    inv = _empty_inventory(game)
+    tut.update()  # показывает первую подсказку, шаг не двигается
+    assert gm.tutorial_step == 0
+
+    # шаг 0: движение + прыжок
+    game.player.rect.x += TSIZE * 6
+    tut.seen_jump = True
+    tut.update()
+    assert gm.tutorial_step == 1
+    # шаг 1: добыть дерево
+    inv.put_to_inventory(ItemsTile(game, 12, count=1))
+    tut.update()
+    assert gm.tutorial_step == 2
+    # шаг 2: инвентарь
+    tut.seen_inventory = True
+    tut.update()
+    assert gm.tutorial_step == 3
+    # шаг 3: доски
+    inv.put_to_inventory(ItemsTile(game, 11, count=1))
+    tut.update()
+    assert gm.tutorial_step == 4
+    # шаг 4: блоки; финальный шаг закрывается сам
+    game.player.blocks_placed_count = 5
+    tut.update()
+    tut.update()
+    assert gm.tutorial_step == -1, "обучение должно завершиться"
+
+    # прогресс сохраняется вместе с миром
+    wid = gm.world_id
+    gm.save_current_game_map()
+    game.game_map.new_world()  # обычный мир — обучение неактивно
+    assert gm.tutorial_step == -1
+    gm.open_game_map(game, wid)
+    assert gm.tutorial_step == -1  # завершённое обучение не перезапускается
+
+    WorldStorage.delete_world(wid)
+    assert WorldStorage.find_tutorial_world() is None, "мир обучения удаляем как обычный"
+
+
 def test_help_ui():
     import pygame
     app = get_app()

@@ -49,6 +49,7 @@ class ToolHand(ToolPickaxe):
                     self.last_action_time_set = time()
                     self.animation.start()
                     res = set_tile(self.owner, x, y, self.owner.inventory[self.owner.inventory.active_cell], True)
+                    self.owner.blocks_placed_count += 1
                     if res == 0:
                         self.owner.inventory[self.owner.inventory.active_cell] = None
                     self.owner.choose_active_cell()
