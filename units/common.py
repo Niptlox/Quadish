@@ -1,9 +1,8 @@
 import os
 
+# units.config при импорте выставляет рабочую директорию в корень проекта
 from units.UI.Translate import get_translated_text
 
-if "//units" in os.getcwd():
-    os.chdir(__file__.replace("common.py", "") + "../")
 import math
 import pickle
 import sys
@@ -51,7 +50,7 @@ WSIZE = WINDOW_SIZE
 
 # flags |= pygame.SCALED
 pygame.display.set_caption('Quadish')
-Icon = pg.image.load("data/sprites/icon.png")
+Icon = pg.image.load("data/sprites/Icon.png")
 pygame.display.set_icon(Icon)
 
 screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags, vsync=1)

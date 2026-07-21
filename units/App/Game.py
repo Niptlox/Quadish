@@ -8,7 +8,8 @@ from units.Map.GameMap import GameMap
 from units.Map.ScreenMap import ScreenMap
 from units.App.Scenes import TitleScene, OpenMapScenePopupMenu, SaveMapScenePopupMenu, PauseScenePopupMenu, EndSceneUI, \
     AchievementsSceneUI, HelpSceneUI
-import subprocess
+import pathlib
+import webbrowser
 
 from units.config import GameSettings
 from units.sound import sounds_background, get_random_sound_of
@@ -35,11 +36,8 @@ class GameApp(App):
 
     @classmethod
     def open_help(cls):
-        path = CWDIR + f"data/translations/help_{GameSettings.language}.md"
-        subprocess.Popen(('start', path), shell=True, cwd=CWDIR)
-
-
-f = open("fff.txt", "w")
+        path = pathlib.Path(CWDIR, f"data/translations/help_{GameSettings.language}.md")
+        webbrowser.open(path.absolute().as_uri())
 
 
 class GameScene(Scene):
@@ -59,7 +57,6 @@ class GameScene(Scene):
         self.first_start = False
         self.hided_ui = False
         self.background_sound = get_random_sound_of(sounds_background).play(loops=-1, )
-        print(self, self.player.inventory, file=f)
         if GameSettings.debug_open_map:
             self.game_map.open_game_map(self, 0)
         # print(list(self.blocks_ui_manager.blocks_ui.values())[0])

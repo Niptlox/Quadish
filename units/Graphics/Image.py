@@ -22,7 +22,8 @@ SIZE_2X = "2x"
 
 
 def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_tile=False):
-    print(path)
+    # виндовые пути с '\' приводим к универсальным '/'
+    path = path.replace("\\", "/")
     img = pygame.image.load(path)
     return convert_img(img, size, colorkey, alpha, scale, is_tile)
 

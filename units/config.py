@@ -1,16 +1,23 @@
 import os
+import sys
 
 from configparser import ConfigParser
-if "\\units" in os.getcwd():
-    os.chdir(__file__.replace("config.py", "") + "../")
-config_filename = os.getcwd() + '\settings.ini'
+
+# Корень проекта: рядом с exe для собранной игры, иначе на уровень выше units/
+if getattr(sys, 'frozen', False):
+    PROJECT_ROOT = os.path.dirname(sys.executable)
+else:
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(PROJECT_ROOT)
+config_filename = os.path.join(PROJECT_ROOT, 'settings.ini')
 print("config_filename", config_filename)
 config = ConfigParser()
-config.read(config_filename)
+if not config.read(config_filename, encoding="utf-8"):
+    raise FileNotFoundError(f"Не найден файл настроек: {config_filename}")
 
 
 def config_save():
-    with open(config_filename, 'w') as configfile:
+    with open(config_filename, 'w', encoding="utf-8") as configfile:
         config.write(configfile)
 
 
@@ -61,6 +68,7 @@ class GameSettings(__Settings):
     debug_open_map = config.getboolean(section, 'debug_open_map')
     all_languages = config.get(section, 'all_languages').replace(" ", "").split(",")
     language = config.get(section, 'language')
+    max_fps = config.getint(section, 'max_fps', fallback=60)
     if language not in all_languages:
         language = "en"
 
@@ -80,6 +88,10 @@ class GameSettings(__Settings):
     def set_item_index_state(cls, state):
         cls.set("view_item_index", state)
 
+    @classmethod
+    def set_max_fps(cls, value):
+        cls.set("max_fps", int(value))
+
 
 class VolumeSettings(__Settings):
     section = 'sound'
@@ -88,15 +100,3 @@ class VolumeSettings(__Settings):
     player_volume = config.getfloat(section, 'player_volume')
     creatures_volume = config.getfloat(section, 'creatures_volume')
     background_volume = config.getfloat(section, 'background_volume')
-
-# https://stackoverflow.com/questions/8884188/how-to-read-and-write-ini-file-with-python3
-# string_val = config.get('section_a', 'string_val')
-# bool_val = config.getboolean('section_a', 'bool_val')
-# int_val = config.getint('section_a', 'int_val')
-# float_val = config.getfloat('section_a', 'pi_val')
-# config.add_section('section_b')
-# config.set('section_b', 'meal_val', 'spam')
-# config.set('section_b', 'not_found_val', '404')
-#
-# # save to a file
-#

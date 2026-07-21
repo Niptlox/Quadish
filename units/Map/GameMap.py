@@ -43,7 +43,7 @@ class GameMap(SavedObject):
             self.new_base_generation()
 
     def new_base_generation(self):
-        self.base_generation = random.randint(-1e5, 1e5)
+        self.base_generation = random.randint(-100000, 100000)
         print("base_generation", self.base_generation)
 
     def set_vars(self, vrs):

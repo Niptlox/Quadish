@@ -64,7 +64,7 @@ ground_imgs[None] = (ground_img,
                      ground_L_img,
                      ground_R_img,
                      ground_LR_img)
-stone_img = load_img("data/sprites/tiles/stone.png")
+stone_img = load_img("data/sprites/tiles/Stone.png")
 back_stone_img = load_img("data/sprites/backtiles/BackStone2.png")
 # create_tile_image("#57534E")
 
@@ -78,7 +78,7 @@ purore_img = create_tile_image("#9333EA")  # purple ore
 tnt_img = create_tile_image("#B91C1C")  # tnt
 
 # granite_img = create_tile_image("#09070A")
-granite_img = load_img("data/sprites/tiles/granite.png")
+granite_img = load_img("data/sprites/tiles/Granite.PNG")
 
 tnt_1_img = create_tile_image("#F87171")  # tnt activ
 tnt_imgs = [tnt_1_img, create_tile_image("#FECACA")]  # tnt activ
@@ -129,7 +129,7 @@ build_img = load_img("data/sprites/tiles/build.png")
 structure_pass_img = load_img("data/sprites/tiles/structure_pass.png")
 activator_img = load_img("data/sprites/tiles/activator.png")
 commandblock_img = load_img("data/sprites/tiles/commandblock.png")
-commandblock_imgs = load_imgs("data/sprites/tiles/commandblock/commandblock_{}.png", 14)
+commandblock_imgs = load_imgs("data/sprites/tiles/CommandBlock/commandblock_{}.png", 14)
 
 rain_img = load_img("data/sprites/tiles/rain.png")
 
