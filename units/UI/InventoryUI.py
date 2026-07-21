@@ -275,28 +275,33 @@ class InventoryPlayerUI(InventoryUI):
             x += cell_size
 
     def draw(self, surface):
+        if not self.opened:
+            # Закрытый инвентарь — это только хотбар. Его поверхность
+            # перерисовывается событиями (redraw_top), тут только blit —
+            # без полноэкранной альфа-поверхности каждый кадр.
+            surface.blit(self.work_inventory, self.work_inventory.rect)
+            if self.inventory_info_index != -1:
+                surface.blit(self.inventory_info_index_surface,
+                             (self.work_inventory.rect.x + self.inventory_info_index * self.cell_size,
+                              self.work_inventory.rect.y + self.cell_size))
+            return
+
         self.redraw_table_inventory()
 
         self.fill(color_none)
 
         self.work_inventory.draw(self)
-        if self.opened:
-            # pg.draw.rect(self, bg_color, self.rect)
-            self.table_inventory.draw(self)
-            if self.inventory.owner.creative_mode:
-                self.all_tiles.draw(self)
-            else:
-                self.recipes.draw(self)
-            if get_obj_mouse():
-                self.blit(get_obj_mouse().sprite, pg.mouse.get_pos())
-            elif self.inventory_info_index != -1:
-                mx, my = pg.mouse.get_pos()
-                self.blit(self.inventory_info_index_surface, (mx, my + 26))
+        # pg.draw.rect(self, bg_color, self.rect)
+        self.table_inventory.draw(self)
+        if self.inventory.owner.creative_mode:
+            self.all_tiles.draw(self)
         else:
-            if self.inventory_info_index != -1:
-                self.blit(self.inventory_info_index_surface,
-                          (self.work_inventory.rect.x + self.inventory_info_index * self.cell_size,
-                           self.work_inventory.rect.y + self.cell_size))
+            self.recipes.draw(self)
+        if get_obj_mouse():
+            self.blit(get_obj_mouse().sprite, pg.mouse.get_pos())
+        elif self.inventory_info_index != -1:
+            mx, my = pg.mouse.get_pos()
+            self.blit(self.inventory_info_index_surface, (mx, my + 26))
 
         surface.blit(self, self.rect)
 

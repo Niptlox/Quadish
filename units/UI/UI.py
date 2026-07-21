@@ -110,6 +110,7 @@ class GameUI(UI):
         # self.playerui = SurfaceAlphaUI((0, 0, 280, 120))
         self.playerui = SurfaceUI((0, 0, 450, 420)).convert_alpha()
         self.playerui.rect.bottom = self.rect.bottom
+        self._playerui_state = None  # (lives, max_lives, creative) последней отрисовки
         self.new_sys_message("Привет игрок. Нажми [E]")
 
     def draw_sky(self):
@@ -167,6 +168,10 @@ class GameUI(UI):
         self.info_surface.blit(text_c_ents, (8, 85))
 
     def redraw_playerui(self):
+        state = (self.scene.player.lives, self.scene.player.max_lives, self.scene.player.creative_mode)
+        if state == self._playerui_state:
+            return
+        self._playerui_state = state
         lives_in_heart = 10
         self.playerui.fill(color_none)
         imgs = live_imgs
@@ -263,6 +268,7 @@ class TitleUI(UI):
         self.tts_scale = 1.05
         self.tts_speed = 0.005
         self.tts_size = self.tts.rect.size
+        self._tts_drawn_scale = None  # масштаб последней отрисовки заголовка
         self.objects.add(title_text_surf)
         self.objects.add(self.sys_message)
         print("objects", self.objects.components)
@@ -292,10 +298,13 @@ class TitleUI(UI):
         self.tts_scale += self.tts_speed
         if self.tts_scale > 1.08 or self.tts_scale < 1.01:
             self.tts_speed *= 0
-        tts = pg.transform.smoothscale(self.game_title_text,
-                                       (self.tts_size[0] * self.tts_scale, self.tts_size[1] * self.tts_scale))
-        self.tts.set(tts)
-        self.tts.set_colorkey(self.color_sky)
+        if self._tts_drawn_scale != self.tts_scale:
+            # масштабируем заголовок только пока анимация реально идёт
+            self._tts_drawn_scale = self.tts_scale
+            tts = pg.transform.smoothscale(self.game_title_text,
+                                           (self.tts_size[0] * self.tts_scale, self.tts_size[1] * self.tts_scale))
+            self.tts.set(tts)
+            self.tts.set_colorkey(self.color_sky)
         # self.tts.rect.x = self.tts_x
 
     def draw(self):
@@ -599,6 +608,10 @@ class AchievementsUI(UI):
 
     def redraw_achievements(self):
         achievs = self.scene.app.game_scene.player.achievements
+        key = tuple(achievs.completed)
+        if key == getattr(self, "_ach_key", None):
+            return
+        self._ach_key = key
         height_block = 105
         height = height_block * len(achievs.completed) + 20
         self.surface_achievements = pg.Surface((self.rect.w, height)).convert_alpha()

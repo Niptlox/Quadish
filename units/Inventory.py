@@ -196,6 +196,8 @@ class InventoryPlayer(Inventory):
         self.ui = InventoryPlayerUI(self)
         self.active_cell = 0
         self.available_create_items = []
+        # первичная отрисовка хотбара (дальше он обновляется по событиям)
+        self.ui.redraw_top()
 
     def pg_event(self, event):
         if self.ui.pg_event(event):
