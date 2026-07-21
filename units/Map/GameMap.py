@@ -17,7 +17,10 @@ from units.sound import sound_gate
 
 
 class GameMap(SavedObject):
-    not_save_vars = SavedObject.not_save_vars | {"gate", "particles", "world_id", "world_meta"}
+    not_save_vars = SavedObject.not_save_vars | {"gate", "particles", "world_id", "world_meta",
+                                                 "dynamic_dump", "dump_keep_radius"}
+    # держим в памяти чанки в этом радиусе (в чанках) вокруг игрока
+    DUMP_KEEP_RADIUS = 8
 
     def __init__(self, game, generate_type, base_generation=None) -> None:
         self.game = game
@@ -41,6 +44,12 @@ class GameMap(SavedObject):
         self.creative_mode = CREATIVE_MODE
         self.tutorial_step = -1  # -1 = обучение неактивно; >=0 = номер шага
         self.tutorial_state = {}  # запоминаемые состояния обучения (сохраняются с миром)
+        # Динамическая выгрузка карты: дальние немодифицированные чанки
+        # удаляются из памяти и детерминированно регенерируются при возврате.
+        # modified_chunks — чанки с правками игрока/структурами, их не трогаем.
+        self.modified_chunks = set()
+        self.dynamic_dump = config.GameSettings.dynamic_dump
+        self.dump_keep_radius = self.DUMP_KEEP_RADIUS
         self.gate = None
         if self.base_generation is None:
             self.new_base_generation()
@@ -64,8 +73,12 @@ class GameMap(SavedObject):
                 chunk[2][key] = tile_obj
         # set vars
         super(GameMap, self).set_vars(vrs)
-        # for k, i in vrs.items():
-        #     self.__dict__[k] = i
+        # Все загруженные чанки считаем модифицированными: они были сохранены,
+        # поэтому их нельзя выгружать и регенерировать (совместимо со старыми
+        # сейвами, где modified_chunks ещё не было).
+        if not isinstance(getattr(self, "modified_chunks", None), set):
+            self.modified_chunks = set()
+        self.modified_chunks.update(self.game_map.keys())
 
     def get_vars(self):
         d = super(GameMap, self).get_vars()
@@ -160,7 +173,8 @@ class GameMap(SavedObject):
         return chunk[0][i]
 
     def set_static_tile(self, x, y, tile: Union[int, list], create_chunk=True):
-        chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE), create_chunk=create_chunk)
+        cxy = (x // CHUNK_SIZE, y // CHUNK_SIZE)
+        chunk = self.chunk(cxy, create_chunk=create_chunk)
         if chunk is not None:
             if tile is None:
                 tile = [0, 0, 0, 0]
@@ -172,31 +186,38 @@ class GameMap(SavedObject):
                 tile[3] = obj.id
             i = self.convert_pos_to_i(x, y)
             chunk[0][i:i + self.tile_data_size] = tile
+            self.modified_chunks.add(cxy)
             return True
         return False
 
     def set_obj_static_tile(self, x, y, group_id):
-        chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE))
+        cxy = (x // CHUNK_SIZE, y // CHUNK_SIZE)
+        chunk = self.chunk(cxy)
         if chunk is not None:
             i = self.convert_pos_to_i(x, y)
             chunk[0][i + 3] = group_id
+            self.modified_chunks.add(cxy)
             return True
         return False
 
     def set_static_tile_solidity(self, x, y, sol):
         """Установить прочность тайла"""
-        chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE))
+        cxy = (x // CHUNK_SIZE, y // CHUNK_SIZE)
+        chunk = self.chunk(cxy)
         if chunk is not None:
             i = self.convert_pos_to_i(x, y)
             chunk[0][i + 1] = sol
+            self.modified_chunks.add(cxy)
             return True
         return False
 
     def set_static_tile_state(self, x, y, state):
-        chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE))
+        cxy = (x // CHUNK_SIZE, y // CHUNK_SIZE)
+        chunk = self.chunk(cxy)
         if chunk is not None:
             i = self.convert_pos_to_i(x, y)
             chunk[0][i + 2] = state
+            self.modified_chunks.add(cxy)
             return True
         return False
 
@@ -208,9 +229,11 @@ class GameMap(SavedObject):
         return chunk[5][i]
 
     def set_backtile(self, x, y, backtile_type, create_chunk=True):
-        chunk = self.chunk((x // CHUNK_SIZE, y // CHUNK_SIZE), create_chunk=create_chunk)
+        cxy = (x // CHUNK_SIZE, y // CHUNK_SIZE)
+        chunk = self.chunk(cxy, create_chunk=create_chunk)
         i = (y % CHUNK_SIZE) * CHUNK_SIZE + (x % CHUNK_SIZE)
         chunk[5][i] = backtile_type
+        self.modified_chunks.add(cxy)
 
     def move_tile_obj(self, chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj):
         chunk = self.chunk((new_chunk_x, new_chunk_y))
@@ -297,6 +320,30 @@ class GameMap(SavedObject):
 
     def del_particle_of_idx(self, idx):
         return self.particles.pop(idx)
+
+    def unload_far_chunks(self):
+        """Выгрузить из памяти дальние немодифицированные чанки.
+
+        Удаляются только чанки без правок игрока/структур (modified_chunks),
+        без динамики (существ/предметов) и тайл-объектов — при возврате они
+        регенерируются идентично из сида. Отключается настройкой."""
+        if not self.dynamic_dump:
+            return 0
+        pcx, pcy = self.game.player.chunk_pos
+        r = self.dump_keep_radius
+        gate_pos = self.gate.chunk_pos if self.gate is not None else None
+        to_del = []
+        for (cx, cy), chunk in self.game_map.items():
+            if abs(cx - pcx) <= r and abs(cy - pcy) <= r:
+                continue
+            if (cx, cy) in self.modified_chunks or (cx, cy) == gate_pos:
+                continue
+            if chunk[1] or chunk[2]:  # есть существа/предметы или тайл-объекты
+                continue
+            to_del.append((cx, cy))
+        for key in to_del:
+            del self.game_map[key]
+        return len(to_del)
 
     def add_item_of_index(self, index, count_items, x, y):
         npos = (x * TSIZE + random.randint(0, TSIZE - HAND_SIZE), y * TSIZE)
@@ -445,6 +492,17 @@ class GameMap(SavedObject):
         return chunk
 
     def generate_chunk_noise_island(self, x, y):
+        # Детерминированная генерация по (сид, x, y): при выгрузке и повторной
+        # генерации чанк выходит идентичным (терраин, растения, существа), что
+        # делает динамическую выгрузку карты незаметной.
+        _rng_state = random.getstate()
+        random.seed((self.base_generation * 1000003) ^ (x * 73856093) ^ (y * 19349663))
+        try:
+            return self._generate_chunk_noise_island(x, y)
+        finally:
+            random.setstate(_rng_state)
+
+    def _generate_chunk_noise_island(self, x, y):
         res = self.create_pass_chunk((x, y))
         static_tiles, dynamic_tiles, tile_objs, creature_cash, biome_info, back_tiles = res
         on_ground_tiles, cnt_creatures = creature_cash[0], creature_cash[1]

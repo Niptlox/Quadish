@@ -146,5 +146,7 @@ class GameScene(Scene):
         self.tact += 1
         if self.tact % 30 == 0:
             self.tutorial.update()
+        if self.tact % (FPS * 5) == 0:
+            self.game_map.unload_far_chunks()
         if self.tact % AUTOSAVE_PERIOD_TACTS == 0 and self.game_map.world_id is not None:
             self.game_map.save_current_game_map()

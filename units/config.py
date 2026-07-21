@@ -69,6 +69,7 @@ class GameSettings(__Settings):
     all_languages = config.get(section, 'all_languages').replace(" ", "").split(",")
     language = config.get(section, 'language')
     max_fps = config.getint(section, 'max_fps', fallback=60)
+    dynamic_dump = config.getboolean(section, 'dynamic_dump', fallback=True)
     if language not in all_languages:
         language = "en"
 
@@ -91,6 +92,10 @@ class GameSettings(__Settings):
     @classmethod
     def set_max_fps(cls, value):
         cls.set("max_fps", int(value))
+
+    @classmethod
+    def set_dynamic_dump(cls, state):
+        cls.set("dynamic_dump", bool(state))
 
 
 class VolumeSettings(__Settings):

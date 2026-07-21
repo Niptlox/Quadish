@@ -93,6 +93,52 @@ def test_chunk_structure():
     assert len(chunk[5]) == CHUNK_SIZE ** 2
 
 
+def test_dynamic_dump_unload():
+    from units.common import CHUNK_SIZE
+    game = fresh_world(321)
+    gm = game.game_map
+    gm.dynamic_dump = True
+    game.player.rect.x = 0
+    game.player.rect.y = 0
+    game.player.update_chunk_pos()
+
+    # 1) чистый дальний чанк выгружается из памяти
+    far = (400, 400)
+    gm.create_pass_chunk(far)
+    assert far in gm.game_map and far not in gm.modified_chunks
+    gm.unload_far_chunks()
+    assert far not in gm.game_map, "чистый дальний чанк должен выгрузиться"
+
+    # 2) модифицированный чанк остаётся в памяти
+    gm.set_static_tile(400 * CHUNK_SIZE, 400 * CHUNK_SIZE, 3)
+    assert far in gm.modified_chunks
+    gm.unload_far_chunks()
+    assert far in gm.game_map, "модифицированный чанк выгружать нельзя"
+
+    # 3) чанк с динамикой не выгружается (предметы/существа не теряются)
+    other = (410, 410)
+    gm.create_pass_chunk(other)
+    gm.add_item_of_index(2, 1, 410 * CHUNK_SIZE, 410 * CHUNK_SIZE)
+    gm.unload_far_chunks()
+    assert other in gm.game_map, "чанк с предметами не выгружается"
+
+    # 4) отключение — ничего не выгружается
+    gm.dynamic_dump = False
+    empty = (600, 600)
+    gm.create_pass_chunk(empty)
+    assert gm.unload_far_chunks() == 0
+    assert empty in gm.game_map
+
+
+def test_generation_reproducible_after_unload():
+    game = fresh_world(654)
+    gm = game.game_map
+    a = list(gm.chunk((80, 0), create_chunk=True)[0])
+    del gm.game_map[(80, 0)]
+    b = list(gm.chunk((80, 0), create_chunk=True)[0])
+    assert a == b, "регенерация чанка должна быть идентичной (детерминизм по сиду)"
+
+
 def test_space_chunks_empty():
     gm = fresh_world(5).game_map
     chunk = gm.generate_chunk(0, -100)  # глубокий космос

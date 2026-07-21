@@ -330,35 +330,42 @@ fps_values_lst = [30, 60, 120]
 
 class MainSettingsUI(TitleUI):
     # меню с основными настройками
-    window_sizes_lst = ["1240,720", "1054,612", "720,480"]
+    window_sizes_lst = ["1920,1080", "1600,900", "1366,768", "1280,720",
+                        "1240,720", "1054,612", "960,540", "720,480"]
+    header_title = "Настройки"
 
     def __init__(self, scene):
         super(MainSettingsUI, self).__init__(scene)
+        # логотип в настройках не показываем (self.tts от TitleUI остаётся,
+        # но не добавлен в objects — draw_background его обновляет вхолостую)
         self.objects = GroupUI([])
 
-        btn_size = 400, 35
-        btn_rect = pg.Rect((0, 0), btn_size)
+        # компактный заголовок вверху вместо большого логотипа
+        htxt = add_outline_to_image(textfont_btn.render(get_translated_text(self.header_title), True, WHITE),
+                                    2, "#1C1917")
+        header = SurfaceUI(((0, 0), htxt.get_size())).convert_alpha()
+        header.blit(htxt, (0, 0))
+        header.rect.centerx = self.rect.centerx
+        header.rect.top = 22
 
-        btns = self.get_pre_buttons(btn_rect)
+        btn_w, btn_h = 400, 35
+        btns = self.get_pre_buttons(pg.Rect(0, 0, btn_w, btn_h))
+        n = max(1, len(btns))
 
-        step = 15
-        btn_pos = self.rect.w // 2 - btn_size[0] // 2, self.rect.h // 2 - (btn_size[1] + step) / 2 * len(btns) + 40
-        btn_rect = pg.Rect(btn_pos, btn_size)
-        obj_btns = createVSteckTextButtons(btn_rect.size, btn_rect.centerx, btn_rect.top, step, btns,
+        # динамическая вертикальная раскладка: кнопки всегда влезают между
+        # заголовком и низом экрана при любом размере окна (фикс наложения)
+        top = header.rect.bottom + 18
+        avail = max(btn_h, self.rect.h - top - 20)
+        slot = min(btn_h + 15, max(btn_h + 4, avail // n))
+        step = slot - btn_h
+        start_y = top + max(0, (avail - slot * n) // 2)
+        obj_btns = createVSteckTextButtons((btn_w, btn_h), self.rect.centerx, start_y, step, btns,
                                            screen_position=(self.rect.x, self.rect.y),
-                                           font=textfont_btn)  # кнопки открывающие карты
+                                           font=textfont_btn)
 
         self.objects.add_lst(obj_btns)
+        self.objects.add(header)
         self.keynav = KeyboardNav(obj_btns)
-
-        self.tts = title_text_surf = SurfaceUI(((0, 0), self.game_title_text.get_size()))
-        title_text_surf.blit(self.game_title_text, (0, 0))
-        title_text_surf.set_colorkey(self.color_sky)
-        title_text_surf.rect.topleft = center_pos_2lens(title_text_surf.rect.w, self.rect.w), \
-            center_pos_2lens(title_text_surf.rect.h, self.rect.h) - 220
-        self.tts_y = title_text_surf.rect.top
-
-        self.objects.add(title_text_surf)
         self.objects.add(self.sys_message)
 
     def get_pre_buttons(self, btn_rect):
@@ -387,6 +394,9 @@ class MainSettingsUI(TitleUI):
                              "Лимит FPS: {}", states_text_lst=fps_values_lst,
                              start_state_index=fps_values_lst.index(config.GameSettings.max_fps)
                              if config.GameSettings.max_fps in fps_values_lst else 1),
+            ChangeTextButton(self.set_dynamic_dump, btn_rect,
+                             "Выгрузка карты: {}", states_text_lst=ru_bool_lst,
+                             start_state_index=eng_bool_lst.index(config.GameSettings.dynamic_dump)),
             ("Звуки и музыка...", lambda _: self.scene.set_ui(self.scene.sound_settings_ui)),
             ("Создать мир обучения", lambda _: self.scene.create_tutorial_world()),
             ("В главное меню", lambda _: self.scene.set_ui(self.scene.title_ui)),
@@ -412,6 +422,15 @@ class MainSettingsUI(TitleUI):
         config.GameSettings.set_max_fps(state)
         self.sys_message.send_reload_game_for_change()
 
+    def set_dynamic_dump(self, button, state):
+        enabled = bool_dict[state]
+        config.GameSettings.set_dynamic_dump(enabled)
+        # применяем сразу к текущему миру
+        try:
+            self.scene.app.game_scene.game_map.dynamic_dump = enabled
+        except Exception:
+            pass
+
 
 categories_sounds = {
     "ui",
@@ -425,6 +444,8 @@ volume_values_lst = [0, 10, 20, 30, 40, 50, 60, 70, 80, 100]
 
 
 class SoundSettingsUI(MainSettingsUI):
+    header_title = "Звук и музыка"
+
     def get_pre_buttons(self, btn_rect):
         btns = [
             ChangeTextButton(lambda _, state: set_category_volume("background", state / 100), btn_rect, "Музыка {}%",
