@@ -1,6 +1,6 @@
 from units.Achievements import achievements
 from units.UI.Button import createImagesButton, createVSteckButtons, Button, createVSteckTextButtons, \
-    ChangeTextButton, TextButton
+    ChangeTextButton, TextButton, KeyboardNav
 from units.UI.ClassUI import *
 from units.UI.InventoryUI import *
 from units.UI.ColorsUI import *
@@ -250,6 +250,7 @@ class TitleUI(UI):
                                        screen_position=(self.rect.x, self.rect.y))  # кнопки открывающие карты
 
         self.objects.add_lst(obj_btns)
+        self.keynav = KeyboardNav(obj_btns)
         _font_dev_btn = pygame.font.Font(MAIN_FONT_PATH, 23, )
         dev_but = Button(lambda _: self.scene.open_developers(),
                          (self.rect.w - 200, self.rect.h - 60, 175, 35),
@@ -316,6 +317,8 @@ class TitleUI(UI):
         pg.display.flip()
 
     def pg_event(self, event: pg.event.Event):
+        if self.keynav.pg_event(event):
+            return True
         self.objects.pg_event(event)
 
     def change_lang(self, button, lang):
@@ -347,6 +350,7 @@ class MainSettingsUI(TitleUI):
                                            font=textfont_btn)  # кнопки открывающие карты
 
         self.objects.add_lst(obj_btns)
+        self.keynav = KeyboardNav(obj_btns)
 
         self.tts = title_text_surf = SurfaceUI(((0, 0), self.game_title_text.get_size()))
         title_text_surf.blit(self.game_title_text, (0, 0))
@@ -417,24 +421,31 @@ volume_values_lst = [0, 10, 20, 30, 40, 50, 60, 70, 80, 100]
 class SoundSettingsUI(MainSettingsUI):
     def get_pre_buttons(self, btn_rect):
         btns = [
-            ("Громкость", lambda _: ()),
             ChangeTextButton(lambda _, state: set_category_volume("background", state / 100), btn_rect, "Музыка {}%",
                              states_text_lst=volume_values_lst,
-                             start_state_index=volume_values_lst.index(config.VolumeSettings.background_volume * 100)),
+                             start_state_index=self._volume_index(config.VolumeSettings.background_volume)),
+            ChangeTextButton(lambda _, state: set_category_volume("game", state / 100), btn_rect, "Звуки игры {}%",
+                             states_text_lst=volume_values_lst,
+                             start_state_index=self._volume_index(config.VolumeSettings.game_volume)),
             ChangeTextButton(lambda _, state: set_category_volume("player", state / 100), btn_rect, "Игрок {}%",
                              states_text_lst=volume_values_lst,
-                             start_state_index=volume_values_lst.index(config.VolumeSettings.player_volume * 100)),
+                             start_state_index=self._volume_index(config.VolumeSettings.player_volume)),
             ChangeTextButton(lambda _, state: set_category_volume("creatures", state / 100), btn_rect, "Существа {}%",
                              states_text_lst=volume_values_lst,
-                             start_state_index=volume_values_lst.index(config.VolumeSettings.creatures_volume * 100)),
+                             start_state_index=self._volume_index(config.VolumeSettings.creatures_volume)),
             ChangeTextButton(lambda _, state: set_category_volume("ui", state / 100), btn_rect, "Интерфейс {}%",
                              states_text_lst=volume_values_lst,
-                             start_state_index=volume_values_lst.index(config.VolumeSettings.ui_volume * 100)),
+                             start_state_index=self._volume_index(config.VolumeSettings.ui_volume)),
             ("Назад", lambda _: self.scene.set_ui(self.scene.settings_ui)),
 
         ]
-        print(btns)
         return btns
+
+    @staticmethod
+    def _volume_index(volume):
+        """Индекс ближайшего значения громкости (устойчиво к произвольным числам в конфиге)."""
+        value = volume * 100
+        return min(range(len(volume_values_lst)), key=lambda i: abs(volume_values_lst[i] - value))
 
 
 class WorldListUI(UI):
@@ -609,6 +620,7 @@ class PauseUI(UI):
         self.btns = createVSteckButtons(btn_rect.size, btn_rect.centerx, btn_rect.top, 15, self.img_btns, funcs,
                                         screen_position=(self.rect.x,
                                                          self.rect.y))  # кнопки открывающие карты
+        self.keynav = KeyboardNav(self.btns)
 
     def draw(self):
         self.screen.blit(self.display, (0, 0))
@@ -620,6 +632,8 @@ class PauseUI(UI):
         pg.display.flip()
 
     def pg_event(self, event: pg.event.Event):
+        if self.keynav.pg_event(event):
+            return True
         for btn in self.btns:
             btn.pg_event(event)
 

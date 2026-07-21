@@ -183,6 +183,40 @@ class Button(pygame.sprite.Sprite):
         self.redraw()
 
 
+class KeyboardNav:
+    """Навигация по списку кнопок с клавиатуры: стрелки/W/S + Enter/Space."""
+
+    def __init__(self, btns):
+        self.btns = [b for b in btns if isinstance(b, Button)]
+        self.index = -1
+
+    def pg_event(self, event):
+        if event.type != pygame.KEYDOWN or not self.btns:
+            return False
+        if event.key in (pygame.K_DOWN, pygame.K_s):
+            self._move(1)
+            return True
+        if event.key in (pygame.K_UP, pygame.K_w):
+            self._move(-1)
+            return True
+        if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+            if 0 <= self.index < len(self.btns):
+                self.btns[self.index].click()
+                return True
+        return False
+
+    def _move(self, d):
+        if self.index == -1:
+            self.index = 0 if d > 0 else len(self.btns) - 1
+        else:
+            self.btns[self.index].mauseInButton = False
+            self.btns[self.index].redraw()
+            self.index = (self.index + d) % len(self.btns)
+        btn = self.btns[self.index]
+        btn.mauseInButton = True
+        btn.redraw()
+
+
 class TextButton(Button):
     def __init__(self, func, rect, text, group=None, screenXY=None, disabled=False, color_schema=DEF_COLOR_SCHEME_BUT,
                  font=TEXTFONT_BTN):
