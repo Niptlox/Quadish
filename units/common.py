@@ -41,8 +41,6 @@ if not AUDIO_ENABLED:
 # Лимит кадров: настраивается в settings.ini ([game] max_fps) и в меню настроек.
 # 60 по умолчанию — вдвое меньше работы на слабом железе, чем прежние 120.
 FPS = config.GameSettings.max_fps
-flags = 0
-# flags = pygame.SCALED
 print("INIT GAME VARS")
 last_versions = ["0.9.1", "0.1.3-alpha", "0.1.5-alpha", "0.1.6-alpha"]
 GAME_VERSION = "0.1.7-alpha"
@@ -50,18 +48,19 @@ GAME_VERSION = "0.1.7-alpha"
 WINDOW_SIZE = tuple(map(int, config.Window.size.split(",")))
 FULLSCREEN = config.Window.fullscreen
 desktop_size = pygame.display.get_desktop_sizes()[0]
+
+# pygame.SCALED: игра рендерится в логический размер WINDOW_SIZE, а pygame
+# сам масштабирует картинку под реальное окно/фуллскрин (сохраняя пропорции)
+# и пересчитывает координаты мыши. Благодаря этому окно можно ресайзить и
+# включать фуллскрин без «катавасии» — без искажений и пустых полей.
+flags = pygame.SCALED
 if FULLSCREEN:
-    # WINDOW_SIZE = desktop_size[0] // 2, desktop_size[1] // 2
-    DESKTOP_COF = desktop_size[0] / desktop_size[1]
-    WINDOW_SIZE = WINDOW_SIZE[1] * DESKTOP_COF, WINDOW_SIZE[1]
     flags |= pygame.FULLSCREEN
+else:
+    flags |= pygame.RESIZABLE
 
-# WINDOW_SIZE = WINDOW_SIZE[0] * 2, WINDOW_SIZE[1] - 10
 WSIZE = WINDOW_SIZE
-# WINDOW_SIZE = (1920, 1080)
 
-
-# flags |= pygame.SCALED
 pygame.display.set_caption('Quadish')
 Icon = pg.image.load("data/sprites/Icon.png")
 pygame.display.set_icon(Icon)

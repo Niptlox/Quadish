@@ -400,7 +400,13 @@ class MainSettingsUI(TitleUI):
 
     def set_fullscreen(self, button, state):
         config.Window.set_fullscreen(state)
-        self.sys_message.send_reload_game_for_change()
+        # с флагом SCALED фуллскрин можно переключать на лету, без перезапуска
+        want = bool(bool_dict.get(state, state))
+        try:
+            if pg.display.is_fullscreen() != want:
+                pg.display.toggle_fullscreen()
+        except Exception:
+            self.sys_message.send_reload_game_for_change()
 
     def set_max_fps(self, button, state):
         config.GameSettings.set_max_fps(state)
