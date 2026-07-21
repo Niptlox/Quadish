@@ -520,6 +520,15 @@ def test_tutorial_world_and_steps():
     gm.save_current_game_map()
     assert WorldStorage.find_tutorial_world()["id"] == gm.world_id
 
+    # сундук с припасами создан и запомнен в состоянии мира
+    chest_pos = gm.tutorial_state.get("chest_pos")
+    assert chest_pos, "мир обучения должен создать сундук с припасами"
+    chest_tile = gm.get_static_tile(*chest_pos)
+    assert chest_tile[0] == 129
+    chest = gm.get_tile_obj(*gm.to_chunk_xy(*chest_pos), chest_tile[3])
+    from units.Tutorial import count_in_inventory
+    assert count_in_inventory(chest.inventory, 66) >= 2, "в сундуке должны быть рубины для зелий"
+
     tut = game.tutorial
     tut.__init__(game)  # свежий трекинг
     inv = _empty_inventory(game)
@@ -529,9 +538,9 @@ def test_tutorial_world_and_steps():
     tut.draw(game.display)  # панель задачи рисуется без падений
     assert tut._task_surf is not None
 
-    # шаг 0: движение + прыжок
+    # шаг 0: движение + прыжок (события запоминаются в состоянии мира)
     game.player.rect.x += TSIZE * 6
-    tut.seen_jump = True
+    gm.tutorial_state["seen_jump"] = True
     tut.update()
     assert gm.tutorial_step == 1
 
@@ -549,31 +558,58 @@ def test_tutorial_world_and_steps():
     inv.put_to_inventory(ItemsTile(game, 12, count=1))
     tut.update()
     assert gm.tutorial_step == 2
-    # прогресс в задаче
+    assert game.player.achievements.is_completed("tutorial_wood")
     tut.draw(game.display)
     assert tut._task_text is not None
 
     # шаг 2: инвентарь
-    tut.seen_inventory = True
+    gm.tutorial_state["seen_inventory"] = True
     tut.update()
     assert gm.tutorial_step == 3
     # шаг 3: доски (2 шт — один крафт)
     inv.put_to_inventory(ItemsTile(game, 11, count=2))
     tut.update()
     assert gm.tutorial_step == 4
-    # шаг 4: блоки; финальный шаг закрывается сам
+    # шаг 4: блоки
     game.player.blocks_placed_count = 5
+    tut.update()
+    assert gm.tutorial_step == 5
+    # шаг 5: стол — касание верстака
+    game.player.collisions_ttile = {121}
+    tut.update()
+    assert gm.tutorial_step == 6
+    # шаг 6: припасы из сундука — маркер ведёт к нему
+    assert tuple(tut.target_tile) == tuple(chest_pos), "маркер должен вести к сундуку"
+    inv.put_to_inventory(ItemsTile(game, 66, count=2))
+    tut.update()
+    assert gm.tutorial_step == 7
+    # шаги 7-8: печка и котёл
+    game.player.collisions_ttile = {131}
+    tut.update()
+    assert gm.tutorial_step == 8
+    game.player.collisions_ttile = {125}
+    tut.update()
+    assert gm.tutorial_step == 9
+    # шаг 9: зелье; финальный шаг закрывается сам
+    inv.put_to_inventory(ItemsTile(game, 351, count=1))
     tut.update()
     tut.update()
     assert gm.tutorial_step == -1, "обучение должно завершиться"
+    for ach in ("tutorial_craft", "tutorial_builder", "tutorial_workbench",
+                "tutorial_supplies", "tutorial_furnace", "tutorial_cauldron",
+                "tutorial_potion", "tutorial_done"):
+        assert game.player.achievements.is_completed(ach), f"нет достижения {ach}"
 
-    # прогресс сохраняется вместе с миром
+    # прогресс и состояния сохраняются вместе с миром
     wid = gm.world_id
     gm.save_current_game_map()
     game.game_map.new_world()  # обычный мир — обучение неактивно
     assert gm.tutorial_step == -1
+    assert not gm.tutorial_state
     gm.open_game_map(game, wid)
     assert gm.tutorial_step == -1  # завершённое обучение не перезапускается
+    assert tuple(gm.tutorial_state.get("chest_pos")) == tuple(chest_pos), \
+        "состояния обучения должны сохраняться с миром"
 
     WorldStorage.delete_world(wid)
     assert WorldStorage.find_tutorial_world() is None, "мир обучения удаляем как обычный"

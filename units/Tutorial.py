@@ -1,11 +1,13 @@
-"""Обучение (фаза 2 концепта docs/TUTORIAL_CONCEPT.md).
+"""Обучение (docs/TUTORIAL_CONCEPT.md, фазы 1–3).
 
 Активно только когда game_map.tutorial_step >= 0 — в мире «Обучение».
-Прогресс (номер шага) хранится в GameMap и сохраняется вместе с миром.
+Всё запоминаемое хранится в мире и сохраняется с ним:
+- game_map.tutorial_step — номер текущего шага;
+- game_map.tutorial_state — словарь состояний (стартовая позиция, разовые
+  события, позиция сундука с припасами).
 
-Каналы: подсказка через SysMessege, постоянная задача с прогрессом
-вверху экрана («Добудь дерево 1/3») и маркер цели — пульсирующая рамка
-на тайле, а если цель за экраном — стрелка у края в её сторону.
+Каналы: подсказка через SysMessege, задача с прогрессом вверху экрана,
+маркер цели (рамка на тайле / стрелка у края экрана), достижения за шаги.
 """
 import math
 
@@ -16,9 +18,16 @@ from units.UI.Translate import get_translated_text
 
 REPEAT_TACTS = FPS * 45  # повтор подсказки, если игрок застрял
 HINT_TACTS = FPS * 6     # сколько висит подсказка
-WOOD_TILE = 110          # ствол дерева
-WOOD_ITEM = 12           # бревно
-PLANK_ITEM = 11          # доски
+
+WOOD_TILE = 110    # ствол дерева
+WOOD_ITEM = 12     # бревно
+PLANK_ITEM = 11    # доски
+TABLE_TILE = 121   # стол (верстак)
+CHEST_TILE = 129   # сундук
+FURNACE_TILE = 131 # печка
+CAULDRON_TILE = 125  # котёл
+RUBY_ITEM = 66     # рубин (ингредиент зелий из сундука)
+POTION_ITEMS = (55, 351)  # зелье жизни, зелье прыжка
 
 MARKER_COLOR = "#FDE047"
 
@@ -30,52 +39,79 @@ def count_in_inventory(inventory, index):
 
 
 class Step:
-    __slots__ = ("hint", "done", "task", "progress", "target")
+    __slots__ = ("hint", "done", "task", "progress", "target", "achievement")
 
-    def __init__(self, hint, done, task=None, progress=None, target=None):
+    def __init__(self, hint, done, task=None, progress=None, target=None, achievement=None):
         self.hint = hint          # текст подсказки (SysMessege)
         self.done = done          # () -> bool: условие выполнения
         self.task = task or hint  # текст задачи вверху экрана
         self.progress = progress  # () -> (текущее, всего) или None
         self.target = target      # () -> (tile_x, tile_y) или None: цель маркера
+        self.achievement = achievement  # id достижения за выполнение шага
 
 
 class TutorialHints:
     def __init__(self, game):
         self.game = game
-        self.start_pos = None
-        self.seen_jump = False
-        self.seen_inventory = False
         self.last_hint_tact = -10 ** 9
         self.target_tile = None
         self._steps = None
         self._task_text = None
         self._task_surf = None
 
+    @property
+    def state(self):
+        return self.game.game_map.tutorial_state
+
     def steps(self):
         p = self.game.player
         inv = p.inventory
+        st = self.state
         return [
             Step("Обучение: [A]/[D] — движение, [Пробел] — прыжок",
-                 lambda: self.start_pos is not None and self.seen_jump
-                         and abs(p.rect.x - self.start_pos[0]) > TSIZE * 5,
+                 lambda: st.get("seen_jump") and st.get("start_pos")
+                         and abs(p.rect.x - st["start_pos"][0]) > TSIZE * 5,
                  task="Осмотрись и попрыгай"),
             Step("Обучение: добудь 3 дерева — зажми [ЛКМ] на стволе",
                  lambda: count_in_inventory(inv, WOOD_ITEM) >= 3,
                  task="Добудь дерево",
                  progress=lambda: (min(3, count_in_inventory(inv, WOOD_ITEM)), 3),
-                 target=self._nearest_wood),
+                 target=self._nearest_wood,
+                 achievement="tutorial_wood"),
             Step("Обучение: открой инвентарь — [E]",
-                 lambda: self.seen_inventory,
+                 lambda: st.get("seen_inventory"),
                  task="Открой инвентарь — [E]"),
             Step("Обучение: скрафть доски — рецепты справа в инвентаре [E]",
                  lambda: count_in_inventory(inv, PLANK_ITEM) >= 2,
                  task="Скрафть доски",
-                 progress=lambda: (min(2, count_in_inventory(inv, PLANK_ITEM)), 2)),
+                 progress=lambda: (min(2, count_in_inventory(inv, PLANK_ITEM)), 2),
+                 achievement="tutorial_craft"),
             Step("Обучение: построй что-нибудь — [ПКМ] ставит блок",
                  lambda: p.blocks_placed_count >= 5,
                  task="Поставь блоки",
-                 progress=lambda: (min(5, p.blocks_placed_count), 5)),
+                 progress=lambda: (min(5, p.blocks_placed_count), 5),
+                 achievement="tutorial_builder"),
+            Step("Обучение: скрафть стол (2 доски) и встань рядом — откроются новые рецепты",
+                 lambda: TABLE_TILE in p.collisions_ttile,
+                 task="Скрафть и поставь стол",
+                 achievement="tutorial_workbench"),
+            Step("Обучение: в сундуке припасы для печки и зелий — забери их ([ПКМ] по сундуку)",
+                 lambda: count_in_inventory(inv, RUBY_ITEM) >= 1,
+                 task="Забери припасы из сундука",
+                 target=lambda: st.get("chest_pos"),
+                 achievement="tutorial_supplies"),
+            Step("Обучение: у стола скрафть печку (кирпич и железо из сундука) и поставь её",
+                 lambda: FURNACE_TILE in p.collisions_ttile,
+                 task="Построй печку",
+                 achievement="tutorial_furnace"),
+            Step("Обучение: у стола скрафть котёл (доска и железо) и поставь его",
+                 lambda: CAULDRON_TILE in p.collisions_ttile,
+                 task="Построй котёл",
+                 achievement="tutorial_cauldron"),
+            Step("Обучение: встань у котла и свари зелье — рецепты в инвентаре [E]",
+                 lambda: any(count_in_inventory(inv, i) for i in POTION_ITEMS),
+                 task="Свари зелье у котла",
+                 achievement="tutorial_potion"),
             Step("Обучение пройдено! Свой мир — через «Играть», справка — [F1]",
                  lambda: True),
         ]
@@ -88,25 +124,27 @@ class TutorialHints:
         if step_i < 0:
             self._steps = None
             return
-        if self.start_pos is None:
-            self.start_pos = (game.player.rect.x, game.player.rect.y)
-        # трекинг разовых событий
+        st = self.state
+        if not st.get("start_pos"):
+            st["start_pos"] = [game.player.rect.x, game.player.rect.y]
+        # трекинг разовых событий (запоминается в мире)
         if game.player.jump_count > 0:
-            self.seen_jump = True
+            st["seen_jump"] = True
         if game.player.inventory.ui.opened:
-            self.seen_inventory = True
+            st["seen_inventory"] = True
 
         self._steps = steps = self.steps()
         if step_i >= len(steps):
-            game.game_map.tutorial_step = -1
+            self._finish()
             return
         step = steps[step_i]
         if step.done():
+            if step.achievement:
+                game.player.achievements.new_completed(step.achievement)
             game.game_map.tutorial_step = step_i + 1
             self._task_text = None
             if game.game_map.tutorial_step >= len(steps):
-                game.game_map.tutorial_step = -1
-                self._steps = None
+                self._finish()
                 return
             # сразу показываем следующий шаг
             step = steps[game.game_map.tutorial_step]
@@ -116,6 +154,11 @@ class TutorialHints:
             game.ui.new_sys_message(step.hint, count_tact=HINT_TACTS)
             self.last_hint_tact = game.tact
         self.target_tile = step.target() if step.target else None
+
+    def _finish(self):
+        self.game.game_map.tutorial_step = -1
+        self._steps = None
+        self.game.player.achievements.new_completed("tutorial_done")
 
     def _nearest_wood(self):
         """Ближайший ствол дерева в загруженной области."""

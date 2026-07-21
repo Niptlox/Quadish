@@ -40,6 +40,7 @@ class GameMap(SavedObject):
         self.start_hell_y = START_HELL_Y
         self.creative_mode = CREATIVE_MODE
         self.tutorial_step = -1  # -1 = обучение неактивно; >=0 = номер шага
+        self.tutorial_state = {}  # запоминаемые состояния обучения (сохраняются с миром)
         self.gate = None
         if self.base_generation is None:
             self.new_base_generation()
@@ -676,6 +677,28 @@ class GameMap(SavedObject):
         self.game.reinit_player()
         self.game.player.tp_to(config.GameSettings.start_pos)
         self.spawn_gate()
+        if tutorial:
+            self._place_tutorial_chest()
+
+    def _place_tutorial_chest(self):
+        """Сундук с припасами для обучения (руда, кирпич, слизь, ягоды, рубины) —
+        ставится на землю недалеко от спавна, позиция запоминается для маркера."""
+        x = 4
+        chest_y = None
+        for y in range(-6, 40):
+            if self.get_static_tile_type(x, y, default=0, create_chunk=True) != 0:
+                chest_y = y - 1
+                break
+        if chest_y is None:
+            chest_y = -1
+        self.set_static_tile(x, chest_y, 129)
+        tile = self.get_static_tile(x, chest_y)
+        chest = self.get_tile_obj(*self.to_chunk_xy(x, chest_y), tile[3])
+        if chest is not None:
+            # хватает на печку (31x4, 11x1, 64x2), котёл (11x1, 64x8) и оба зелья
+            for idx, cnt in ((31, 8), (64, 14), (51, 30), (53, 30), (66, 6), (11, 4)):
+                chest.inventory.put_to_inventory(ItemsTile(self.game, idx, count=cnt))
+        self.tutorial_state["chest_pos"] = [x, chest_y]
 
 
 def random_plant_selection(biome=None):

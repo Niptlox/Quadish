@@ -120,5 +120,15 @@
   "Скрафть доски": "Craft planks",
   "Поставь блоки": "Place blocks",
   "Обучение: добудь 3 дерева — зажми [ЛКМ] на стволе": "Tutorial: get 3 wood — hold [LMB] on a trunk",
-  "Обучение: построй что-нибудь — [ПКМ] ставит блок": "Tutorial: build something — [RMB] places a block"
+  "Обучение: построй что-нибудь — [ПКМ] ставит блок": "Tutorial: build something — [RMB] places a block",
+  "Обучение: скрафть стол (2 доски) и встань рядом — откроются новые рецепты": "Tutorial: craft a table (2 planks) and stand next to it — new recipes unlock",
+  "Скрафть и поставь стол": "Craft and place a table",
+  "Обучение: в сундуке припасы для печки и зелий — забери их ([ПКМ] по сундуку)": "Tutorial: the chest holds supplies for the furnace and potions — take them ([RMB] on the chest)",
+  "Забери припасы из сундука": "Take supplies from the chest",
+  "Обучение: у стола скрафть печку (кирпич и железо из сундука) и поставь её": "Tutorial: at the table craft a furnace (bricks and iron from the chest) and place it",
+  "Построй печку": "Build a furnace",
+  "Обучение: у стола скрафть котёл (доска и железо) и поставь его": "Tutorial: at the table craft a cauldron (plank and iron) and place it",
+  "Построй котёл": "Build a cauldron",
+  "Обучение: встань у котла и свари зелье — рецепты в инвентаре [E]": "Tutorial: stand by the cauldron and brew a potion — recipes in the inventory [E]",
+  "Свари зелье у котла": "Brew a potion at the cauldron"
 }
