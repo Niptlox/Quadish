@@ -5,7 +5,7 @@ BORDER_COLOR = "#1C1917"
 
 def create_tile_image(color, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
     size = max(size[0], 1), max(size[1], 1)
-    img = pygame.Surface(size)
+    img = pygame.Surface(size).convert()
     img.fill(bd_color)
     pygame.draw.rect(img, color, ((bd, bd), (size[0] - bd * 2, size[0] - bd * 2)), border_radius=bd * 2)
     return img
@@ -29,6 +29,12 @@ def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_ti
 
 
 def convert_img(img, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_tile=False):
+    # Конвертация в формат экрана обязательна: без неё каждый blit
+    # конвертирует пиксели заново, что роняет FPS в разы.
+    if img.get_flags() & pygame.SRCALPHA:
+        img = img.convert_alpha()
+    else:
+        img = img.convert()
     if size == SIZE_2X:
         img = pygame.transform.scale2x(img)
     elif size:
@@ -40,7 +46,6 @@ def convert_img(img, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_
     if scale == 2:
         img = pygame.transform.scale2x(img)
     if alpha:
-        img.convert_alpha()
         img.set_alpha(alpha)
     return img
 

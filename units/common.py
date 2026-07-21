@@ -54,7 +54,7 @@ Icon = pg.image.load("data/sprites/Icon.png")
 pygame.display.set_icon(Icon)
 
 screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags, vsync=1)
-display_ = pygame.Surface(WINDOW_SIZE)
+display_ = pygame.Surface(WINDOW_SIZE).convert()
 
 print(pg.display.get_allow_screensaver())
 
