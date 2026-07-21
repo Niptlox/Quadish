@@ -321,6 +321,9 @@ class TitleUI(UI):
         self.sys_message.send_reload_game_for_change()
 
 
+fps_values_lst = [30, 60, 120]
+
+
 class MainSettingsUI(TitleUI):
     # меню с основными настройками
     window_sizes_lst = ["1240,720", "1054,612", "720,480"]
@@ -375,6 +378,10 @@ class MainSettingsUI(TitleUI):
             ChangeTextButton(lambda _, state: config.GameSettings.set_item_index_state(bool_dict[state]), btn_rect,
                              "ID предмета: {}", states_text_lst=ru_bool_lst,
                              start_state_index=eng_bool_lst.index(config.GameSettings.view_item_index)),
+            ChangeTextButton(self.set_max_fps, btn_rect,
+                             "Лимит FPS: {}", states_text_lst=fps_values_lst,
+                             start_state_index=fps_values_lst.index(config.GameSettings.max_fps)
+                             if config.GameSettings.max_fps in fps_values_lst else 1),
             ("Звуки и музыка...", lambda _: self.scene.set_ui(self.scene.sound_settings_ui)),
             ("В главное меню", lambda _: self.scene.set_ui(self.scene.title_ui)),
 
@@ -387,6 +394,10 @@ class MainSettingsUI(TitleUI):
 
     def set_fullscreen(self, button, state):
         config.Window.set_fullscreen(state)
+        self.sys_message.send_reload_game_for_change()
+
+    def set_max_fps(self, button, state):
+        config.GameSettings.set_max_fps(state)
         self.sys_message.send_reload_game_for_change()
 
 

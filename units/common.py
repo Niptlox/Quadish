@@ -27,7 +27,9 @@ print(CWDIR)
 pygame.mixer.pre_init(44100, -16, 1, 512)
 pygame.init()  # initiate pygame
 
-FPS = 120
+# Лимит кадров: настраивается в settings.ini ([game] max_fps) и в меню настроек.
+# 60 по умолчанию — вдвое меньше работы на слабом железе, чем прежние 120.
+FPS = config.GameSettings.max_fps
 flags = 0
 # flags = pygame.SCALED
 print("INIT GAME VARS")
