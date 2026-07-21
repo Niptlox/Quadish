@@ -82,15 +82,32 @@ jobs:
             echo "Нет собранных артефактов — релиз не создаётся"
             exit 1
           fi
+          # SHA256-чексуммы для проверки целостности (файл прикладываем к релизу)
+          ( cd artifacts && sha256sum *.tar.gz *.zip 2>/dev/null > SHA256SUMS.txt || true )
+          SUMS=$(cat artifacts/SHA256SUMS.txt 2>/dev/null || true)
+          files+=(artifacts/SHA256SUMS.txt)
           TAG="${{ steps.tag.outputs.tag }}"
           REPO="${{ github.repository }}"
-          NOTES="Автоматическая сборка Quadish.
+          NOTES="Автоматическая сборка Quadish. Python не требуется, собрано на Python 3.13.
 
           **Скачать и запустить:**
           - **Windows** — \`Quadish-*-windows-x64.zip\`: распакуйте и запустите \`Quadish.exe\`
           - **Linux** — \`Quadish-*-linux-x64.tar.gz\`: распакуйте и запустите \`./Quadish\`
 
-          Python не требуется. Собрано на Python 3.13. Проверьте \`Quadish test\` для самопроверки."
+          **⚠️ Браузер/Windows предупреждают о файле?** Это ожидаемо: exe не
+          подписан платным сертификатом, а у новой сборки нулевая репутация —
+          это не вирус.
+          - **Chrome/Edge:** у загрузки нажмите «⋯» → **«Сохранить» / «Keep»**
+            (или в \`chrome://downloads\` → «Сохранить опасный файл»).
+          - **Windows SmartScreen** при запуске: **«Подробнее» → «Выполнить в
+            любом случае»**.
+          - Для спокойствия сверьте SHA256 из \`SHA256SUMS.txt\` (см. ниже).
+
+          Самопроверка сборки: \`Quadish test\`.
+
+          \`\`\`
+          $SUMS
+          \`\`\`"
           if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
             # релиз уже есть (повторный запуск тега) — обновляем архивы и описание
             gh release upload "$TAG" "${files[@]}" --repo "$REPO" --clobber
