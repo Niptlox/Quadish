@@ -58,6 +58,12 @@ class ScreenMap:
                                                   self.edges_for_stars[3] - int(height * 0.3) + display.get_height())])
         print("STARS:", cnt)
 
+        # запас для отсечения невидимых облаков/звёзд (максимальный размер картинки)
+        self.cloud_margin = max(max(im.get_width() for im in cloud_images),
+                                max(im.get_height() for im in cloud_images))
+        self.star_margin = max(max(im.get_width() for im in star_images),
+                               max(im.get_height() for im in star_images))
+
     def teleport_to_player(self):
         self.true_scroll[0] = self.player.rect.x - WSIZE[0] // 2
         self.true_scroll[1] = self.player.rect.y - WSIZE[1] // 2
@@ -133,19 +139,32 @@ class ScreenMap:
 
         # self.true_scroll[1] = self.player.rect.y - WSIZE[1] // 2
         self.scroll = scroll = [int(self.true_scroll[0]), int(self.true_scroll[1])]
+        blit = self.display.blit
+        sw, sh = WSIZE
         if GameSettings.stars and self.scroll[1] < TOP_MIDDLE_WORLD * TSIZE:
+            m = self.star_margin
+            off_x = scroll[0] * PARALLAX_SPACE
+            off_y = scroll[1] * PARALLAX_SPACE + (TOP_MIDDLE_WORLD * TSIZE - 7000)
             for star in self.sky_stars:
-                pos = (star[1] - scroll[0] * PARALLAX_SPACE,
-                       star[2] - scroll[1] * PARALLAX_SPACE - (TOP_MIDDLE_WORLD * TSIZE - 7000))
-                # star[2] - scroll[1] * PARALLAX_SPACE - (TOP_MIDDLE_WORLD * TSIZE - 6200))
-                self.display.blit(star_images[star[0]], pos)
+                x = star[1] - off_x
+                if -m < x < sw:
+                    y = star[2] - off_y
+                    if -m < y < sh:
+                        blit(star_images[star[0]], (x, y))
         if GameSettings.clouds:
+            m = self.cloud_margin
+            off_x = scroll[0] * PARALLAX
+            off_y = scroll[1] * PARALLAX
+            right_edge = (self.edges[1] + WSIZE[0]) * PARALLAX
             for cloud in self.clouds:
                 cloud[2] += cloud[1]
-                self.display.blit(cloud_images[cloud[0]],
-                                  (cloud[2] - scroll[0] * PARALLAX, cloud[3] - scroll[1] * PARALLAX))
-                if cloud[2] > (self.edges[1] + WSIZE[0]) * PARALLAX:
+                if cloud[2] > right_edge:
                     cloud[2] = self.edges[0] * PARALLAX - cloud_images[cloud[0]].get_width()
+                x = cloud[2] - off_x
+                if -m < x < sw:
+                    y = cloud[3] - off_y
+                    if -m < y < sh:
+                        blit(cloud_images[cloud[0]], (x, y))
 
         static_tiles = {}
         dynamic_tiles = []
@@ -167,6 +186,15 @@ class ScreenMap:
 
         # SHOW AND LOAD TILES ++++++++
 
+        # Видимый диапазон тайлов (+1 тайл запаса по краям).
+        # Тайлы за экраном не рисуются, но регистрируются в static_tiles
+        # для коллизий существ в загруженных чанках.
+        vis_x0 = scroll[0] // TILE_SIZE - 1
+        vis_x1 = (scroll[0] + sw) // TILE_SIZE + 1
+        vis_y0 = scroll[1] // TILE_SIZE - 1
+        vis_y1 = (scroll[1] + sh) // TILE_SIZE + 1
+        tds = self.game_map.tile_data_size
+
         for cy in range(WCSIZE[1]):
             chunk_x = scroll_chunk_x
             for cx in range(WCSIZE[0]):
@@ -176,84 +204,102 @@ class ScreenMap:
                     # генериует статические и динамичские чанки
                     chunk = self.game_map.generate_chunk(chunk_x, chunk_y)  # [static_lst, dynamic_lst]
                 if chunk:
-                    # if cx  + cy == 0:
-                    #     print("chunk_pos", chunk_pos)
                     dynamic_tiles += chunk[1]
                     group_handlers.update(chunk[2])
+                    chunk_static = chunk[0]
+                    chunk_back = chunk[5]
                     index = 0
-                    biome_index = 0
                     backtile_index = 0
                     tile_y = chunk_y * CSIZE
                     i = 0
                     for y in range(CSIZE):
                         tile_x = chunk_x * CSIZE
+                        if not (vis_y0 <= tile_y <= vis_y1):
+                            # строка целиком за экраном: только коллизии
+                            for x in range(CSIZE):
+                                tile_type = chunk_static[index]
+                                if tile_type != 0:
+                                    static_tiles[(tile_x, tile_y)] = tile_type
+                                index += tds
+                                tile_x += 1
+                            backtile_index += CSIZE
+                            i += CSIZE
+                            tile_y += 1
+                            continue
                         for x in range(CSIZE):
-                            backtile_type = chunk[5][backtile_index]
+                            tile_type = chunk_static[index]
+                            if not (vis_x0 <= tile_x <= vis_x1):
+                                # тайл за экраном: только коллизии
+                                if tile_type != 0:
+                                    static_tiles[(tile_x, tile_y)] = tile_type
+                                index += tds
+                                backtile_index += 1
+                                tile_x += 1
+                                i += 1
+                                continue
+                            backtile_type = chunk_back[backtile_index]
                             if backtile_type != 0:
-                                sprite_pos = [tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1]]
-                                self.display.blit(tile_imgs[backtile_type], sprite_pos)
+                                blit(tile_imgs[backtile_type],
+                                     (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1]))
 
-                            tile = chunk[0][index:index + self.game_map.tile_data_size]
-                            tile_type = tile[0]
                             if tile_type > 0:
+                                tile = chunk_static[index:index + tds]
                                 b_pos = [tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1]]
                                 sprite_pos = b_pos
-                                if 1 or srect_d.collidepoint(*b_pos):
-                                    # print(tile_xy)
-                                    if tile_type in tile_many_imgs:
-                                        img = tile_many_imgs[tile_type][tile[2]]
-                                    else:
-                                        img = tile_imgs[tile_type]
-                                    if tile_type == 1:
-                                        biome = chunk[4][i][0]
-                                        if biome not in ground_imgs:
-                                            biome = None
-                                        img = ground_imgs[biome][0]
-                                        if static_tiles.get((tile_x - 1, tile_y), 0) == 0:
-                                            img = ground_imgs[biome][1]
-                                            if self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
-                                                img = ground_imgs[biome][3]
-                                        elif self.game_map.get_static_tile_type(tile_x + 1, tile_y) == 0:
-                                            img = ground_imgs[biome][2]
-                                    elif tile_type == 126:  # шкаф
-                                        img = tile_imgs[tile_type].copy()
-                                        step = TSIZE // 2
-                                        for ity in range(2):
-                                            for itx in range(2):
-                                                if tile[3]:
-                                                    item = tile[3][ity * 2 + itx]
-                                                    if item:
-                                                        img.blit(
-                                                            pg.transform.scale(tile_hand_imgs[item[0]],
-                                                                               (TSIZE // 2 - 1, TSIZE // 2 - 1)),
-                                                            (itx * step + 1, ity * step + 1))
-                                    else:
-                                        # Если передана картинка, то отрисовываем
-                                        img = self.update_tile(chunk, tile, tile_type, index,
-                                                               tile_x, tile_y, chunk_x, chunk_y, tact) or img
+                                if tile_type in tile_many_imgs:
+                                    img = tile_many_imgs[tile_type][tile[2]]
+                                else:
+                                    img = tile_imgs[tile_type]
+                                if tile_type == 1:
+                                    biome = chunk[4][i][0]
+                                    if biome not in ground_imgs:
+                                        biome = None
+                                    img = ground_imgs[biome][0]
+                                    if static_tiles.get((tile_x - 1, tile_y), 0) == 0:
+                                        img = ground_imgs[biome][1]
+                                        if self.game_map.get_static_tile_type(tile_x + 1, tile_y,
+                                                                              default=1, create_chunk=False) == 0:
+                                            img = ground_imgs[biome][3]
+                                    elif self.game_map.get_static_tile_type(tile_x + 1, tile_y,
+                                                                            default=1, create_chunk=False) == 0:
+                                        img = ground_imgs[biome][2]
+                                elif tile_type == 126:  # шкаф
+                                    img = tile_imgs[tile_type].copy()
+                                    step = TSIZE // 2
+                                    for ity in range(2):
+                                        for itx in range(2):
+                                            if tile[3]:
+                                                item = tile[3][ity * 2 + itx]
+                                                if item:
+                                                    img.blit(
+                                                        pg.transform.scale(tile_hand_imgs[item[0]],
+                                                                           (TSIZE // 2 - 1, TSIZE // 2 - 1)),
+                                                        (itx * step + 1, ity * step + 1))
+                                else:
+                                    # Если передана картинка, то отрисовываем
+                                    img = self.update_tile(chunk, tile, tile_type, index,
+                                                           tile_x, tile_y, chunk_x, chunk_y, tact) or img
 
-                                    if tile_type in TILE_WITH_LOCAL_POS:
-                                        local_pos = tile[3][TILE_LOCAL_POS]
-                                        sprite_pos[0] += local_pos[0]
-                                        sprite_pos[1] += local_pos[1]
-                                    self.display.blit(img, sprite_pos)
+                                if tile_type in TILE_WITH_LOCAL_POS:
+                                    local_pos = tile[3][TILE_LOCAL_POS]
+                                    sprite_pos[0] += local_pos[0]
+                                    sprite_pos[1] += local_pos[1]
+                                blit(img, sprite_pos)
 
-                                    sol = tile[1]
-                                    if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
-                                        br_i = (break_imgs_cnt - 1) - int(
-                                            sol * (break_imgs_cnt - 1) / TILES_SOLIDITY[tile_type])
-                                        self.display.blit(break_imgs[br_i], b_pos)
+                                sol = tile[1]
+                                if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
+                                    br_i = (break_imgs_cnt - 1) - int(
+                                        sol * (break_imgs_cnt - 1) / TILES_SOLIDITY[tile_type])
+                                    blit(break_imgs[br_i], b_pos)
 
                             elif GameSettings.show_biomes:
                                 b_pos = (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1])
                                 img = biome_tiles[chunk[4][i][0]]
-                                self.display.blit(img, b_pos)
-                            # if tile_type in PHYSBODY_TILES:
+                                blit(img, b_pos)
                             if tile_type != 0:
                                 static_tiles[(tile_x, tile_y)] = tile_type
-                            index += self.game_map.tile_data_size
+                            index += tds
                             backtile_index += 1
-                            biome_index += 1
                             tile_x += 1
                             i += 1
                         tile_y += 1
