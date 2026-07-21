@@ -15,6 +15,15 @@
 import os
 import sys
 
+# Windows-консоль по умолчанию cp1252 и падает на печати кириллицы
+# (UnicodeEncodeError). Переводим вывод в UTF-8; в оконной сборке потоки
+# могут быть None — тогда просто пропускаем.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 USAGE = __doc__
 
 
