@@ -456,18 +456,30 @@ class GameMap(SavedObject):
         base_y = y * CHUNK_SIZE
         tile_y = base_y  # global tile y (not px)
         i = 0
-        standart_noise2_bool = lambda tx, ty: noise2(tx / freq_x, ty / freq_y, octaves, persistence=0.35, base=base,
-                                                     lacunarity=lacunarity) < threshold and (
-                                                      noise2(tx / freq_x, ty / freq_y) * 20 + ty) > START_ATMO_Y and (
-                                                      (noise2(tx / freq_x, ty / freq_y) * 20 + ty) < START_HELL_Y or (
-                                                      noise2(tx / freq_x, ty / freq_y) * 20 + ty) > (
-                                                              START_HELL_Y + 50))
+        # Кэш результатов по тайлу: одна и та же проверка вызывается для
+        # нескольких соседей, а раньше внутри неё noise2 считался 4 раза.
+        _noise_cache = {}
+        _climate_cache = {}
+
+        def standart_noise2_bool(tx, ty):
+            res = _noise_cache.get((tx, ty))
+            if res is None:
+                # дешёвая проверка высоты первой — дорогой 6-октавный шум
+                # считается только когда она прошла
+                h = noise2(tx / freq_x, ty / freq_y) * 20 + ty
+                if h <= START_ATMO_Y or START_HELL_Y <= h <= START_HELL_Y + 50:
+                    res = False
+                else:
+                    res = noise2(tx / freq_x, ty / freq_y, octaves, persistence=0.35, base=base,
+                                 lacunarity=lacunarity) < threshold
+                _noise_cache[(tx, ty)] = res
+            return res
 
         # print("noise", (noise2(base_x / freq_x, base_y / freq_y) * 20 + base_y) > START_SPACE_Y)
         for y_pos in range(CHUNK_SIZE):  # local tile y in chunk (not px)
             tile_x = base_x  # global tile x (not px)
             for x_pos in range(CHUNK_SIZE):  # local tile x in chunk (not px)
-                biome_info[i] = biome_of_pos(tile_x, tile_y)
+                biome_info[i] = biome_of_pos(tile_x, tile_y, _climate_cache)
                 tile_type = None
                 backtile_type = None
                 if config.GameSettings.vertical_tunel and tile_x in (-2, -1, 0, 1):

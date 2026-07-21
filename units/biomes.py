@@ -44,14 +44,32 @@ for i, color in enumerate(biome_colors):
 biomes = np.flip(biomes, axis=0).T
 
 
-def biome_of_pos(x, y):
-    """биом, Температура, влажность"""
+def _climate_raw(x, y):
+    """Гладкие климатические поля (температура/влажность) до высотной поправки."""
     cof = 240
     i = snoise2(x / cof, y / cof, 2, persistence=0.75, base=123, lacunarity=1)
     j = snoise2(x / cof, y / cof, 2, persistence=0.75, base=13, lacunarity=1)
     k = snoise2(x / 100, y / 100, 2, persistence=0.75, base=113, lacunarity=2)
     j -= (j - i) * k
     i -= (i - j) * k
+    return i, j
+
+
+def biome_of_pos(x, y, _climate_cache=None):
+    """биом, Температура, влажность
+
+    _climate_cache: климат меняется на масштабе ~240px (7+ тайлов), поэтому при
+    генерации чанка его можно сэмплировать раз на блок 4x4 тайла — в 4 раза
+    меньше вызовов шума."""
+    if _climate_cache is not None:
+        key = (x >> 2, y >> 2)
+        c = _climate_cache.get(key)
+        if c is None:
+            c = _climate_raw(x, y)
+            _climate_cache[key] = c
+        i, j = c
+    else:
+        i, j = _climate_raw(x, y)
     if y < TOP_MIDDLE_WORLD:
         iy = y - TOP_MIDDLE_WORLD - 15
         i -= -iy / 100
