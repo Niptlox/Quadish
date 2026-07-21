@@ -9,8 +9,6 @@ from units.Map.ScreenMap import ScreenMap
 from units.App.Scenes import TitleScene, WorldsScenePopupMenu, PauseScenePopupMenu, EndSceneUI, \
     AchievementsSceneUI, HelpSceneUI
 from units.Map import WorldStorage
-import pathlib
-import webbrowser
 
 from units.config import GameSettings
 from units.sound import sounds_background, get_random_sound_of
@@ -35,12 +33,6 @@ class GameApp(App):
             super().__init__(self.game_scene)
         else:
             super().__init__(self.title_scene)
-
-    @classmethod
-    def open_help(cls):
-        path = pathlib.Path(CWDIR, f"data/translations/help_{GameSettings.language}.md")
-        webbrowser.open(path.absolute().as_uri())
-
 
 class GameScene(Scene):
     _Tiles = Tiles
@@ -82,8 +74,7 @@ class GameScene(Scene):
                 continue
             if event.type == KEYDOWN:
                 if event.key == K_F1:
-                    self.app.open_help()
-                    self.set_scene(self.app.pause_scene)
+                    self.set_scene(self.app.help_scene)
                 elif event.key == K_ESCAPE:
                     self.set_scene(self.app.pause_scene)
                 elif event.key == K_c and pg.key.get_mods() & KMOD_ALT:

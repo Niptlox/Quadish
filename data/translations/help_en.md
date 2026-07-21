@@ -1,33 +1,37 @@
-Game help
+How to play Quadish
 ============================================================================================
-Keyboard shortcuts:
-- [Esc] - pause
-- [Esc] - exit the menu
-- [F1] - Help
-- [Alt+C] - Take a screenshot ("sreenshot.png" is saved in the game folder)
 
-Character management:
-1. Move: WASD / arrows, space bar (up to 5 jumps)
-2. Break the block: left mouse button
-3. Put the block: right mouse button
-4. Eat something: right mouse button:
-- [E] - inventory
-- [Q] - remove all items from the active inventory cell
-- [Ctrl+T] - teleport to a point at home
-- [Ctrl+R] - teleport to a random point
-Creative mode
-- [Ctrl+Alt+J] - Switch to creative mode and back
-- [Alt+Space] - Switch to flight mode and back
-- [Alt+X] - Fast forward 1 minute (in creative mode)
-- [Alt+Z] - Fast forward 10 minutes (in creative mode)
+Controls:
+- [A]/[D] or arrows — move
+- [Space] — jump (up to 2 in the air, jump potions give up to 5)
+- [S] — crouch / descend
+- [LMB] — dig a block / attack
+- [RMB] — place a block / use / eat
+- Mouse wheel or [1]–[0] — select hotbar cell
 
-The concept of the game; gas giant, when descending to the core, magnetic and gas 
-storms intensify, new enemies and anomalies appear, damage is inflicted on the 
-hero and snarr, the lower boundary of the world is impassable turbolent clouds.
-People went to the core through an anomaly, a late-level location.
-A brief history of the world:
-Intelligent life flourished peacefully for many millennia, until the servants 
-of the dark cult, for the sake of consolidating personal power, called the dark god,
-who forever changed the planet into what it is now, the majority of the population 
-died out, and the remaining cultists went to the core under the protection of clouds 
-to serve the dark god forever.
+Inventory and crafting:
+- [E] — open and close the inventory (recipes on the right)
+- [Q] — drop items from the active cell
+
+World:
+- [Ctrl+S] — save the world (plus autosave every 5 minutes)
+- [Ctrl+T] — teleport to your home point
+- [Ctrl+R] — teleport to a random place
+- [Alt+C] — screenshot ("screenshot.png" in the game folder)
+- [Esc] — pause / close a menu
+- [F1] — help
+
+Creative mode:
+- [Alt+J] — toggle creative mode
+- [Alt+Space] — flight (in creative mode)
+- [Alt+X] — fast-forward time by 1 minute
+- [Alt+Z] — fast-forward time by 10 minutes
+
+The world:
+Quadish is a gas giant. The closer to the core, the stronger the magnetic and
+gas storms: new enemies, anomalies, damage to the hero and equipment. The lower
+boundary of the world is impassable turbulent clouds.
+Intelligent life flourished for millennia until servants of a dark cult, greedy
+for power, summoned a dark god. The planet changed forever: most of its
+inhabitants died out, and the surviving cultists went down to the core, under
+the protection of the clouds, to serve their god forever.

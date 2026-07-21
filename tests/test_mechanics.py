@@ -504,6 +504,19 @@ def test_world_list_ui():
         WS.delete_world(meta["id"])
 
 
+def test_help_ui():
+    import pygame
+    app = get_app()
+    ui = app.help_scene.ui
+    assert ui.content.get_height() > 200, "контент справки должен отрисоваться"
+    ui.draw()  # не должен падать
+    before = ui.scroll_y
+    ui.pg_event(pygame.event.Event(pygame.MOUSEWHEEL, y=-3))
+    assert ui.scroll_y > before, "прокрутка колесом должна работать"
+    ui.pg_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_PAGEUP, unicode=""))
+    assert ui.scroll_y == 0
+
+
 # ===================== конфиг =====================
 
 def test_config_values():

@@ -5,8 +5,7 @@ from units.UI.ClassUI import *
 from units.UI.InventoryUI import *
 from units.UI.ColorsUI import *
 from units.UI.FontsUI import *
-from units.UI.Translate import get_translated_text, get_translated_lst_text, get_translated_text_to_lang, \
-    get_translated_help
+from units.UI.Translate import get_translated_text, get_translated_lst_text, get_translated_text_to_lang
 
 from units.Graphics.Texture import WHITE
 from units.Tiles import live_imgs, bg_live_img, goldlive_imgs, bg_livecreative_img, \
@@ -230,7 +229,7 @@ class TitleUI(UI):
             ("Играть", lambda _: self.scene.open_worlds()),
             ("Новый мир", lambda _: self.scene.new_game()),
             ("Настройки", lambda _: self.scene.set_ui(self.scene.settings_ui)),
-            ("Справка", lambda _: self.scene.app.open_help()),
+            ("Справка", lambda _: self.scene.set_scene(self.scene.app.help_scene)),
             ("Выйти", lambda _: self.scene.exit()),
 
         ]
@@ -699,20 +698,139 @@ class AchievementsUI(UI):
 
 
 class HelpUI(UI):
-    bg = (82, 82, 91, 220)
-    font_text = pygame.font.Font(CWDIR+'data/fonts/xenoa.ttf', 15, )
+    """Экран «Как играть»: секции управления с клавишами-чипами,
+    прокрутка колесом/стрелками, Esc — закрыть."""
+    bg_screen = (24, 24, 27)
+    panel_bg = (39, 39, 42)
+    section_color = "#FDE047"
+    text_color = "#FFFFFF"
+    lore_color = "#A1A1AA"
+    chip_bg = (63, 63, 70)
+    chip_border = (161, 161, 170)
+    font_title = pygame.font.Font(MAIN_FONT_PATH, 32)
+    font_section = pygame.font.Font(MAIN_FONT_PATH, 24)
+    font_text = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 17)
+    font_chip = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 15)
+    font_hint = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 14)
 
     def __init__(self, scene):
         super(HelpUI, self).__init__(scene)
-        # self.achievements = player_achievements
-        tr_text = get_translated_help()
-        self.text_ui = MultilineText((0, 0, 0, 0), tr_text, self.font_text, "#FFFFFF",
-                                     auto_size=True, background=self.bg, padding=4)
+        from units.UI.HelpData import HELP_SECTIONS, LORE, LORE_TITLE
+        w = min(680, WSIZE[0] - 40)
+        h = min(600, WSIZE[1] - 40)
+        self.rect = pg.Rect(0, 0, w, h)
+        self.rect.center = WSIZE[0] // 2, WSIZE[1] // 2
 
-        self.text_ui.rect.center = self.rect.center
-        self.rect = self.text_ui.rect
+        self.header_h = 52
+        self.footer_h = 30
+        self.scroll_y = 0
+        self.content = self._render_content(HELP_SECTIONS, LORE_TITLE, LORE, w - 40)
+        self.view_h = h - self.header_h - self.footer_h
+        self.max_scroll = max(0, self.content.get_height() - self.view_h)
+
+        self.title_surf = self.font_title.render(get_translated_text("Как играть"), True, self.section_color)
+        self.hint_surf = self.font_hint.render(
+            get_translated_text("Esc — закрыть   •   колесо / стрелки — прокрутка"), True, self.lore_color)
+
+    # ---------- отрисовка контента ----------
+
+    def _chip(self, text):
+        """Клавиша-чип: скруглённый прямоугольник с подписью."""
+        t = self.font_chip.render(text, True, self.text_color)
+        chip = pg.Surface((t.get_width() + 16, 26)).convert_alpha()
+        chip.fill((0, 0, 0, 0))
+        r = chip.get_rect()
+        pg.draw.rect(chip, self.chip_bg, r, border_radius=6)
+        pg.draw.rect(chip, self.chip_border, r, width=1, border_radius=6)
+        chip.blit(t, ((r.w - t.get_width()) // 2, (r.h - t.get_height()) // 2 - 1))
+        return chip
+
+    def _wrap(self, text, font, max_w):
+        lines, line = [], ""
+        for word in text.split():
+            probe = (line + " " + word).strip()
+            if font.size(probe)[0] <= max_w:
+                line = probe
+            else:
+                if line:
+                    lines.append(line)
+                line = word
+        if line:
+            lines.append(line)
+        return lines
+
+    def _render_content(self, sections, lore_title, lore, w):
+        surf = pg.Surface((w, 4000)).convert_alpha()
+        surf.fill((0, 0, 0, 0))
+        x_desc = 220  # колонка описаний
+        y = 6
+        plus = self.font_chip.render("+", True, self.lore_color)
+        for title, rows in sections:
+            head = self.font_section.render(get_translated_text(title), True, self.section_color)
+            surf.blit(head, (0, y))
+            y += head.get_height() + 2
+            pg.draw.line(surf, self.section_color, (0, y), (w, y))
+            y += 10
+            for keys, desc in rows:
+                x = 8
+                row_top = y
+                for k_i, key in enumerate(keys):
+                    if k_i:
+                        surf.blit(plus, (x, row_top + 4))
+                        x += plus.get_width() + 4
+                    chip = self._chip(get_translated_text(key))
+                    surf.blit(chip, (x, row_top))
+                    x += chip.get_width() + 4
+                lines = self._wrap(get_translated_text(desc), self.font_text, w - x_desc - 8)
+                ty = row_top + (26 - self.font_text.get_height()) // 2 if len(lines) == 1 else row_top + 2
+                for line in lines:
+                    surf.blit(self.font_text.render(line, True, self.text_color), (x_desc, ty))
+                    ty += self.font_text.get_height() + 2
+                y = max(row_top + 26, ty) + 8
+            y += 12
+        # история мира
+        head = self.font_section.render(get_translated_text(lore_title), True, self.section_color)
+        surf.blit(head, (0, y))
+        y += head.get_height() + 2
+        pg.draw.line(surf, self.section_color, (0, y), (w, y))
+        y += 10
+        for line in self._wrap(get_translated_text(lore), self.font_text, w - 16):
+            surf.blit(self.font_text.render(line, True, self.lore_color), (8, y))
+            y += self.font_text.get_height() + 4
+        return surf.subsurface((0, 0, w, min(y + 6, surf.get_height()))).copy()
+
+    # ---------- события/отрисовка ----------
+
+    def scroll(self, dy):
+        self.scroll_y = max(0, min(self.max_scroll, self.scroll_y - dy))
+
+    def pg_event(self, event: pg.event.Event):
+        if event.type == pg.MOUSEWHEEL:
+            self.scroll(event.y * 40)
+        elif event.type == pg.KEYDOWN:
+            if event.key in (pg.K_DOWN, pg.K_s):
+                self.scroll(-40)
+            elif event.key in (pg.K_UP, pg.K_w):
+                self.scroll(40)
+            elif event.key == pg.K_PAGEDOWN:
+                self.scroll(-self.view_h)
+            elif event.key == pg.K_PAGEUP:
+                self.scroll(self.view_h)
 
     def draw(self):
-        self.screen.blit(self.display, (0, 0))
-        self.text_ui.draw(self.screen)
+        self.screen.fill(self.bg_screen)
+        panel = pg.Surface(self.rect.size).convert_alpha()
+        panel.fill(self.panel_bg)
+        panel.blit(self.title_surf, (20, 8))
+        panel.blit(self.content, (20, self.header_h),
+                   (0, self.scroll_y, self.content.get_width(), self.view_h))
+        # полоса прокрутки
+        if self.max_scroll:
+            track_h = self.view_h
+            thumb_h = max(30, int(track_h * self.view_h / self.content.get_height()))
+            thumb_y = self.header_h + int((track_h - thumb_h) * self.scroll_y / self.max_scroll)
+            pg.draw.rect(panel, (63, 63, 70), (self.rect.w - 10, self.header_h, 4, track_h), border_radius=2)
+            pg.draw.rect(panel, (161, 161, 170), (self.rect.w - 10, thumb_y, 4, thumb_h), border_radius=2)
+        panel.blit(self.hint_surf, (20, self.rect.h - self.footer_h + 4))
+        self.screen.blit(panel, self.rect)
         pg.display.flip()
