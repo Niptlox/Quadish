@@ -1,5 +1,6 @@
 from units.Achievements import achievements
-from units.UI.Button import createImagesButton, createVSteckButtons, Button, createVSteckTextButtons, ChangeTextButton
+from units.UI.Button import createImagesButton, createVSteckButtons, Button, createVSteckTextButtons, \
+    ChangeTextButton, TextButton
 from units.UI.ClassUI import *
 from units.UI.InventoryUI import *
 from units.UI.ColorsUI import *
@@ -226,6 +227,7 @@ class TitleUI(UI):
         self.bg2_x, self.bg2_y = 0, 0
 
         btns = [
+            ("Играть", lambda _: self.scene.open_worlds()),
             ("Новый мир", lambda _: self.scene.new_game()),
             ("Настройки", lambda _: self.scene.set_ui(self.scene.settings_ui)),
             ("Справка", lambda _: self.scene.app.open_help()),
@@ -435,88 +437,109 @@ class SoundSettingsUI(MainSettingsUI):
         return btns
 
 
-class SwitchMapUI(UI):
-    bg = (82, 82, 91, 150)
+class WorldListUI(UI):
+    """Экран «Мои миры»: карточка на мир (имя, дата, наигранное время),
+    клик — играть, крестик — удалить (с подтверждением)."""
+    bg = (82, 82, 91, 240)
+    row_h = 40
+    row_step = 62  # высота карточки с подписью
+    font_sub = pygame.font.Font(MAIN_FONT_PATH, 16)
 
-    def __init__(self, scene, title) -> None:
-        self.title = get_translated_text(title)
+    def __init__(self, scene) -> None:
         super().__init__(scene)
-        w, h = 300, 500
+        w, h = 460, 520
         self.rect = pg.Rect(0, 0, w, h)
         self.rect.center = WSIZE[0] // 2, WSIZE[1] // 2
         self.surface = pg.Surface(self.rect.size).convert_alpha()
 
         self.title_surf = pg.Surface((w, 40)).convert_alpha()
         self.title_surf.fill((82, 82, 91))
-        self.title_surf.blit(textfont_btn.render(self.title, True, WHITE), (10, 5))
+        self.title_surf.blit(textfont_btn.render(get_translated_text("Мои миры"), True, WHITE), (10, 5))
 
-        btn_rect = pg.Rect(0, 20 + 40, 200, 35)
-        self.btns_scroll = [(w - btn_rect.w) // 2 - 15, btn_rect.y]
-        self.btns_scroll_step = 20 + btn_rect.height
+        self.list_top = 55
+        self.scroll_y = 0
+        self.worlds = []
+        self.btns = []
+        self.subtitles = []
+        self.confirm_delete_id = None
+        self.reload_worlds()
 
-        n = self.scene.game.game_map.save_slots
-        tr_text = get_translated_text("Мир")
-        imgs = [createImagesButton(btn_rect.size, tr_text + f" #{i}", font=textfont_btn)
-                for i in range(n)]
-        self.img_btns = imgs
-        funcs = [lambda b, i=i: self.open_map(b, i) for i in range(n)]
-        btns = createVSteckButtons(btn_rect.size, btn_rect.centerx + 15, 10, 15, imgs, funcs,
-                                   screen_position=(self.rect.x + self.btns_scroll[0],
-                                                    self.rect.y + self.btns_scroll[1]))  # кнопки открывающие карты
-        self.btns_rect = pg.Rect(btns[0].rect.x, btns[0].rect.y, btns[-1].rect.right + 15, btns[-1].rect.bottom + 15)
-        self.btns_surf = pg.Surface(self.btns_rect.size).convert_alpha()
-        self.btns_surf.fill(self.bg)
+    def reload_worlds(self):
+        from units.Map import WorldStorage
+        self.worlds = WorldStorage.list_worlds()
+        self.scroll_y = 0
+        self.confirm_delete_id = None
+        self._build()
 
-        self.btns = btns
+    def _build(self):
+        from units.Map import WorldStorage
+        self.btns = []
+        self.subtitles = []  # (y, отрендеренный текст)
+        x = 20
+        y = self.list_top + self.scroll_y
+        w = self.rect.w - 40
+        # кнопка нового мира
+        self.btns.append(TextButton(lambda _: self.scene.new_world(),
+                                    (x, y, w, self.row_h - 5), "+ Новый мир",
+                                    screenXY=(self.rect.x + x, self.rect.y + y)))
+        y += self.row_h + 10
+        for meta in self.worlds:
+            wid = meta["id"]
+            name = meta.get("name", wid)
+            self.btns.append(TextButton(lambda _, wid=wid: self.scene.play_world(wid),
+                                        (x, y, w - 45, self.row_h), name,
+                                        screenXY=(self.rect.x + x, self.rect.y + y)))
+            del_text = "Точно?" if self.confirm_delete_id == wid else "X"
+            self.btns.append(TextButton(lambda _, wid=wid: self.delete_world(wid),
+                                        (x + w - 40, y, 40, self.row_h), del_text,
+                                        screenXY=(self.rect.x + x + w - 40, self.rect.y + y)))
+            sub = f"{WorldStorage.format_last_played(meta.get('last_played'))}  •  " \
+                  f"{WorldStorage.format_playtime(meta.get('playtime'))}"
+            self.subtitles.append((y + self.row_h + 2, self.font_sub.render(sub, True, "#D4D4D8")))
+            y += self.row_step
+
+    def delete_world(self, wid):
+        from units.Map import WorldStorage
+        if self.confirm_delete_id == wid:
+            WorldStorage.delete_world(wid)
+            self.reload_worlds()
+        else:
+            # первый клик — просим подтвердить
+            self.confirm_delete_id = wid
+            self._build()
+
+    def scroll(self, dy):
+        # ограничение прокрутки: контент не выше первого и не ниже последнего
+        content_h = self.row_h + 10 + self.row_step * len(self.worlds)
+        min_scroll = min(0, self.rect.h - self.list_top - content_h - 15)
+        self.scroll_y = max(min_scroll, min(0, self.scroll_y + dy))
+        self._build()
 
     def pg_event(self, event: pg.event.Event) -> Union[bool, None]:
+        if event.type == pg.MOUSEWHEEL:
+            self.scroll(event.y * 40)
+            return
         if event.type == pg.MOUSEBUTTONDOWN:
-            if event.button == 5:
-                self.btns_scroll[1] -= self.btns_scroll_step
-                for btn in self.btns:
-                    btn.screenRect.y -= self.btns_scroll_step
-            elif event.button == 4:
-                if self.btns_scroll[1] < 55:
-                    self.btns_scroll[1] += self.btns_scroll_step
-                    for btn in self.btns:
-                        btn.screenRect.y += self.btns_scroll_step
-            else:
-                if not self.rect.collidepoint(event.pos):
-                    return
+            if not self.rect.collidepoint(event.pos):
+                return
         for btn in self.btns:
             btn.pg_event(event)
 
     def draw(self):
-        self.screen.blit(self.display, (0, 0))
-
+        self.screen.fill((39, 39, 42))
         self.surface.fill(self.bg)
 
         for btn in self.btns:
-            btn.draw(self.btns_surf)
-        self.surface.blit(self.btns_surf, self.btns_scroll)
-        self.surface.blit(self.title_surf, (0, -5))
+            if self.list_top - self.row_h < btn.rect.y < self.rect.h:
+                btn.draw(self.surface)
+        for y, sub in self.subtitles:
+            if self.list_top < y < self.rect.h:
+                self.surface.blit(sub, (28, y))
+        self.surface.blit(self.title_surf, (0, 0))
 
         self.screen.blit(self.surface, self.rect)
 
         pygame.display.flip()
-
-    def set_disabled_btns(self, ar):
-        for i in range(len(ar)):
-            self.btns[i].set_disabled(ar[i])
-
-    def set_check_btns(self, ar):
-        check = Surface((10, 10))
-        check.fill("#EF4444")
-        for i in range(len(ar)):
-            if ar[i]:
-                img = self.img_btns[i][0].copy()
-                img.blit(check, (0, 0))
-                self.btns[i].imgUpB = img
-            else:
-                self.btns[i].imgUpB = self.img_btns[i][0]
-
-    def open_map(self, but, num):
-        res = self.scene.open_map(num)
 
 
 class EndUI(UI):
@@ -571,8 +594,8 @@ class PauseUI(UI):
         btn_rect = pg.Rect(btn_pos, btn_size)
 
         btns = [
-            ("Сохранить мир", lambda _: self.scene.set_scene(self.scene.app.savem_scene)),
-            ("Открыть мир", lambda _: self.scene.set_scene(self.scene.app.openm_scene)),
+            ("Продолжить", lambda _: self.scene.resume()),
+            ("Сохранить", lambda _: self.scene.save_world()),
             ("Достижения", lambda _: self.scene.set_scene(self.scene.app.achievements_scene)),
             ("Как играть", lambda _: self.scene.set_scene(self.scene.app.help_scene)),
             ("Телепорт домой", lambda _: self.scene.tp_to_home()),

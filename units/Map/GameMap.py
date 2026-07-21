@@ -1,4 +1,4 @@
-import glob
+import os
 from typing import Union
 
 from noise import snoise2 as noise2
@@ -9,6 +9,7 @@ from units.Objects.Entity import PhysicalObject
 from units.Objects.Items import ItemsTile
 from units.Objects.TileClasses import tiles_class
 from units.Tools import TOOLS
+from units.Map import WorldStorage
 from units.biomes import biome_of_pos
 from units.Map.Structures import Structures_chance, Structures, Structures_all, structure_start
 from units.Tiles import *
@@ -16,8 +17,7 @@ from units.sound import sound_gate
 
 
 class GameMap(SavedObject):
-    not_save_vars = SavedObject.not_save_vars | {"gate", "particles"}
-    save_slots = 16
+    not_save_vars = SavedObject.not_save_vars | {"gate", "particles", "world_id", "world_meta"}
 
     def __init__(self, game, generate_type, base_generation=None) -> None:
         self.game = game
@@ -33,7 +33,8 @@ class GameMap(SavedObject):
         # build - (build_index, build_id, points)
         self.structures_lst = []
         self.base_generation = base_generation
-        self.num_save_map = 0
+        self.world_id = None  # id папки мира (data/maps/<world_id>/)
+        self.world_meta = None
         self.saved = False
         self.start_space_y = START_SPACE_Y
         self.start_hell_y = START_HELL_Y
@@ -582,71 +583,68 @@ class GameMap(SavedObject):
         return res
 
     def save_current_game_map(self):
-        self.save_game_map(self.game, self.num_save_map)
+        if self.world_id is None:
+            # мир ещё не привязан к папке — создаём
+            self.world_meta = WorldStorage.new_world_meta()
+            self.world_id = self.world_meta["id"]
+        self.save_game_map(self.game, self.world_id)
 
-    def save_game_map(self, game, num=0):
+    def save_game_map(self, game, world_id=None):
+        if world_id is None:
+            self.save_current_game_map()
+            return
         self.saved = True
+        self.world_id = world_id
         self.game.ui.new_sys_message(f"Сохранение", draw_now=True)
 
-        file_p = GAMEMAPS_PATH + f'game_map-{num}.pclv'
+        file_p = WorldStorage.data_path(world_id)
         print(f"GamaMap: '{file_p}' - SAVING...")
-        self.num_save_map = num
-        # try:
         data = {"game_map_vars": self.get_vars(), "player_vars": game.player.get_vars(),
                 "game_version": GAME_VERSION, "game_tact": game.tact, "game_total_time": game.total_time}
-        # with open("save_data.json", 'w') as f:
-        #     f.write(str(data))
         t = pickle.dumps(data)
+        os.makedirs(WorldStorage.world_dir(world_id), exist_ok=True)
         with open(file_p, 'wb') as f:
             f.write(t)
+        self.world_meta = WorldStorage.touch_meta(world_id, playtime=game.total_time / 1000)
         print("GamaMap - SAVE!")
-        self.game.ui.new_sys_message(get_translated_text("Карта сохранена #") + f"{num}", draw_now=True)
-        # except Exception as exc:
-        #     print("Ошибка сохранения:", exc)
-        #     self.game.ui.new_sys_message(f"Ошибка {exc}")
-        #     return False
-        # finally:
-        #
-        #     return True
+        self.game.ui.new_sys_message(
+            get_translated_text("Мир сохранён: ") + self.world_meta["name"], draw_now=True)
 
-    def open_game_map(self, game, num=0):
-        self.game.ui.new_sys_message(get_translated_text("Загрузка карты #") + f"{num}", draw_now=True)
+    def open_game_map(self, game, world_id):
+        meta = WorldStorage.load_meta(world_id)
+        name = meta["name"] if meta else str(world_id)
+        self.game.ui.new_sys_message(get_translated_text("Загрузка мира: ") + name, draw_now=True)
 
-        file_p = GAMEMAPS_PATH + f'game_map-{num}.pclv'
-        self.num_save_map = num
+        file_p = WorldStorage.data_path(world_id)
         print(f"GamaMap: '{file_p}' - LOADING...")
-        # try:
-        with open(file_p, 'rb') as f:
-            data = pickle.load(f)
+        try:
+            with open(file_p, 'rb') as f:
+                data = pickle.load(f)
+        except Exception as exc:
+            print("Ошибка загрузки:", exc)
+            self.game.ui.new_sys_message(get_translated_text("Не удалось загрузить мир"), draw_now=True)
+            return None
         version = data.get("game_version", "0.4")
         if version != GAME_VERSION:
-            self.game.ui.new_sys_message(f"Конфликт версий с картой", draw_now=True)
-
-            return
-        game_map = data["game_map_vars"]
-        game.game_map.set_vars(game_map)
-        player = data["player_vars"]
-        game.player.set_vars(player)
+            # пробуем загрузить, но предупреждаем
+            self.game.ui.new_sys_message(
+                get_translated_text("Мир из другой версии: ") + str(version), draw_now=True)
+        try:
+            game.game_map.set_vars(data["game_map_vars"])
+            game.player.set_vars(data["player_vars"])
+        except Exception as exc:
+            print("Ошибка загрузки:", exc)
+            self.game.ui.new_sys_message(get_translated_text("Не удалось загрузить мир"), draw_now=True)
+            return None
+        self.world_id = world_id
+        self.world_meta = meta
         game.tact = data.get("game_tact", 0)
         game.total_time = data.get("game_total_time", 0)
-        print(game.player.rect.center)
         if abs(game.player.rect.x) > 10000 or abs(game.player.rect.y) > 10000:
             game.screen_map.teleport_to_player()
         game.player.inventory.ui.redraw_top()
-        # except Exception as exc:
-        #     print("Ошибка загрузки:", exc)
-        #     return False
         print("GamaMap - LOAD!")
         return file_p
-
-    def get_list_maps(self):
-        files = glob.glob(GAMEMAPS_PATH + '*.pclv', recursive=False)
-        return files
-
-    def get_list_num_maps(self):
-        files = self.get_list_maps()
-        ar = [int(f.split("-")[-1].split(".")[0]) for f in files if "None" not in f]
-        return ar
 
     def get_choice_world(self, pos_1, pos_2):
         size = pos_2[0] + 1 - pos_1[0], pos_2[1] + 1 - pos_1[1]
@@ -664,6 +662,8 @@ class GameMap(SavedObject):
 
     def new_world(self, base_generation=None):
         self.__init__(self.game, self.gen_type, base_generation)
+        self.world_meta = WorldStorage.new_world_meta()
+        self.world_id = self.world_meta["id"]
         self.set_structure((-10, -13), structure_start)
         self.game.reinit_player()
         self.game.player.tp_to(config.GameSettings.start_pos)

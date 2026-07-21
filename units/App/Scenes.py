@@ -1,7 +1,7 @@
 import webbrowser
 
 from units.App.App import *
-from units.UI.UI import SwitchMapUI, EndUI, PauseUI, AchievementsUI, TitleUI, MainSettingsUI, SoundSettingsUI, HelpUI
+from units.UI.UI import WorldListUI, EndUI, PauseUI, AchievementsUI, TitleUI, MainSettingsUI, SoundSettingsUI, HelpUI
 from units.config import Window
 
 
@@ -17,6 +17,11 @@ class TitleScene(SceneMenu):
     def new_game(self):
         self.set_scene(self.app.game_scene)
         self.app.game_scene.game_map.new_world()
+        # сразу создаём файл мира, чтобы он появился в списке
+        self.app.game_scene.game_map.save_current_game_map()
+
+    def open_worlds(self):
+        self.set_scene(self.app.worlds_scene)
 
     def open_developers(self):
         webbrowser.open('https://gamejolt.com/@Niptlox', new=2)
@@ -26,35 +31,26 @@ class TitleScene(SceneMenu):
         return super(TitleScene, self).main()
 
 
-class OpenMapScenePopupMenu(ScenePopupMenu):
+class WorldsScenePopupMenu(ScenePopupMenu):
+    """Экран «Мои миры»: список сохранённых миров + создание нового."""
+
     def __init__(self, app: App) -> None:
         self.game = app.game_scene
-        super().__init__(app, lambda _app: SwitchMapUI(_app, "Открыть мир"))
+        super().__init__(app, WorldListUI)
+        self.back_scene = app.title_scene
 
-    def open_map(self, num=0):
+    def play_world(self, world_id):
+        res = self.game.game_map.open_game_map(self.game, world_id)
+        if res:
+            self.set_scene(self.app.game_scene)
+
+    def new_world(self):
         self.set_scene(self.app.game_scene)
-        return self.game.game_map.open_game_map(self.game, num)
+        self.game.game_map.new_world()
+        self.game.game_map.save_current_game_map()
 
     def main(self):
-        ar = self.game.game_map.get_list_num_maps()
-        ar = [i not in ar for i in range(self.game.game_map.save_slots)]
-        self.ui.set_disabled_btns(ar)
-        return super().main()
-
-
-class SaveMapScenePopupMenu(ScenePopupMenu):
-    def __init__(self, app: App) -> None:
-        self.game = app.game_scene
-        super().__init__(app, lambda app: SwitchMapUI(app, "Сохранить мир"))
-
-    def open_map(self, num=0):
-        self.set_scene(None)
-        return self.game.game_map.save_game_map(self.game, num)
-
-    def main(self):
-        ar = self.game.game_map.get_list_num_maps()
-        ar = [i in ar for i in range(self.game.game_map.save_slots)]
-        self.ui.set_check_btns(ar)
+        self.ui.reload_worlds()
         return super().main()
 
 
@@ -86,6 +82,13 @@ class PauseScenePopupMenu(ScenePopupMenu):
         super().__init__(app, PauseUI)
         self.back_scene = self.app.game_scene
 
+    def resume(self):
+        self.set_scene(self.app.game_scene)
+
+    def save_world(self):
+        self.app.game_scene.game_map.save_current_game_map()
+        self.set_scene(self.app.game_scene)
+
     def tp_to_home(self):
         self.app.game_scene.player.tp_to_home()
         self.set_scene(self.app.game_scene)
@@ -97,10 +100,6 @@ class PauseScenePopupMenu(ScenePopupMenu):
     def save_and_to_main_menu(self):
         self.app.game_scene.game_map.save_current_game_map()
         self.set_scene(self.app.title_scene)
-
-    def new_world(self):
-        self.app.game_scene.game_map.new_world()
-        self.set_scene(self.app.game_scene)
 
     def editfullscreen(self):
         Window.set_fullscreen(not Window.fullscreen)

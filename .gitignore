@@ -1,4 +1,4 @@
-data/maps/*.pclv
+data/maps/
 .vscode
 .idea
 *.aseprite

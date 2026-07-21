@@ -6,8 +6,9 @@ from units.UI.BlocksUI import BlocksUIManger
 from units.UI.UI import GameUI
 from units.Map.GameMap import GameMap
 from units.Map.ScreenMap import ScreenMap
-from units.App.Scenes import TitleScene, OpenMapScenePopupMenu, SaveMapScenePopupMenu, PauseScenePopupMenu, EndSceneUI, \
+from units.App.Scenes import TitleScene, WorldsScenePopupMenu, PauseScenePopupMenu, EndSceneUI, \
     AchievementsSceneUI, HelpSceneUI
+from units.Map import WorldStorage
 import pathlib
 import webbrowser
 
@@ -18,13 +19,14 @@ set_cursor(CURSOR_NORMAL)
 choice_pos1 = None
 choice_pos2 = None
 
+AUTOSAVE_PERIOD_TACTS = FPS * 300  # автосохранение раз в ~5 минут
+
 
 class GameApp(App):
     def __init__(self) -> None:
         self.title_scene = TitleScene(self)
         self.game_scene = GameScene(self)
-        self.openm_scene = OpenMapScenePopupMenu(self)
-        self.savem_scene = SaveMapScenePopupMenu(self)
+        self.worlds_scene = WorldsScenePopupMenu(self)
         self.pause_scene = PauseScenePopupMenu(self)
         self.end_scene = EndSceneUI(self)
         self.achievements_scene = AchievementsSceneUI(self)
@@ -58,7 +60,9 @@ class GameScene(Scene):
         self.hided_ui = False
         self.background_sound = get_random_sound_of(sounds_background).play(loops=-1, )
         if GameSettings.debug_open_map:
-            self.game_map.open_game_map(self, 0)
+            worlds = WorldStorage.list_worlds()
+            if worlds:
+                self.game_map.open_game_map(self, worlds[0]["id"])
         # print(list(self.blocks_ui_manager.blocks_ui.values())[0])
 
     def reinit_player(self):
@@ -68,6 +72,9 @@ class GameScene(Scene):
     def pg_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                # не теряем прогресс при закрытии окна
+                if self.game_map.world_id is not None:
+                    self.game_map.save_current_game_map()
                 self.running = EXIT
             if self.blocks_ui_manager.pg_event(event):
                 continue
@@ -143,3 +150,5 @@ class GameScene(Scene):
             self.ui.draw()
         self.ui.flip()
         self.tact += 1
+        if self.tact % AUTOSAVE_PERIOD_TACTS == 0 and self.game_map.world_id is not None:
+            self.game_map.save_current_game_map()
