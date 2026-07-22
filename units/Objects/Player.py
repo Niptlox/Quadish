@@ -184,7 +184,10 @@ class Player(PhysicalObject):
             if event.button == 3:
                 self.vector = Vector2(self.rect.center)
                 vector_player_display = self.vector - Vector2(self.game.screen_map.scroll)
-                vector_to_mouse = Vector2(event.pos) - vector_player_display
+                # мышь — в координатах реального экрана, мир может рендериться
+                # в меньшем логическом разрешении (см. WSIZE/SCREEN_SIZE) —
+                # переводим клик в мировые координаты перед прицеливанием
+                vector_to_mouse = Vector2(screen_to_world_pos(event.pos)) - vector_player_display
                 if not self.tool.right_button_click(vector_to_mouse):
                     self.set = True
 
@@ -249,7 +252,9 @@ class Player(PhysicalObject):
             self.num_down = -1
         self.vector = Vector2(self.rect.center)
         vector_player_display = self.vector - Vector2(self.game.screen_map.scroll)
-        vector_to_mouse = Vector2(pg.mouse.get_pos()) - vector_player_display
+        # см. комментарий в pg_event: переводим реальные координаты мыши в
+        # мировые (мир может рендериться в другом логическом разрешении)
+        vector_to_mouse = Vector2(screen_to_world_pos(pg.mouse.get_pos())) - vector_player_display
 
         item: Union[Items, ItemTool] = self.inventory[self.inventory.active_cell]
         if item is None or item.class_item & CLS_TOOL == 0:

@@ -183,41 +183,19 @@ class TutorialHints:
         return best
 
     # ---------- отрисовка (каждый кадр) ----------
+    #
+    # Маркер цели зависит от прокрутки мира (scroll) — он должен остаться
+    # частью МИРА (draw_world -> на display_, может быть уменьшен для
+    # производительности, масштабируется вместе с тайлами). Текст задания
+    # и подсказка Esc не зависят от мира — их рисуем прямо на реальный
+    # экран (draw_hud -> на screen), чтобы шрифт не мылился.
 
-    def draw(self, display):
-        game = self.game
-        step_i = game.game_map.tutorial_step
-        if step_i < 0 or not self._steps or step_i >= len(self._steps):
-            return
-        step = self._steps[step_i]
-
-        # панель задачи вверху по центру
-        text = get_translated_text(step.task)
-        if step.progress:
-            cur, total = step.progress()
-            text += f"  {cur}/{total}"
-        if text != self._task_text:
-            self._task_text = text
-            t = font_task.render(text, True, MARKER_COLOR)
-            panel = pg.Surface((t.get_width() + 24, t.get_height() + 12)).convert_alpha()
-            panel.fill((39, 39, 42, 210))
-            panel.blit(t, (12, 6))
-            self._task_surf = panel
-        # задание — под хотбаром (10 верхних слотов), чтобы не накладываться
-        try:
-            task_top = game.player.inventory.ui.work_inventory.rect.bottom + 10
-        except Exception:
-            task_top = 70
-        display.blit(self._task_surf, ((WSIZE[0] - self._task_surf.get_width()) // 2, task_top))
-
-        # подсказка про Esc в углу (Esc открывает меню/паузу)
-        if self._esc_hint is None:
-            self._esc_hint = font_esc.render(get_translated_text("[Esc] — меню"), True, "#A1A1AA")
-        display.blit(self._esc_hint, (12, 10))
-
-        # маркер цели
+    def draw_world(self, display):
+        """Рамка/стрелка на цель — в мировых координатах (использует WSIZE,
+        логическое разрешение мира, и scroll камеры)."""
         if self.target_tile is None:
             return
+        game = self.game
         scroll = game.screen_map.scroll
         sx = self.target_tile[0] * TSIZE - scroll[0]
         sy = self.target_tile[1] * TSIZE - scroll[1]
@@ -241,3 +219,36 @@ class TutorialHints:
             left = (ex + math.cos(ang + 2.5) * 12, ey + math.sin(ang + 2.5) * 12)
             right = (ex + math.cos(ang - 2.5) * 12, ey + math.sin(ang - 2.5) * 12)
             pg.draw.polygon(display, MARKER_COLOR, (tip, left, right))
+
+    def draw_hud(self, screen):
+        """Текст задания и подсказка Esc — на реальном экране (SCREEN_SIZE),
+        независимо от логического разрешения мира, поэтому всегда чёткие."""
+        game = self.game
+        step_i = game.game_map.tutorial_step
+        if step_i < 0 or not self._steps or step_i >= len(self._steps):
+            return
+        step = self._steps[step_i]
+
+        text = get_translated_text(step.task)
+        if step.progress:
+            cur, total = step.progress()
+            text += f"  {cur}/{total}"
+        if text != self._task_text:
+            self._task_text = text
+            t = font_task.render(text, True, MARKER_COLOR)
+            panel = pg.Surface((t.get_width() + 24, t.get_height() + 12)).convert_alpha()
+            panel.fill((39, 39, 42, 210))
+            panel.blit(t, (12, 6))
+            self._task_surf = panel
+        # задание — под хотбаром (10 верхних слотов), чтобы не накладываться
+        try:
+            task_top = game.player.inventory.ui.work_inventory.rect.bottom + 10
+        except Exception:
+            task_top = 70
+        sw = screen.get_width()
+        screen.blit(self._task_surf, ((sw - self._task_surf.get_width()) // 2, task_top))
+
+        # подсказка про Esc в углу (Esc открывает меню/паузу)
+        if self._esc_hint is None:
+            self._esc_hint = font_esc.render(get_translated_text("[Esc] — меню"), True, "#A1A1AA")
+        screen.blit(self._esc_hint, (12, 10))

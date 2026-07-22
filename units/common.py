@@ -53,29 +53,50 @@ MONITORS = pygame.display.get_desktop_sizes()
 MONITOR_INDEX = config.Window.monitor if 0 <= config.Window.monitor < len(MONITORS) else 0
 desktop_size = MONITORS[MONITOR_INDEX]
 
-# Авто-размер логического рендера: на широких экранах (>1600 px) рендерим в
-# 2 раза меньше и растягиваем через SCALED — это в разы дешевле (60 FPS
-# вместо 30 в фуллскрине), картинка при этом занимает весь экран.
-if config.Window.auto_size:
-    if desktop_size[0] > 1600:
-        WINDOW_SIZE = (desktop_size[0] // 2, desktop_size[1] // 2)
-    else:
-        WINDOW_SIZE = desktop_size
-else:
-    WINDOW_SIZE = tuple(map(int, config.Window.size.split(",")))
-print("RENDER SIZE", WINDOW_SIZE, "monitor", MONITOR_INDEX, "of", MONITORS)
-
-# pygame.SCALED: игра рендерится в логический размер WINDOW_SIZE, а pygame
-# сам масштабирует картинку под реальное окно/фуллскрин (сохраняя пропорции)
-# и пересчитывает координаты мыши. Благодаря этому окно можно ресайзить и
-# включать фуллскрин без «катавасии» — без искажений и пустых полей.
-flags = pygame.SCALED
+# ==========================================================================
+# Два независимых размера — в этом весь фикс размытого текста после ресайза:
+#
+# SCREEN_SIZE — реальное окно/экран в физических пикселях. Здесь рисуется
+#   ВЕСЬ текст и UI (меню, HUD, инвентарь) — напрямую, без масштабирования,
+#   поэтому шрифт всегда чёткий, независимо от размера окна.
+# WSIZE       — логическое разрешение МИРА (тайлы/небо/игрок). Может быть
+#   меньше SCREEN_SIZE — тогда игра считает меньше видимых тайлов (дешевле
+#   рендерить) и подросток-кадр растягивается на весь экран (transform.scale,
+#   блочно, без блюра — это просто тайлы с плоской заливкой, не текст).
+#
+# Раньше был один общий "логический" размер, который SDL (флаг SCALED)
+# тянул на весь монитор одним махом — из-за этого замыливался и текст, и
+# мир. Теперь ресайзится (масштабируется) только мир, а меню — никогда.
+# ==========================================================================
 if FULLSCREEN:
-    flags |= pygame.FULLSCREEN
+    SCREEN_SIZE = desktop_size
+elif config.Window.auto_size:
+    SCREEN_SIZE = desktop_size
 else:
-    flags |= pygame.RESIZABLE
+    SCREEN_SIZE = tuple(map(int, config.Window.size.split(",")))
 
-WSIZE = WINDOW_SIZE
+if config.Window.auto_size and SCREEN_SIZE[0] > 1600:
+    WSIZE = (SCREEN_SIZE[0] // 2, SCREEN_SIZE[1] // 2)
+else:
+    WSIZE = SCREEN_SIZE
+print("SCREEN_SIZE (экран/UI)", SCREEN_SIZE, "WSIZE (мир)", WSIZE,
+     "monitor", MONITOR_INDEX, "of", MONITORS)
+
+# Коэффициент для перевода координат мыши из экранных (SCREEN_SIZE) в мировые
+# (WSIZE) — нужен только там, где мышь целится по тайлам (копка/постройка);
+# все UI-клики остаются в экранных координатах без пересчёта.
+WORLD_SCALE = (WSIZE[0] / SCREEN_SIZE[0], WSIZE[1] / SCREEN_SIZE[1])
+
+
+def screen_to_world_pos(pos):
+    return pos[0] * WORLD_SCALE[0], pos[1] * WORLD_SCALE[1]
+
+
+flags = pygame.FULLSCREEN if FULLSCREEN else 0
+# намеренно без RESIZABLE: свободное перетаскивание рамки окна никак не
+# пересчитывает раскладку меню (та кэшируется при запуске) — вместо этого
+# размер меняется через настройки (по списку размеров) с перезапуском,
+# это и предсказуемо, и не даёт тексту "поплыть" на нестандартном размере.
 
 pygame.display.set_caption('Quadish')
 Icon = pg.image.load("data/sprites/Icon.png")
@@ -84,13 +105,15 @@ pygame.display.set_icon(Icon)
 # vsync можно отключить: при включённом vsync слабое железо в фуллскрине
 # нередко «залипает» на половине развёртки (60→30 FPS).
 try:
-    screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags, display=MONITOR_INDEX,
+    screen_ = pygame.display.set_mode(SCREEN_SIZE, flags=flags, display=MONITOR_INDEX,
                                       vsync=1 if config.GameSettings.vsync else 0)
 except pygame.error:
     # display= может не поддерживаться — откат на монитор по умолчанию
-    screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags,
+    screen_ = pygame.display.set_mode(SCREEN_SIZE, flags=flags,
                                       vsync=1 if config.GameSettings.vsync else 0)
-display_ = pygame.Surface(WINDOW_SIZE).convert()
+# Мир рендерится в собственную (возможно, уменьшенную) поверхность и
+# растягивается на экран только этим слоем — см. GameUI.blit_world().
+display_ = pygame.Surface(WSIZE).convert()
 
 print(pg.display.get_allow_screensaver())
 
@@ -113,10 +136,11 @@ SCSIZE = STRUCTURE_CHUNKS_SIZE
 
 CHUNK_SIZE_PX = CHUNK_SIZE * TILE_SIZE
 CSIZEPX = CHUNK_SIZE_PX
-# колво чанков отрисовываемых на экране
-WINDOW_CHUNK_SIZE = math.ceil(WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 2, \
-                    math.ceil(WINDOW_SIZE[1] / (TILE_SIZE * CHUNK_SIZE)) + 2
-print("WINDOW_CHUNK_SIZE", WINDOW_CHUNK_SIZE, WINDOW_SIZE[0] / (TILE_SIZE * CHUNK_SIZE))
+# колво чанков отрисовываемых на экране — считается от WSIZE (мировой,
+# возможно уменьшенный размер), а не от SCREEN_SIZE
+WINDOW_CHUNK_SIZE = math.ceil(WSIZE[0] / (TILE_SIZE * CHUNK_SIZE)) + 2, \
+                    math.ceil(WSIZE[1] / (TILE_SIZE * CHUNK_SIZE)) + 2
+print("WINDOW_CHUNK_SIZE", WINDOW_CHUNK_SIZE, WSIZE[0] / (TILE_SIZE * CHUNK_SIZE))
 WCSIZE = WINDOW_CHUNK_SIZE
 
 # DEBUG ====================================================
@@ -292,5 +316,5 @@ if not os.path.exists(GAMEMAPS_PATH):
 
 # Loadings screen ==================================================================
 text = get_translated_text("Загрузка...")
-screen_.blit(pygame.font.SysFont("", 40).render(text, True, "white"), (35, WSIZE[1] - 50))
+screen_.blit(pygame.font.SysFont("", 40).render(text, True, "white"), (35, SCREEN_SIZE[1] - 50))
 pygame.display.flip()

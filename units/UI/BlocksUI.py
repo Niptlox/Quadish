@@ -88,8 +88,8 @@ class CommandBlockUI(BlockUI):
     index = 200
 
     def __init__(self, player):
-        rect = pg.Rect(0, 0, WSIZE[0] // 2, WSIZE[1] // 2 + 10)
-        rect.center = WSIZE[0] // 2, WSIZE[1] // 2
+        rect = pg.Rect(0, 0, SCREEN_SIZE[0] // 2, SCREEN_SIZE[1] // 2 + 10)
+        rect.center = SCREEN_SIZE[0] // 2, SCREEN_SIZE[1] // 2
         super(CommandBlockUI, self).__init__(rect)
         self.convert_alpha()
         y = rect.h - 80
@@ -212,7 +212,7 @@ class FurnaceUI(BlockUI):
 
 class InventoryPlayerWithBlockUI(BlockUI):
     def __init__(self, player, block_ui: BlockUI):
-        super(InventoryPlayerWithBlockUI, self).__init__(((0, 0), WSIZE))
+        super(InventoryPlayerWithBlockUI, self).__init__(((0, 0), SCREEN_SIZE))
         self.player_inventory_ui = InventoryPlayerUI(player.inventory)
         self.player_inventory_ui.opened = True
         self.player_inventory_ui.table_inventory.rect.y = 100

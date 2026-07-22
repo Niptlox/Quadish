@@ -137,11 +137,14 @@ class GameScene(Scene):
             self.running = False
             self.new_scene = self.app.end_scene
 
+        self.tutorial.draw_world(self.display)  # маркер цели — в мировых координатах
+        self.ui.blit_world()  # растянуть мир (self.display) на реальный экран
+
         if not self.hided_ui:
-            self.blocks_ui_manager.draw(self.display)
-            self.player.inventory.ui.draw(self.display)
+            self.blocks_ui_manager.draw(self.screen)
+            self.player.inventory.ui.draw(self.screen)
             self.ui.draw()
-            self.tutorial.draw(self.display)
+            self.tutorial.draw_hud(self.screen)
         self.ui.flip()
         self.tact += 1
         if self.tact % 30 == 0:

@@ -20,9 +20,10 @@ bool_dict = {ru_bool_lst[0]: eng_bool_lst[0], ru_bool_lst[1]: eng_bool_lst[1]}
 
 
 class SysMessege:
-    # полупрозрачное всплывающие  сообщение внизу экрана
+    # полупрозрачное всплывающие  сообщение внизу экрана (рисуется на реальном
+    # экране SCREEN_SIZE, а не в уменьшенном мире — поэтому текст не мылится)
     bg = (82, 82, 91, 220)
-    rect = pg.Rect((WSIZE[0] - 330, WSIZE[1] - 45), (300, 32))
+    rect = pg.Rect((SCREEN_SIZE[0] - 330, SCREEN_SIZE[1] - 45), (300, 32))
     width = 300
     height = 35
 
@@ -36,10 +37,11 @@ class SysMessege:
 
     def update_rect(self):
         off = 20 + self.bottom_offset
+        sw, sh = SCREEN_SIZE
         if self.align == "bottom_right":
-            self.rect = pg.Rect((WSIZE[0] - self.width - 30, WSIZE[1] - self.height - off), (self.width, self.height))
+            self.rect = pg.Rect((sw - self.width - 30, sh - self.height - off), (self.width, self.height))
         if self.align == "bottom_center":
-            self.rect = pg.Rect(((WSIZE[0] - self.width) // 2, WSIZE[1] - self.height - off), (self.width, self.height))
+            self.rect = pg.Rect(((sw - self.width) // 2, sh - self.height - off), (self.width, self.height))
         self.surface = pg.Surface(self.rect.size).convert_alpha()
 
     def new(self, text, count_tact=FPS * 3):
@@ -81,7 +83,7 @@ class SysMessege:
 
 class AchievementMessege(SysMessege):
     # все тоже самое что и SysMessege но для ачивок
-    rect = pg.Rect((WSIZE[0] - 330, WSIZE[1] - 75), (300, 62))
+    rect = pg.Rect((SCREEN_SIZE[0] - 330, SCREEN_SIZE[1] - 75), (300, 62))
     font_title = pygame.font.SysFont("Fenix", 28, )  # yes rus
     font_text = pygame.font.SysFont("Fenix", 24, )  # yes rus
     height = 62
@@ -114,7 +116,7 @@ class GameUI(UI):
         self.achievement_message.update_rect()
         # self.playerui = SurfaceAlphaUI((0, 0, 280, 120))
         self.playerui = SurfaceUI((0, 0, 450, 420)).convert_alpha()
-        self.playerui.rect.bottom = self.rect.bottom
+        self.playerui.rect.bottom = self.screen.get_height()
         self._playerui_state = None  # (lives, max_lives, creative) последней отрисовки
         self.new_sys_message("Привет игрок. Нажми [E]")
 
@@ -126,19 +128,29 @@ class GameUI(UI):
         # if self.
         self.display.fill(sky)
 
-    def draw(self):
-        # DRAW DISPLAY GAME TO WINDOW ========================================
-        if show_info_menu:
-            self.display.blit(self.info_surface, (WINDOW_SIZE[0] - 250, 0))
+    def blit_world(self):
+        """Растянуть отрендеренный мир (self.display, может быть меньше экрана)
+        на реальный экран. Единственное место, где мир масштабируется — весь
+        остальной HUD/UI рисуется прямо на self.screen и не размывается."""
+        if self.display.get_size() == self.screen.get_size():
+            self.screen.blit(self.display, (0, 0))
+        else:
+            pygame.transform.scale(self.display, self.screen.get_size(), self.screen)
 
-        self.sys_message.draw(self.display)
-        self.achievement_message.draw(self.display)
+    def draw(self):
+        # HUD рисуется прямо на экран (self.screen), в его настоящем
+        # разрешении — поэтому текст всегда чёткий, даже если мир (self.display)
+        # рендерится в уменьшенном логическом размере.
+        sw, sh = self.screen.get_size()
+        if show_info_menu:
+            self.screen.blit(self.info_surface, (sw - 250, 0))
+
+        self.sys_message.draw(self.screen)
+        self.achievement_message.draw(self.screen)
         self.redraw_playerui()
-        self.playerui.draw(self.display)
-        # pygame.transform.scale(display,(WINDOW_SIZE[0]//1.8, WINDOW_SIZE[1]//1.8)), (100, 100)
+        self.playerui.draw(self.screen)
 
     def flip(self):
-        self.screen.blit(self.display, (0, 0))
         pygame.display.flip()
 
     def new_sys_message(self, text, count_tact=FPS * 3, draw_now=False):
@@ -214,7 +226,7 @@ class TitleUI(UI):
     color_sky = "#a5f3fc"
     background = title_background
     background_layer_2 = title_background_layer_2
-    background = pg.transform.scale(background, (int(WSIZE[0] * 1.5), int(WSIZE[1] * 1.5)))
+    background = pg.transform.scale(background, (int(SCREEN_SIZE[0] * 1.5), int(SCREEN_SIZE[1] * 1.5)))
     background_layer_2 = pg.transform.scale(background_layer_2, background.get_size())
     background.set_colorkey(color_sky)
     game_title_text = title_text
@@ -483,13 +495,12 @@ class MainSettingsUI(TitleUI):
             self.sys_message.send_reload_game_for_change()
 
         def set_fs(value, i):
-            want = bool_dict[value]
-            win.set_fullscreen(want)
-            try:
-                if pg.display.is_fullscreen() != want:
-                    pg.display.toggle_fullscreen()
-            except Exception:
-                self.sys_message.send_reload_game_for_change()
+            # без живого переключения: экран/мир разделены на два разных
+            # размера (см. common.py), и без полного пересчёта раскладки меню
+            # "на лету" вёрстка бы поехала — поэтому, как и для размера окна,
+            # применяем через перезапуск
+            win.set_fullscreen(bool_dict[value])
+            self.sys_message.send_reload_game_for_change()
 
         def set_fps(value, i):
             gs.set_max_fps(value)
@@ -612,10 +623,10 @@ class WorldListUI(UI):
 
     def __init__(self, scene) -> None:
         super().__init__(scene)
-        w = min(560, WSIZE[0] - 40)
-        h = min(600, WSIZE[1] - 40)
+        w = min(560, SCREEN_SIZE[0] - 40)
+        h = min(600, SCREEN_SIZE[1] - 40)
         self.rect = pg.Rect(0, 0, w, h)
-        self.rect.center = WSIZE[0] // 2, WSIZE[1] // 2
+        self.rect.center = SCREEN_SIZE[0] // 2, SCREEN_SIZE[1] // 2
 
         # фиксированные кнопки (координаты в экранной системе — рисуем на screen)
         bx = self.rect.x
@@ -913,10 +924,10 @@ class HelpUI(UI):
     def __init__(self, scene):
         super(HelpUI, self).__init__(scene)
         from units.UI.HelpData import HELP_SECTIONS, LORE, LORE_TITLE
-        w = min(680, WSIZE[0] - 40)
-        h = min(600, WSIZE[1] - 40)
+        w = min(680, SCREEN_SIZE[0] - 40)
+        h = min(600, SCREEN_SIZE[1] - 40)
         self.rect = pg.Rect(0, 0, w, h)
-        self.rect.center = WSIZE[0] // 2, WSIZE[1] // 2
+        self.rect.center = SCREEN_SIZE[0] // 2, SCREEN_SIZE[1] // 2
 
         self.header_h = 52
         self.footer_h = 30

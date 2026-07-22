@@ -488,7 +488,44 @@ def test_map_add_item():
     assert len(chunk[1]) == before + 1
 
 
+def test_mouse_aim_matches_world_scale():
+    """Клик мышью (в реальных экранных координатах) должен целиться в мир с
+    учётом WORLD_SCALE — иначе на широких экранах (мир меньше экрана) копка
+    и постройка блоков будут промахиваться."""
+    import pygame
+    import units.common as common
+    game = fresh_world(3)
+    p = game.player
+    p.active = True
+    scroll = game.screen_map.scroll
+    vp = pygame.Vector2(p.rect.center)
+    vector_player_display = vp - pygame.Vector2(scroll)
+
+    captured = {}
+    p.tool.right_button_click = lambda vtm: captured.setdefault("vtm", pygame.Vector2(vtm)) or True
+
+    real_pos = (777, 333)
+    expected = pygame.Vector2(common.screen_to_world_pos(real_pos)) - vector_player_display
+    p.pg_event(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=real_pos, button=3))
+    assert (expected - captured["vtm"]).length() < 0.01
+
+    if common.WORLD_SCALE != (1, 1):
+        assert real_pos != tuple(expected), \
+            "при уменьшенном мире экранные и мировые координаты должны отличаться"
+
+
 # ===================== рендер =====================
+
+def test_world_screen_split():
+    """Мир (game.display) может быть меньше экрана (game.screen) — HUD/меню
+    рисуются на экране напрямую (для чёткости текста), а blit_world должен
+    растягивать мир на экран без падений, при любом соотношении размеров."""
+    game = fresh_world(11)
+    assert game.display.get_size() == game.ui.display.get_size()
+    game.ui.blit_world()  # не должен падать при любом соотношении размеров
+    # HUD-виджеты (хотбар/сообщения) должны быть в разрешении экрана, не мира
+    assert game.player.inventory.ui.get_size() == game.screen.get_size()
+
 
 def test_game_frame_renders():
     game = fresh_world(10)
@@ -581,7 +618,7 @@ def test_tutorial_world_and_steps():
     game.player.blocks_placed_count = 0
     tut.update()  # показывает первую подсказку, шаг не двигается
     assert gm.tutorial_step == 0
-    tut.draw(game.display)  # панель задачи рисуется без падений
+    tut.draw_hud(game.screen)  # панель задачи рисуется без падений
     assert tut._task_surf is not None
 
     # шаг 0: движение + прыжок (события запоминаются в состоянии мира)
@@ -610,7 +647,8 @@ def test_tutorial_world_and_steps():
     tut.update()
     assert gm.tutorial_step == 3
     assert game.player.achievements.is_completed("tutorial_wood")
-    tut.draw(game.display)
+    tut.draw_world(game.display)  # маркер — не должен падать
+    tut.draw_hud(game.screen)
     assert tut._task_text is not None
 
     # шаг 3: инвентарь

@@ -22,7 +22,7 @@ class InventoryUI(SurfaceUI):
         self.ui_owner = ui_owner
         self.inventory = inventory
         self.margin = margin_table
-        super(InventoryUI, self).__init__(((0, 0), WSIZE))
+        super(InventoryUI, self).__init__(((0, 0), SCREEN_SIZE))
         self.convert_alpha()
         self.fill((0, 0, 0, 0))
 
