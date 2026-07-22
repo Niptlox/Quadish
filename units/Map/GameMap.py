@@ -3,7 +3,7 @@ from typing import Union
 
 from units.noise_compat import snoise2 as noise2
 
-from units.Objects.Creatures import Slime, Cow, Wolf, SlimeBigBoss, Snake
+from units.Objects.Creatures import Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp
 from units.Objects.Entities import PortalMainGate
 from units.Objects.Entity import PhysicalObject
 from units.Objects.Items import ItemsTile
@@ -117,7 +117,7 @@ class GameMap(SavedObject):
                     for tile_xy in tiles_xy:
                         # if random.random() < 0.005:
                         x, y = tile_xy[0] * TSIZE, tile_xy[1] * TSIZE
-                        Crt = random_creature_selection()
+                        Crt = random_creature_selection(tile_xy[1])
                         if Crt is not None:
                             dynamic_tiles.append(Crt(self.game, (x, y)))
                             crt_cash[1] += 1
@@ -622,7 +622,7 @@ class GameMap(SavedObject):
                                     static_tiles[pl_i + 2] = state_img
                                     static_tiles[pl_i + 3] = state
                                     if config.GameSettings.creatures and cnt_creatures < CHUNK_CREATURE_LIMIT:
-                                        Crt = random_creature_selection()
+                                        Crt = random_creature_selection(tile_y)
                                         if Crt is not None:
                                             dynamic_tiles.append(Crt(self.game, (tile_x * TSIZE, tile_y * TSIZE)))
                                             cnt_creatures += 1
@@ -833,14 +833,19 @@ def random_plant_selection(biome=None):
     return None
 
 
-def random_creature_selection():
+def random_creature_selection(tile_y=None):
+    """tile_y задаёт биом-зависимость спавна: глубоко под START_HELL_Y
+    водятся бесы (Imp) вместо коров, а не единый для всего мира пул мобов."""
     if not config.GameSettings.creatures:
         return None
     r = random.random()
     if r >= CHUNK_CREATURE_CHANCE:
         return None
 
-    crt = random.choices([Slime, Cow, Snake, Wolf, SlimeBigBoss], [20, 5, 1, 0.7, 0.25], k=1)
+    if tile_y is not None and tile_y > START_HELL_Y:
+        crt = random.choices([Slime, Wolf, Imp], [10, 3, 4], k=1)
+    else:
+        crt = random.choices([Slime, Cow, Snake, Wolf, SlimeBigBoss], [20, 5, 1, 0.7, 0.25], k=1)
     # print("random_creature_selection", crt)
     return crt[0]
 

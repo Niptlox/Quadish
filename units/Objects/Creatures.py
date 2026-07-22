@@ -122,10 +122,23 @@ class MovingCreature(Creature):
 def slime_animation(color, size, reduction_step, count_sprites=3):
     size = max(size[0], 1), max(size[1], 1)
 
-    sprites = [pg.Surface((size[0], size[1] + i)).convert_alpha() for i in
-               range(0, reduction_step * count_sprites, reduction_step)]
-    [spr.fill(color + "AA") for spr in sprites]
-    [pg.draw.rect(spr, color + "EE", ((0, 0), spr.get_size()), width=2) for spr in sprites]
+    sprites = []
+    for i in range(0, reduction_step * count_sprites, reduction_step):
+        w, h = size[0], size[1] + i
+        spr = pg.Surface((w, h)).convert_alpha()
+        spr.fill((0, 0, 0, 0))
+        radius = max(2, min(w, h) // 3)
+        pg.draw.rect(spr, color + "AA", (0, 0, w, h), border_radius=radius)
+        pg.draw.rect(spr, color + "EE", (0, 0, w, h), width=2, border_radius=radius)
+        # блик и "глазки" — придают слаймy характер, а не просто закруглённый блок
+        eye_y = h // 3
+        eye_r = max(1, w // 12)
+        pg.draw.circle(spr, "#1C1917", (w // 3, eye_y), eye_r)
+        pg.draw.circle(spr, "#1C1917", (w * 2 // 3, eye_y), eye_r)
+        highlight = pg.Surface((max(1, w // 3), max(1, h // 4)), pg.SRCALPHA)
+        highlight.fill((255, 255, 255, 70))
+        spr.blit(highlight, (w // 5, h // 6))
+        sprites.append(spr)
 
     return sprites
 
@@ -226,6 +239,35 @@ class Slime(MovingCreature):
         return True
 
 
+def create_cow_sprite(color, size, outline="#1C1917"):
+    """Корова примитивами (мордой вправо): туловище, пятна, голова с мордой и ушами, ноги."""
+    w, h = max(size[0], 4), max(size[1], 4)
+    s = pg.Surface((w, h)).convert_alpha()
+    s.fill((0, 0, 0, 0))
+    leg_w = max(2, w // 7)
+    leg_h = max(2, int(h * 0.28))
+    leg_y = h - leg_h
+    for lx in (int(w * 0.08), int(w * 0.32), int(w * 0.58), int(w * 0.82)):
+        pg.draw.rect(s, "#44403C", (lx, leg_y, leg_w, leg_h))
+    body_h = h - leg_h + 2
+    pg.draw.ellipse(s, color, (0, 0, w, body_h))
+    spot = "#3F3A36"
+    pg.draw.ellipse(s, spot, (int(w * 0.08), int(body_h * 0.15), int(w * 0.22), int(body_h * 0.35)))
+    pg.draw.ellipse(s, spot, (int(w * 0.5), int(body_h * 0.4), int(w * 0.28), int(body_h * 0.3)))
+    head_w, head_h = int(w * 0.3), int(body_h * 0.7)
+    hx, hy = w - head_w - 1, int(body_h * 0.05)
+    pg.draw.ellipse(s, color, (hx, hy, head_w, head_h))
+    ear_r = max(2, head_h // 5)
+    pg.draw.circle(s, color, (hx + 2, hy), ear_r)
+    pg.draw.circle(s, color, (hx + head_w - 2, hy), ear_r)
+    snout_w = int(head_w * 0.55)
+    pg.draw.ellipse(s, "#F5E6D3", (hx + head_w - snout_w, hy + int(head_h * 0.5), snout_w, int(head_h * 0.45)))
+    pg.draw.circle(s, outline, (hx + head_w - 4, hy + int(head_h * 0.35)), max(1, w // 40 + 1))
+    pg.draw.ellipse(s, outline, (0, 0, w, body_h), width=1)
+    pg.draw.ellipse(s, outline, (hx, hy, head_w, head_h), width=1)
+    return s
+
+
 class Cow(MovingCreature):
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "cow"
@@ -239,8 +281,7 @@ class Cow(MovingCreature):
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
         self.color = random.choice(self.colors)
-        self.sprite = pg.Surface((self.rect.w, self.rect.h))
-        self.sprite.fill(self.color)
+        self.sprite = create_cow_sprite(self.color, self.rect.size)
         self.jump_speed = 5
 
     def update(self, tact, elapsed_time):
@@ -255,6 +296,59 @@ class Cow(MovingCreature):
             self.move_tact = random.randint(30, 205)
             self.move_direction = random.randint(-1, 1)
         return True
+
+
+def create_wolf_sprite(color, size, outline="#1C1917"):
+    """Волк/собака примитивами (мордой вправо): туловище, треугольные уши, морда, хвост, ноги."""
+    w, h = max(size[0], 4), max(size[1], 4)
+    s = pg.Surface((w, h)).convert_alpha()
+    s.fill((0, 0, 0, 0))
+    leg_w = max(2, w // 8)
+    leg_h = max(2, int(h * 0.3))
+    leg_y = h - leg_h
+    for lx in (int(w * 0.05), int(w * 0.28), int(w * 0.6), int(w * 0.83)):
+        pg.draw.rect(s, "#3F3A36", (lx, leg_y, leg_w, leg_h))
+    body_w = int(w * 0.78)
+    body_h = h - leg_h + 2
+    pg.draw.rect(s, color, (0, 0, body_w, body_h), border_radius=max(1, int(body_h * 0.3)))
+    tail = [(int(w * 0.1), int(body_h * 0.2)), (0, int(body_h * 0.02)), (int(w * 0.1), int(body_h * 0.45))]
+    pg.draw.polygon(s, color, tail)
+    head_w, head_h = int(w * 0.34), int(body_h * 0.75)
+    hx, hy = w - head_w, 0
+    pg.draw.rect(s, color, (hx, hy, head_w, head_h), border_radius=max(1, int(head_h * 0.25)))
+    ear_h = max(2, head_h // 3)
+    pg.draw.polygon(s, color, [(hx + 2, hy), (hx + 2 + ear_h // 2, hy - ear_h), (hx + 2 + ear_h, hy)])
+    pg.draw.polygon(s, color, [(hx + head_w - 2 - ear_h, hy), (hx + head_w - 2 - ear_h // 2, hy - ear_h),
+                               (hx + head_w - 2, hy)])
+    snout_w = max(1, int(head_w * 0.4))
+    pg.draw.rect(s, color, (hx + head_w - 2, hy + int(head_h * 0.45), snout_w, int(head_h * 0.35)),
+                border_top_right_radius=3, border_bottom_right_radius=3)
+    pg.draw.circle(s, outline, (hx + head_w - 4, hy + int(head_h * 0.3)), max(1, w // 40 + 1))
+    pg.draw.rect(s, outline, (0, 0, body_w, body_h), width=1, border_radius=max(1, int(body_h * 0.3)))
+    pg.draw.rect(s, outline, (hx, hy, head_w, head_h), width=1, border_radius=max(1, int(head_h * 0.25)))
+    return s
+
+
+def create_snake_sprite(color, size, outline="#1C1917"):
+    """Змея примитивами: волнистое тело из кружков, голова с языком."""
+    w, h = max(size[0], 4), max(size[1], 3)
+    s = pg.Surface((w, h)).convert_alpha()
+    s.fill((0, 0, 0, 0))
+    body_r = max(1, h // 2)
+    segs = max(3, w // max(2, body_r * 3))
+    seg_w = w / segs
+    for i in range(segs):
+        offset = body_r // 2 if i % 2 else -(body_r // 2)
+        cy = max(body_r, min(h - body_r, h // 2 + offset))
+        cx = int(seg_w * (i + 0.5))
+        pg.draw.circle(s, color, (cx, cy), body_r)
+    head_r = max(2, body_r + 1)
+    hx, hy = w - head_r, h // 2
+    pg.draw.circle(s, color, (hx, hy), head_r)
+    pg.draw.circle(s, outline, (min(w - 1, hx + head_r // 2), max(0, hy - head_r // 3)), 1)
+    if w > 1:
+        pg.draw.line(s, "#B91C1C", (w - 2, hy), (w - 1, hy), 1)
+    return s
 
 
 class Wolf(MovingCreature):
@@ -282,8 +376,7 @@ class Wolf(MovingCreature):
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
-        self.sprite = pg.Surface((self.rect.w, self.rect.h))
-        self.sprite.fill(self.color)
+        self.sprite = create_wolf_sprite(self.color, self.rect.size)
         self.angry_rect = pg.Rect((0, 0), self.angry_rect_size)
         self.angry = False
 
@@ -332,6 +425,60 @@ class Snake(Wolf):
     color = "#4d7c0f"
     drop_items = [(ItemsTile, (401, (1, 2))), (ItemsTile, (301, (0, 1)))]
 
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.sprite = create_snake_sprite(self.color, self.rect.size)
+
+
+def create_imp_sprite(color, size, outline="#1C1917"):
+    """Бес примитивами: приземистое тело, рожки, светящийся глаз."""
+    w, h = max(size[0], 4), max(size[1], 4)
+    s = pg.Surface((w, h)).convert_alpha()
+    s.fill((0, 0, 0, 0))
+    leg_w = max(2, w // 6)
+    leg_h = max(2, int(h * 0.3))
+    leg_y = h - leg_h
+    for lx in (int(w * 0.1), int(w * 0.35), int(w * 0.6), int(w * 0.82)):
+        pg.draw.rect(s, "#292524", (lx, leg_y, leg_w, leg_h))
+    body_w = int(w * 0.8)
+    body_h = h - leg_h + 2
+    pg.draw.rect(s, color, (0, 0, body_w, body_h), border_radius=max(1, int(body_h * 0.35)))
+    head_w, head_h = int(w * 0.4), int(body_h * 0.7)
+    hx, hy = w - head_w, 0
+    pg.draw.rect(s, color, (hx, hy, head_w, head_h), border_radius=max(1, int(head_h * 0.3)))
+    horn_h = max(2, head_h // 3)
+    pg.draw.polygon(s, "#78716C", [(hx + 2, hy + 2), (hx, hy - horn_h), (hx + 4, hy)])
+    pg.draw.polygon(s, "#78716C", [(hx + head_w - 2, hy + 2), (hx + head_w, hy - horn_h), (hx + head_w - 4, hy)])
+    eye_r = max(1, w // 30 + 1)
+    pg.draw.circle(s, "#FDE047", (hx + head_w - 4, hy + int(head_h * 0.4)), eye_r)
+    pg.draw.rect(s, outline, (0, 0, body_w, body_h), width=1, border_radius=max(1, int(body_h * 0.35)))
+    pg.draw.rect(s, outline, (hx, hy, head_w, head_h), width=1, border_radius=max(1, int(head_h * 0.3)))
+    return s
+
+
+class Imp(Wolf):
+    """Бес — враждебный житель Ада (спавнится глубоко под START_HELL_Y)."""
+    not_save_vars = Wolf.not_save_vars
+    bio_kingdom = KINGDOM_ANIMALIA
+    bio_species = "imp"
+    bio_subspecies = "hell imp"
+    width, height = int(TSIZE * 0.9), int(TSIZE * 0.9)
+    color = "#DC2626"
+    max_lives = 45
+    drop_items = [(ItemsTile, (402, (1, 3)))]
+
+    move_speed = 4
+    jump_speed = 6
+
+    enemy = True
+    punch_damage = 12
+    punch_speed = 2
+    punch_discard = 6
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.sprite = create_imp_sprite(self.color, self.rect.size)
+
 
 class SlimeBigBoss(Slime):
     not_save_vars = Slime.not_save_vars | {"angry", "angry_player"}
@@ -379,5 +526,5 @@ class SlimeBigBoss(Slime):
                 self.move_tact = None
 
 
-CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss, Snake]
+CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp]
 CREATURES_D = {cls.__name__: cls for cls in CREATURES}

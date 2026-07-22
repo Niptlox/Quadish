@@ -73,6 +73,7 @@ stone_brick_1_img = (load_img("data/sprites/tiles/blocksstoun1.png"))
 stone_brick_2_img = (load_img("data/sprites/tiles/blocksstoun2.png"))
 
 purore_img = create_tile_image("#9333EA")  # purple ore
+sulfur_item_img = create_tile_image("#FDE047")  # сера (добыча бесов)
 
 tnt_img = create_tile_image("#B91C1C")  # tnt
 
@@ -232,6 +233,7 @@ tile_imgs = {None: none_img,
              301: poison_item_img,
              351: potion_jump_item_img,
              401: meet_snake_item_img,
+             402: sulfur_item_img,
              501: sword_1_img,
              502: sword_77_img,
              503: sword_2_img,
@@ -283,7 +285,7 @@ STANDING_TILES = {0, 110, 120, 121, 122, 123, 125, 126, 130, 129, 131} | ON_EART
 # Задние панельки
 BACKTILES = {1003, }
 # предметы которые нельзя физически поставить
-ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 351, 401, 801, 81, 82, 86}
+ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 351, 401, 402, 801, 81, 82, 86}
 
 STONE_TILES = {3, 4, 5, 31, 32, 33, 21, 22, 23, 24, 25, 131}
 WOOD_TILES = {12, 110, 11, 121, 122, 123, 124, 126, 127, 128, 129, 131, 251}
@@ -418,6 +420,7 @@ original_tile_words = {None: "None",
                        301: "Ядовитая железа",
                        351: "Зелье нового прыжка",
                        401: "Мясо змеи",
+                       402: "Сера",
                        501: "Железный меч",
                        502: "Золотой меч",
                        503: "Ядовитый меч",
