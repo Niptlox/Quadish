@@ -3,7 +3,8 @@ from typing import Union
 
 from units.noise_compat import snoise2 as noise2
 
-from units.Objects.Creatures import Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion
+from units.Objects.Creatures import (Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion,
+                                     Rabbit, Deer, Fox, Camel, Penguin, Boar, Crab, Bat, StoneGolem, SpaceDrifter)
 from units.Objects.Entities import PortalMainGate
 from units.Objects.Entity import PhysicalObject
 from units.Objects.Items import ItemsTile
@@ -835,28 +836,41 @@ def random_plant_selection(biome=None):
 
 
 def random_creature_selection(tile_y=None, biome=None):
-    """tile_y и biome задают биом-зависимость спавна вместо единого для
-    всего мира пула мобов: глубоко под START_HELL_Y водятся бесы (Imp), в
-    пустыне (0) — скорпионы, в саванне (1) больше коров, в тундре/тайге
-    (3, 8) больше волков, в тропиках/джунглях (2, 5) больше змей."""
+    """tile_y и biome задают биом/глубину-зависимость спавна вместо единого
+    для всего мира пула мобов:
+    - космос (tile_y < START_SPACE_Y) — космические дрейферы
+    - ад (tile_y > START_HELL_Y) — бесы, волки, слаймы
+    - глубокие пещеры (BOTTOM_MIDDLE_WORLD < tile_y <= START_HELL_Y) —
+      летучие мыши, каменные големы
+    - пустыня (0) — скорпионы, верблюды; саванна (1) — коровы, зайцы
+    - тундра/тайга (3, 8) — волки, олени, пингвины
+    - тропики/джунгли (2, 5) — змеи, крабы
+    - леса (4, 6, 7) — олени, лисы, кабаны
+    - остальное — исходный набор + зайцы"""
     if not config.GameSettings.creatures:
         return None
     r = random.random()
     if r >= CHUNK_CREATURE_CHANCE:
         return None
 
-    if tile_y is not None and tile_y > START_HELL_Y:
+    if tile_y is not None and tile_y < START_SPACE_Y:
+        crt = random.choices([SpaceDrifter], [1], k=1)
+    elif tile_y is not None and tile_y > START_HELL_Y:
         crt = random.choices([Slime, Wolf, Imp], [10, 3, 4], k=1)
+    elif tile_y is not None and tile_y > BOTTOM_MIDDLE_WORLD:
+        crt = random.choices([Slime, Bat, StoneGolem], [10, 6, 2], k=1)
     elif biome == 0:  # desert
-        crt = random.choices([Slime, Scorpion, Snake], [10, 6, 2], k=1)
+        crt = random.choices([Slime, Scorpion, Snake, Camel], [10, 6, 2, 3], k=1)
     elif biome == 1:  # savanna
-        crt = random.choices([Slime, Cow, Wolf], [15, 10, 1], k=1)
+        crt = random.choices([Slime, Cow, Wolf, Rabbit], [15, 10, 1, 6], k=1)
     elif biome in (3, 8):  # tundra, boreal_forest
-        crt = random.choices([Slime, Wolf, Cow], [12, 5, 1], k=1)
+        crt = random.choices([Slime, Wolf, Cow, Deer, Penguin], [12, 5, 1, 4, 3], k=1)
     elif biome in (2, 5):  # tropical_woodland, rainforest
-        crt = random.choices([Slime, Snake, Cow, Wolf], [15, 4, 3, 1], k=1)
+        crt = random.choices([Slime, Snake, Cow, Wolf, Crab], [15, 4, 3, 1, 3], k=1)
+    elif biome in (4, 6, 7):  # seasonal/temperate/temperate_rainforest
+        crt = random.choices([Slime, Deer, Fox, Boar, Rabbit], [15, 5, 4, 2, 5], k=1)
     else:
-        crt = random.choices([Slime, Cow, Snake, Wolf, SlimeBigBoss], [20, 5, 1, 0.7, 0.25], k=1)
+        crt = random.choices([Slime, Cow, Snake, Wolf, SlimeBigBoss, Rabbit], [20, 5, 1, 0.7, 0.25, 6], k=1)
     # print("random_creature_selection", crt)
     return crt[0]
 

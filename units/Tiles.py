@@ -103,7 +103,37 @@ stone_brick_2_img = (load_img("data/sprites/tiles/blocksstoun2.png"))
 
 purore_img = create_tile_image("#9333EA")  # purple ore
 sulfur_item_img = create_tile_image("#FDE047")  # сера (добыча бесов)
-chitin_item_img = create_tile_image("#D4A373")  # хитин (добыча скорпионов)
+chitin_item_img = create_tile_image("#D4A373")  # хитин (добыча скорпионов/крабов)
+hide_item_img = create_tile_image("#A16207")  # шкура (общий ресурс новых зверей)
+raw_meat_item_img = create_tile_image("#FCA5A5")  # сырое мясо (общее)
+cooked_meat_item_img = create_tile_image("#B45309")  # жареное мясо (общее)
+space_dust_item_img = create_tile_image("#818CF8")  # космическая пыль (добыча пришельцев)
+
+
+def create_timer_block_img():
+    """Таймер: часовой циферблат со стрелками поверх обычного блока."""
+    img = create_tile_image("#78716C")
+    cx, cy = img.get_width() // 2, img.get_height() // 2
+    r = min(img.get_width(), img.get_height()) // 2 - 4
+    pygame.draw.circle(img, "#F5F5F4", (cx, cy), r)
+    pygame.draw.circle(img, "#1C1917", (cx, cy), r, width=1)
+    pygame.draw.line(img, "#1C1917", (cx, cy), (cx, cy - r + 2), 2)
+    pygame.draw.line(img, "#1C1917", (cx, cy), (cx + r // 2, cy), 2)
+    return img
+
+
+def create_pressure_plate_img():
+    """Нажимная плита: тонкая жёлтая плашка на обычном блоке."""
+    img = create_tile_image("#57534E")
+    w, h = img.get_size()
+    pad = 4
+    pygame.draw.rect(img, "#FDE047", (pad, pad, w - pad * 2, h - pad * 2), border_radius=3)
+    pygame.draw.rect(img, "#1C1917", (pad, pad, w - pad * 2, h - pad * 2), width=1, border_radius=3)
+    return img
+
+
+timer_block_img = create_timer_block_img()
+pressure_plate_img = create_pressure_plate_img()
 
 tnt_img = create_tile_image("#B91C1C")  # tnt
 
@@ -265,6 +295,12 @@ tile_imgs = {None: none_img,
              401: meet_snake_item_img,
              402: sulfur_item_img,
              403: chitin_item_img,
+             404: hide_item_img,
+             405: raw_meat_item_img,
+             406: cooked_meat_item_img,
+             408: space_dust_item_img,
+             211: timer_block_img,
+             212: pressure_plate_img,
              501: sword_1_img,
              502: sword_77_img,
              503: sword_2_img,
@@ -316,20 +352,22 @@ STANDING_TILES = {0, 110, 120, 121, 122, 123, 125, 126, 130, 129, 131} | ON_EART
 # Задние панельки
 BACKTILES = {1003, }
 # предметы которые нельзя физически поставить
-ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 351, 401, 402, 403, 801, 81, 82, 86}
+ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 351,
+             401, 402, 403, 404, 405, 406, 408, 801, 81, 82, 86}
 
 STONE_TILES = {3, 4, 5, 31, 32, 33, 21, 22, 23, 24, 25, 131}
 WOOD_TILES = {12, 110, 11, 121, 122, 123, 124, 126, 127, 128, 129, 131, 251}
 
 # блоки у которых есть прграммный класс
-CLASS_TILE = {131, 129, 200, 210}
+CLASS_TILE = {131, 129, 200, 210, 211, 212}
 # которые надо обновлять
-CLASS_UPDATING_TILES = {131, 200, 210}
+CLASS_UPDATING_TILES = {131, 200, 210, 211, 212}
 # CLASS_UPDATING_TILES_IN_UI = {131}
 # которые надо обновлять не зависимо от загрузки чанка те всегда
 CLASS_ALLWAYS_UPDATING_TILES = {200, }
-# блоки которые можно активировать
-ACTIVATE_TILES = {200, 210, 9}
+# блоки которые можно активировать (и/или сами активируют сеть) —
+# 211 таймер (авто-клокер), 212 нажимная плита (датчик игрока)
+ACTIVATE_TILES = {200, 210, 9, 211, 212}
 
 # Блоки у которых state это массив
 ITEM_WITH_STATE_IS_LIST = {126}
@@ -346,7 +384,7 @@ TILE_WITH_LOCAL_POS = {251, } | PLANT_WITH_RANDOM_LOCAL_POS
 # EAT ===================================================================
 
 Eats = {52: 10, 53: 2, 56: 8, 55: 100, 401: 7, 251: 7, 351: 1,
-        81: 14, 82: 20, 86: 16}
+        81: 14, 82: 20, 86: 16, 405: 8, 406: 16}
 
 # PICKAXE ===============================================================
 
@@ -462,6 +500,12 @@ original_tile_words = {None: "None",
                        401: "Мясо змеи",
                        402: "Сера",
                        403: "Хитин",
+                       404: "Шкура",
+                       405: "Сырое мясо",
+                       406: "Жареное мясо",
+                       408: "Космическая пыль",
+                       211: "Таймер",
+                       212: "Нажимная плита",
                        501: "Железный меч",
                        502: "Золотой меч",
                        503: "Ядовитый меч",

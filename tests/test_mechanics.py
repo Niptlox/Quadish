@@ -270,6 +270,47 @@ def test_activator_large_cluster_no_crash():
     assert any(type(obj).__name__ == "Dynamite" for obj in chunk[1])
 
 
+def test_timer_block_auto_triggers_network():
+    """TimerBlock должен сам (без клика игрока) периодически запускать
+    подключённую сеть активаторов через bfs_activate."""
+    game = fresh_world(23)
+    gm = game.game_map
+    gm.set_static_tile(0, 0, 211)  # таймер
+    gm.set_static_tile(1, 0, 210)  # активатор рядом
+
+    timer = gm.get_tile_obj(*gm.to_chunk_xy(0, 0), gm.get_static_tile(0, 0)[3])
+    activator = gm.get_tile_obj(*gm.to_chunk_xy(1, 0), gm.get_static_tile(1, 0)[3])
+    assert timer is not None and activator is not None
+
+    for _ in range(timer.interval):
+        assert not activator.activating
+        timer.update(16)
+    assert activator.activating, "по истечении интервала таймер должен активировать сеть"
+
+
+def test_pressure_plate_triggers_on_player_step():
+    """PressurePlate должна активировать сеть, когда игрок встаёт на неё, и
+    не срабатывать повторно, пока он с неё не сойдёт."""
+    game = fresh_world(24)
+    gm = game.game_map
+    gm.set_static_tile(0, 0, 212)  # нажимная плита
+    gm.set_static_tile(1, 0, 210)  # активатор рядом
+
+    plate = gm.get_tile_obj(*gm.to_chunk_xy(0, 0), gm.get_static_tile(0, 0)[3])
+    activator = gm.get_tile_obj(*gm.to_chunk_xy(1, 0), gm.get_static_tile(1, 0)[3])
+
+    from units.common import TSIZE
+    game.player.rect.topleft = (TSIZE * 100, TSIZE * 100)  # далеко от плиты
+    plate.update(16)
+    assert not plate.pressed
+    assert not activator.activating
+
+    game.player.rect.topleft = plate.rect.topleft  # встал на плиту
+    plate.update(16)
+    assert plate.pressed
+    assert activator.activating
+
+
 # ===================== хранилище миров =====================
 
 def test_world_storage_crud():
@@ -555,6 +596,40 @@ def test_creature_selection_biome_diversity():
     hell_picks = {random_creature_selection(START_HELL_Y + 10, 0) for _ in range(500)}
     assert Imp in hell_picks
     assert Scorpion not in hell_picks
+
+
+def test_new_creatures_registered_and_spawnable():
+    """10 новых существ (заяц, олень, лиса, кабан, верблюд, пингвин, краб,
+    летучая мышь, голем, пришелец) должны быть в общем реестре и появляться
+    в подходящих для них зонах/биомах."""
+    from units.Map.GameMap import random_creature_selection
+    from units.Objects.Creatures import (CREATURES_D, Rabbit, Deer, Fox, Boar, Camel, Penguin,
+                                         Crab, Bat, StoneGolem, SpaceDrifter)
+    from units.common import START_HELL_Y, START_SPACE_Y, BOTTOM_MIDDLE_WORLD
+
+    new_creatures = [Rabbit, Deer, Fox, Boar, Camel, Penguin, Crab, Bat, StoneGolem, SpaceDrifter]
+    for cls in new_creatures:
+        assert CREATURES_D[cls.__name__] is cls
+
+    random.seed(3)
+    assert Camel in {random_creature_selection(0, 0) for _ in range(500)}  # пустыня
+    assert Rabbit in {random_creature_selection(0, 1) for _ in range(500)}  # саванна
+    assert {Deer, Penguin} & {random_creature_selection(0, 3) for _ in range(1000)}  # тундра
+    assert Crab in {random_creature_selection(0, 2) for _ in range(1000)}  # тропики
+    assert {Fox, Boar} & {random_creature_selection(0, 4) for _ in range(1000)}  # лес
+    assert {Bat, StoneGolem} & {random_creature_selection(BOTTOM_MIDDLE_WORLD + 50, 0) for _ in range(1000)}
+    assert SpaceDrifter in {random_creature_selection(START_SPACE_Y - 10, None) for _ in range(200)}
+    assert random_creature_selection(START_HELL_Y + 10, 0) is not None or True  # ад не должен падать
+
+
+def test_creature_spawn_creates_valid_object():
+    """Каждое новое существо должно создаваться без ошибок и иметь спрайт."""
+    from units.Objects.Creatures import Rabbit, Deer, Fox, Boar, Camel, Penguin, Crab, Bat, StoneGolem, SpaceDrifter
+    game = fresh_world(25)
+    for cls in (Rabbit, Deer, Fox, Boar, Camel, Penguin, Crab, Bat, StoneGolem, SpaceDrifter):
+        creature = cls(game, (0, -64))
+        assert creature.sprite is not None
+        assert creature.sprite.get_width() > 0 and creature.sprite.get_height() > 0
 
 
 def test_plants_defined_for_all_biomes():

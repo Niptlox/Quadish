@@ -30,6 +30,32 @@ class Chest(Tile):
     def items_of_break(self):
         return self.inventory.items_of_break()
 
+def bfs_activate(game_map, origin):
+    """Обходит связную сеть активируемых блоков (Activator/TimerBlock/
+    PressurePlate) итеративно (очередь, не рекурсия) — на большом скоплении
+    рекурсивный обход уходил вглубь на сотни вложенных вызовов и был уязвим
+    к RecursionError; visited по id защищает от повторной активации того же
+    блока (циклы/сетки). Общая логика для всех источников активации."""
+    visited = {origin.id}
+    queue = [origin]
+    while queue:
+        current = queue.pop()
+        current.activating = True
+        for i in range(-1, 2):
+            for j in range(-1, 2):
+                if i == 0 and j == 0:
+                    continue
+                x, y = current.tx + i, current.ty + j
+                tile, tile_obj = game_map.get_tile_and_obj(x, y)
+                if tile[0] in ACTIVATE_TILES:
+                    if tile_obj:
+                        if tile_obj.id not in visited:
+                            visited.add(tile_obj.id)
+                            queue.append(tile_obj)
+                    elif tile[0] == 9:
+                        Entities.activate_dynamite(game_map, x, y, tile[0])
+
+
 class Activator(Tile):
     index = 210
 
@@ -38,30 +64,7 @@ class Activator(Tile):
         self.activating = False
 
     def activate_nearby_tiles(self):
-        """Обходит связную сеть активаторов итеративно (очередь, не рекурсия) —
-        на большом скоплении активаторов рекурсивный обход (activate ->
-        activate_nearby_tiles -> tile_obj.activate -> ...) уходил вглубь на
-        сотни вложенных вызовов и был уязвим к RecursionError; visited по id
-        защищает от повторной активации того же блока (циклы/сетки)."""
-        game_map = self.game_map
-        visited = {self.id}
-        queue = [self]
-        while queue:
-            current = queue.pop()
-            current.activating = True
-            for i in range(-1, 2):
-                for j in range(-1, 2):
-                    if i == 0 and j == 0:
-                        continue
-                    x, y = current.tx + i, current.ty + j
-                    tile, tile_obj = game_map.get_tile_and_obj(x, y)
-                    if tile[0] in ACTIVATE_TILES:
-                        if tile_obj:
-                            if tile_obj.id not in visited:
-                                visited.add(tile_obj.id)
-                                queue.append(tile_obj)
-                        elif tile[0] == 9:
-                            Entities.activate_dynamite(game_map, x, y, tile[0])
+        bfs_activate(self.game_map, self)
 
     def activate(self):
         if not self.activating:
@@ -75,10 +78,53 @@ class Activator(Tile):
             self.activate_nearby_tiles()
 
 
+class TimerBlock(Tile):
+    """Таймер: сам, без участия игрока, периодически запускает подключённую
+    сеть активаторов — авто-клокер для командных блоков/активаторов/динамита
+    (не нужно нажимать вручную каждый раз)."""
+    index = 211
+    interval = FPS * 3
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.activating = False
+        self.timer = 0
+
+    def update(self, elapsed_time):
+        self.activating = False
+        self.timer += 1
+        if self.timer >= self.interval:
+            self.timer = 0
+            bfs_activate(self.game_map, self)
+
+    def right_click(self, mouse_local_pos):
+        self.timer = 0
+        bfs_activate(self.game_map, self)
+
+
+class PressurePlate(Tile):
+    """Нажимная плита: запускает подключённую сеть активаторов, пока на ней
+    (в её клетке) стоит игрок — датчик присутствия для авто-дверей/ловушек."""
+    index = 212
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.activating = False
+        self.pressed = False
+
+    def update(self, elapsed_time):
+        was_pressed = self.pressed
+        self.pressed = self.rect.colliderect(self.game.player.rect)
+        self.activating = self.pressed
+        if self.pressed and not was_pressed:
+            bfs_activate(self.game_map, self)
+
+
 furnace_burn_tiles = {
     52: 82,
     56: 86,
     401: 81,
+    405: 406,  # сырое мясо (новые звери) -> жареное
     21: 61,
     22: 62,
     23: 63,
@@ -153,5 +199,5 @@ class Furnace(Tile):
         return sum([inv.items_of_break() for inv in inventories], [])
 
 
-classes = {Chest, Furnace, CommandBlock, Activator}
+classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate}
 tiles_class = {cls.index: cls for cls in classes}
