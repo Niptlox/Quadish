@@ -1,4 +1,4 @@
-from units.Tiles import PHYSBODY_TILES, SEMIPHYSBODY_TILES
+from units.Map.TileFlags import TILE_FLAGS, TileFlag
 from units.common import *
 
 
@@ -40,10 +40,12 @@ def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic
             v_xy_map = v_x_map, v_y_map = (vertex[0] // TILE_SIZE, vertex[1] // TILE_SIZE)
             # if not(0 <= v_x_map < game_map.map_size[0] and 0 <= v_y_map < game_map.map_size[1]):
             #     hit_static_lst.append((v_xy_map, -1))
-            if static_tiles.get(v_xy_map) in PHYSBODY_TILES or collide_all_tiles:
-                hit_static_lst.append((v_xy_map, static_tiles.get(v_xy_map)))
-            elif semiphysbody and static_tiles.get(v_xy_map) in SEMIPHYSBODY_TILES:
-                semiphysbody_lst.append((v_xy_map, static_tiles.get(v_xy_map)))
+            ttile = static_tiles.get(v_xy_map)
+            flags = TILE_FLAGS.get(ttile, TileFlag.NONE)
+            if flags & TileFlag.PHYSBODY or collide_all_tiles:
+                hit_static_lst.append((v_xy_map, ttile))
+            elif semiphysbody and flags & TileFlag.SEMIPHYSBODY:
+                semiphysbody_lst.append((v_xy_map, ttile))
     if semiphysbody:
         return hit_static_lst, hit_dynamic_lst, semiphysbody_lst
     return hit_static_lst, hit_dynamic_lst

@@ -200,6 +200,31 @@ def test_backtiles():
     assert gm.get_backtile(4, 4) == 1003
 
 
+def test_tile_flags_registry():
+    """TILE_FLAGS - единый реестр флагов тайлов (units/Map/TileFlags.py),
+    посчитанный из старых set()-ов в units/Tiles.py. Должен согласовываться
+    с этими списками и давать корректную битовую комбинацию флагов."""
+    from units.Map.TileFlags import TILE_FLAGS, TileFlag, has_flag
+    from units.Tiles import PHYSBODY_TILES, SEMIPHYSBODY_TILES, CLASS_TILE, ACTIVATE_TILES, Eats
+
+    for ttile in PHYSBODY_TILES:
+        assert has_flag(ttile, TileFlag.PHYSBODY), ttile
+    for ttile in SEMIPHYSBODY_TILES:
+        assert has_flag(ttile, TileFlag.SEMIPHYSBODY), ttile
+    for ttile in CLASS_TILE:
+        assert has_flag(ttile, TileFlag.CLASS_TILE), ttile
+    for ttile in ACTIVATE_TILES:
+        assert has_flag(ttile, TileFlag.ACTIVATABLE), ttile
+    for ttile in Eats:
+        assert has_flag(ttile, TileFlag.FOOD), ttile
+
+    # активационный блок (210): и класс-тайл, и активируемый - в одной битовой маске
+    combo = TILE_FLAGS[210]
+    assert combo & TileFlag.CLASS_TILE and combo & TileFlag.ACTIVATABLE
+
+    assert not has_flag(999999, TileFlag.PHYSBODY)  # неизвестный id - без флагов, без KeyError
+
+
 def test_get_tile_and_obj_ignores_non_int_state():
     """get_tile_and_obj не должен путать dict/list-состояние тайла с id
     объекта (регресс: 'unhashable type: dict' в get_tile_obj)."""
