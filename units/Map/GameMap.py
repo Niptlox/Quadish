@@ -153,7 +153,10 @@ class GameMap(SavedObject):
     def get_tile_and_obj(self, x, y, create_chunk=True):
         tile = self.get_static_tile(x, y, create_chunk=create_chunk)
         if tile:
-            if tile[3]:
+            # tile[3] — это id объекта тайла (Chest/Furnace/Activator/...)
+            # ТОЛЬКО для CLASS_TILE; для остальных тайлов там служебное
+            # состояние (dict с таймером у растений, list у шкафа) — не id
+            if tile[3] and isinstance(tile[3], int):
                 return tile, self.get_tile_obj(*self.to_chunk_xy(x, y), tile[3])
             else:
                 return tile, None
@@ -267,6 +270,11 @@ class GameMap(SavedObject):
         return False
 
     def get_tile_obj(self, chunk_x, chunk_y, obj_id: int):
+        # obj_id иногда приходит из tile[3], которое для не-CLASS_TILE тайлов
+        # хранит служебное состояние (dict/list), а не id — на всякий случай
+        # подстраховываемся здесь тоже (единая точка входа для всех вызовов)
+        if not isinstance(obj_id, int):
+            return None
         chunk = self.chunk((chunk_x, chunk_y), create_chunk=True)
         if chunk:
             return chunk[2].get(obj_id)

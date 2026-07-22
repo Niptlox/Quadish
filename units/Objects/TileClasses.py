@@ -30,7 +30,6 @@ class Chest(Tile):
     def items_of_break(self):
         return self.inventory.items_of_break()
 
-cccc = 0
 class Activator(Tile):
     index = 210
 
@@ -39,21 +38,30 @@ class Activator(Tile):
         self.activating = False
 
     def activate_nearby_tiles(self):
-        global cccc
-        print("activate_nearby_tiles", cccc)
-        cccc += 1
-        self.activating = True
-        for i in range(-1, 2):
-            for j in range(-1, 2):
-                if i == 0 and j == 0:
-                    continue
-                x, y = self.tx + i, self.ty + j
-                tile, tile_obj = self.game_map.get_tile_and_obj(x, y)
-                if tile[0] in ACTIVATE_TILES:
-                    if tile_obj:
-                        tile_obj.activate()
-                    elif tile[0] == 9:
-                        Entities.activate_dynamite(self.game_map, x, y, tile[0])
+        """Обходит связную сеть активаторов итеративно (очередь, не рекурсия) —
+        на большом скоплении активаторов рекурсивный обход (activate ->
+        activate_nearby_tiles -> tile_obj.activate -> ...) уходил вглубь на
+        сотни вложенных вызовов и был уязвим к RecursionError; visited по id
+        защищает от повторной активации того же блока (циклы/сетки)."""
+        game_map = self.game_map
+        visited = {self.id}
+        queue = [self]
+        while queue:
+            current = queue.pop()
+            current.activating = True
+            for i in range(-1, 2):
+                for j in range(-1, 2):
+                    if i == 0 and j == 0:
+                        continue
+                    x, y = current.tx + i, current.ty + j
+                    tile, tile_obj = game_map.get_tile_and_obj(x, y)
+                    if tile[0] in ACTIVATE_TILES:
+                        if tile_obj:
+                            if tile_obj.id not in visited:
+                                visited.add(tile_obj.id)
+                                queue.append(tile_obj)
+                        elif tile[0] == 9:
+                            Entities.activate_dynamite(game_map, x, y, tile[0])
 
     def activate(self):
         if not self.activating:
@@ -63,7 +71,8 @@ class Activator(Tile):
         self.activating = False
 
     def right_click(self, mouse_local_pos):
-        self.activate_nearby_tiles()
+        if not self.activating:
+            self.activate_nearby_tiles()
 
 
 furnace_burn_tiles = {

@@ -200,6 +200,51 @@ def test_backtiles():
     assert gm.get_backtile(4, 4) == 1003
 
 
+def test_get_tile_and_obj_ignores_non_int_state():
+    """get_tile_and_obj не должен путать dict/list-состояние тайла с id
+    объекта (регресс: 'unhashable type: dict' в get_tile_obj)."""
+    gm = fresh_world(21).game_map
+    gm.set_static_tile(3, 3, gm.get_tile_ttile(102))  # дерево: tile[3] — dict (таймер)
+    tile, obj = gm.get_tile_and_obj(3, 3)
+    assert obj is None
+    assert gm.get_tile_obj(0, 0, {"t": 1}) is None  # прямой вызов с dict тоже безопасен
+
+
+def test_activator_large_cluster_no_crash():
+    """Регресс: скопление активаторов (index 210) рядом с растением-таймером
+    (dict-состояние в tile[3]) роняло игру 'unhashable type: dict', т.к.
+    get_tile_and_obj принимал любое truthy tile[3] за id объекта. Плюс обход
+    кластера был рекурсивным (уязвим к глубокой рекурсии) — теперь итеративный
+    (очередь + visited по id)."""
+    game = fresh_world(22)
+    gm = game.game_map
+
+    n = 120  # длинная цепочка — проверяем, что обход не рекурсивный
+    for i in range(n):
+        gm.set_static_tile(i, 0, 210)
+
+    # растение с dict-состоянием и динамит сбоку от цепочки (не разрывая её) —
+    # раньше именно комбо активатор+растение роняло activate_nearby_tiles
+    # на 'unhashable type: dict'
+    gm.set_static_tile(5, 1, gm.get_tile_ttile(102))  # дерево
+    gm.set_static_tile(60, 1, 9)  # динамит
+
+    first = gm.get_tile_obj(*gm.to_chunk_xy(0, 0), gm.get_static_tile(0, 0)[3])
+    assert first is not None
+    first.right_click(None)  # не должно бросить исключение
+
+    activated = sum(
+        1 for i in range(n)
+        if (obj := gm.get_tile_obj(*gm.to_chunk_xy(i, 0), gm.get_static_tile(i, 0)[3])) is not None
+        and obj.activating
+    )
+    assert activated == n, f"вся цепочка ({n}) должна активироваться, активировано {activated}"
+
+    assert gm.get_static_tile_type(60, 1) == 0  # динамит сдетонировал, тайл очищен
+    chunk = gm.chunk(gm.to_chunk_xy(60, 1))
+    assert any(type(obj).__name__ == "Dynamite" for obj in chunk[1])
+
+
 # ===================== хранилище миров =====================
 
 def test_world_storage_crud():
