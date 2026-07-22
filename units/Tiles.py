@@ -63,6 +63,35 @@ ground_imgs[None] = (ground_img,
                      ground_L_img,
                      ground_R_img,
                      ground_LR_img)
+
+# Готовых спрайтов земли (ground_{i}.png) хватает только на 4 биома
+# (desert=0, savanna=1, tropical_woodland=2, tundra=3 — см. biome_names в
+# units/biomes.py). Остальные 5 наземных биомов красились как None
+# (дефолт) и визуально не отличались друг от друга. Вместо новых
+# ассетов подкрашиваем базовую текстуру земли цветом биома (тем же,
+# которым биом обозначен на карте биомов) — дёшево и не требует арта.
+_extra_biome_ground_colors = {
+    4: (106, 144, 38),   # seasonal_forest
+    5: (33, 77, 41),     # rainforest
+    6: (86, 179, 106),   # temperate_forest
+    7: (34, 61, 53),     # temperate_rainforest
+    8: (35, 114, 94),    # boreal_forest
+}
+
+
+def _tinted_ground_set(color, alpha=90):
+    tinted = []
+    for img in (ground_img, ground_L_img, ground_R_img, ground_LR_img):
+        t = img.copy()
+        overlay = pygame.Surface(t.get_size()).convert_alpha()
+        overlay.fill((*color, alpha))
+        t.blit(overlay, (0, 0))
+        tinted.append(t)
+    return tuple(tinted)
+
+
+for _biome_id, _color in _extra_biome_ground_colors.items():
+    ground_imgs[_biome_id] = _tinted_ground_set(_color)
 stone_img = load_img("data/sprites/tiles/Stone.png")
 back_stone_img = load_img("data/sprites/backtiles/BackStone2.png")
 # create_tile_image("#57534E")
@@ -74,6 +103,7 @@ stone_brick_2_img = (load_img("data/sprites/tiles/blocksstoun2.png"))
 
 purore_img = create_tile_image("#9333EA")  # purple ore
 sulfur_item_img = create_tile_image("#FDE047")  # сера (добыча бесов)
+chitin_item_img = create_tile_image("#D4A373")  # хитин (добыча скорпионов)
 
 tnt_img = create_tile_image("#B91C1C")  # tnt
 
@@ -234,6 +264,7 @@ tile_imgs = {None: none_img,
              351: potion_jump_item_img,
              401: meet_snake_item_img,
              402: sulfur_item_img,
+             403: chitin_item_img,
              501: sword_1_img,
              502: sword_77_img,
              503: sword_2_img,
@@ -285,7 +316,7 @@ STANDING_TILES = {0, 110, 120, 121, 122, 123, 125, 126, 130, 129, 131} | ON_EART
 # Задние панельки
 BACKTILES = {1003, }
 # предметы которые нельзя физически поставить
-ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 351, 401, 402, 801, 81, 82, 86}
+ITEM_TILES = {None, 51, 52, 53, 55, 56, 58, 61, 62, 63, 64, 65, 66, 301, 351, 401, 402, 403, 801, 81, 82, 86}
 
 STONE_TILES = {3, 4, 5, 31, 32, 33, 21, 22, 23, 24, 25, 131}
 WOOD_TILES = {12, 110, 11, 121, 122, 123, 124, 126, 127, 128, 129, 131, 251}
@@ -338,16 +369,25 @@ Pickaxes_capability = {
 
 
 # plants_chance = {101: 0.1, 102: 0.2, 104: 1, 120: 0.05, 251: 0.005}
+# Растительность по биомам (см. units/biomes.py biome_names для соответствия
+# id -> название). Раньше был расклад только на 4 из 10 биомов (desert,
+# winter, hell, None-фолбэк) — остальные 6 (savanna, tropical_woodland,
+# seasonal_forest, rainforest, temperate_forest, temperate_rainforest,
+# boreal_forest) молча получали дефолтный (None) набор растений и ничем не
+# отличались друг от друга по флоре.
 biomes_plants_chance = {
     None: {101: 0.1, 102: 0.2, 104: 1, 120: 0.05, 251: 0.005},
-    #     desert
-    0: {101: 0.1, 103: 0.2, 104: 0.2, None: 0.5},
-    #     winter
-    3: {101: 0.3, 102: 0.1, None: 0.5},
-    9: {},
+    0: {101: 0.1, 103: 0.2, 104: 0.2, None: 0.5},              # desert
+    1: {104: 0.6, 101: 0.05, 102: 0.03, None: 0.32},           # savanna
+    2: {101: 0.25, 102: 0.15, 104: 0.5, 251: 0.02, None: 0.08},  # tropical_woodland
+    3: {101: 0.3, 102: 0.1, None: 0.5},                        # tundra
+    4: {102: 0.3, 101: 0.15, 104: 0.4, None: 0.15},            # seasonal_forest
+    5: {102: 0.35, 101: 0.25, 104: 0.3, 251: 0.03, None: 0.07},  # rainforest
+    6: {102: 0.25, 101: 0.2, 104: 0.45, None: 0.1},            # temperate_forest
+    7: {102: 0.3, 101: 0.2, 104: 0.4, 251: 0.02, None: 0.08},  # temperate_rainforest
+    8: {102: 0.35, 104: 0.35, 101: 0.1, None: 0.2},            # boreal_forest
+    9: {},                                                     # hell
 }
-# desert_plants_chance = {101: 0.1, 103: 0.2, 104: 0.2, None: 0.5}
-# winter_plants_chance = {101: 0.3, 102: 0.1, None: 0.5}
 
 # специальные каринки предметов для инвентаря
 tile_hand_imgs = {k: tile_imgs[k] if k in ITEM_TILES else transform_hand(i) for k, i in tile_imgs.items()}
@@ -421,6 +461,7 @@ original_tile_words = {None: "None",
                        351: "Зелье нового прыжка",
                        401: "Мясо змеи",
                        402: "Сера",
+                       403: "Хитин",
                        501: "Железный меч",
                        502: "Золотой меч",
                        503: "Ядовитый меч",

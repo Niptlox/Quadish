@@ -3,7 +3,7 @@ from typing import Union
 
 from units.noise_compat import snoise2 as noise2
 
-from units.Objects.Creatures import Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp
+from units.Objects.Creatures import Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion
 from units.Objects.Entities import PortalMainGate
 from units.Objects.Entity import PhysicalObject
 from units.Objects.Items import ItemsTile
@@ -117,7 +117,8 @@ class GameMap(SavedObject):
                     for tile_xy in tiles_xy:
                         # if random.random() < 0.005:
                         x, y = tile_xy[0] * TSIZE, tile_xy[1] * TSIZE
-                        Crt = random_creature_selection(tile_xy[1])
+                        biome = biome_of_pos(tile_xy[0], tile_xy[1])[0]
+                        Crt = random_creature_selection(tile_xy[1], biome)
                         if Crt is not None:
                             dynamic_tiles.append(Crt(self.game, (x, y)))
                             crt_cash[1] += 1
@@ -622,7 +623,7 @@ class GameMap(SavedObject):
                                     static_tiles[pl_i + 2] = state_img
                                     static_tiles[pl_i + 3] = state
                                     if config.GameSettings.creatures and cnt_creatures < CHUNK_CREATURE_LIMIT:
-                                        Crt = random_creature_selection(tile_y)
+                                        Crt = random_creature_selection(tile_y, biome_info[i][0])
                                         if Crt is not None:
                                             dynamic_tiles.append(Crt(self.game, (tile_x * TSIZE, tile_y * TSIZE)))
                                             cnt_creatures += 1
@@ -833,9 +834,11 @@ def random_plant_selection(biome=None):
     return None
 
 
-def random_creature_selection(tile_y=None):
-    """tile_y задаёт биом-зависимость спавна: глубоко под START_HELL_Y
-    водятся бесы (Imp) вместо коров, а не единый для всего мира пул мобов."""
+def random_creature_selection(tile_y=None, biome=None):
+    """tile_y и biome задают биом-зависимость спавна вместо единого для
+    всего мира пула мобов: глубоко под START_HELL_Y водятся бесы (Imp), в
+    пустыне (0) — скорпионы, в саванне (1) больше коров, в тундре/тайге
+    (3, 8) больше волков, в тропиках/джунглях (2, 5) больше змей."""
     if not config.GameSettings.creatures:
         return None
     r = random.random()
@@ -844,6 +847,14 @@ def random_creature_selection(tile_y=None):
 
     if tile_y is not None and tile_y > START_HELL_Y:
         crt = random.choices([Slime, Wolf, Imp], [10, 3, 4], k=1)
+    elif biome == 0:  # desert
+        crt = random.choices([Slime, Scorpion, Snake], [10, 6, 2], k=1)
+    elif biome == 1:  # savanna
+        crt = random.choices([Slime, Cow, Wolf], [15, 10, 1], k=1)
+    elif biome in (3, 8):  # tundra, boreal_forest
+        crt = random.choices([Slime, Wolf, Cow], [12, 5, 1], k=1)
+    elif biome in (2, 5):  # tropical_woodland, rainforest
+        crt = random.choices([Slime, Snake, Cow, Wolf], [15, 4, 3, 1], k=1)
     else:
         crt = random.choices([Slime, Cow, Snake, Wolf, SlimeBigBoss], [20, 5, 1, 0.7, 0.25], k=1)
     # print("random_creature_selection", crt)

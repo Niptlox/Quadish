@@ -534,6 +534,38 @@ def test_creature_selection():
     assert any(p is not None for p in picks), "существа должны иногда выпадать"
 
 
+def test_creature_selection_biome_diversity():
+    """Разные биомы должны давать разный набор мобов вместо одного пула на
+    весь мир: пустыня — скорпионы, тундра/тайга — волки, тропики — змеи."""
+    from units.Map.GameMap import random_creature_selection
+    from units.Objects.Creatures import Scorpion, Wolf, Snake, Imp
+
+    random.seed(2)
+    desert_picks = {random_creature_selection(0, 0) for _ in range(500)}
+    assert Scorpion in desert_picks
+
+    tundra_picks = {random_creature_selection(0, 3) for _ in range(500)}
+    assert Wolf in tundra_picks
+
+    tropical_picks = {random_creature_selection(0, 2) for _ in range(500)}
+    assert Snake in tropical_picks
+
+    # глубина ада (tile_y) сильнее биома — там водятся бесы независимо от биома
+    from units.common import START_HELL_Y
+    hell_picks = {random_creature_selection(START_HELL_Y + 10, 0) for _ in range(500)}
+    assert Imp in hell_picks
+    assert Scorpion not in hell_picks
+
+
+def test_plants_defined_for_all_biomes():
+    """Все 10 биомов (units.biomes.biome_names) должны иметь собственный
+    набор растений, а не молча падать на дефолт (None)."""
+    from units.biomes import biome_names
+    from units.Tiles import biomes_plants_chance
+    for biome_id in range(len(biome_names)):
+        assert biome_id in biomes_plants_chance, biome_names[biome_id]
+
+
 def test_creature_spawn_and_chunk_counter():
     from units.common import OBJ_CREATURE
     from units.Objects.Creatures import Slime

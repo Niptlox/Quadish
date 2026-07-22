@@ -480,6 +480,61 @@ class Imp(Wolf):
         self.sprite = create_imp_sprite(self.color, self.rect.size)
 
 
+def create_scorpion_sprite(color, size, outline="#1C1917"):
+    """Скорпион примитивами: приземистое тело, клешни спереди, хвост со
+    жалом, изогнутый над спиной назад."""
+    w, h = max(size[0], 8), max(size[1], 6)
+    s = pg.Surface((w, h)).convert_alpha()
+    s.fill((0, 0, 0, 0))
+    body_h = int(h * 0.45)
+    body_y = h - body_h - 1
+    leg_len = max(1, int(h * 0.22))
+    for lx in (int(w * 0.28), int(w * 0.42), int(w * 0.56)):
+        pg.draw.line(s, outline, (lx, body_y + body_h - 1), (lx - 2, h - 1), 1)
+        pg.draw.line(s, outline, (lx + leg_len, body_y + body_h - 1), (lx + leg_len + 2, h - 1), 1)
+    pg.draw.ellipse(s, color, (int(w * 0.22), body_y, int(w * 0.55), body_h))
+    claw_w, claw_h = max(2, int(w * 0.2)), max(2, int(body_h * 0.9))
+    pg.draw.ellipse(s, color, (int(w * 0.66), body_y - claw_h // 4, claw_w, claw_h))
+    pg.draw.ellipse(s, color, (int(w * 0.02), body_y - claw_h // 4, claw_w, claw_h))
+    # хвост из сегментов, загибается вверх-назад над телом
+    seg_r = max(1, body_h // 4)
+    tx, ty = int(w * 0.22), body_y
+    for _ in range(4):
+        tx = max(seg_r, tx - int(w * 0.06))
+        ty = max(seg_r, ty - int(h * 0.16))
+        pg.draw.circle(s, color, (tx, ty), seg_r)
+    pg.draw.polygon(s, "#7C2D12", [(tx - seg_r, ty), (tx, max(0, ty - seg_r * 2)), (tx + seg_r, ty)])
+    pg.draw.ellipse(s, outline, (int(w * 0.22), body_y, int(w * 0.55), body_h), width=1)
+    return s
+
+
+class Scorpion(Wolf):
+    """Скорпион — враждебный житель пустыни, мельче и быстрее волка."""
+    not_save_vars = Wolf.not_save_vars
+    bio_kingdom = KINGDOM_ANIMALIA
+    bio_species = "scorpion"
+    bio_subspecies = "desert scorpion"
+    width, height = int(TSIZE * 0.7), int(TSIZE * 0.5)
+    color = "#D4A373"
+    max_lives = 18
+    drop_items = [(ItemsTile, (403, (1, 2)))]
+
+    move_speed = 5
+    jump_speed = 4
+
+    enemy = True
+    punch_damage = 4
+    punch_speed = 4
+    punch_discard = 3
+
+    angry_rect_size = (int(TSIZE * 12), int(TSIZE * 12))
+    move_speed_angry = 7
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.sprite = create_scorpion_sprite(self.color, self.rect.size)
+
+
 class SlimeBigBoss(Slime):
     not_save_vars = Slime.not_save_vars | {"angry", "angry_player"}
     bio_subspecies = "huge slime"
@@ -526,5 +581,5 @@ class SlimeBigBoss(Slime):
                 self.move_tact = None
 
 
-CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp]
+CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion]
 CREATURES_D = {cls.__name__: cls for cls in CREATURES}
