@@ -74,6 +74,9 @@ class TutorialHints:
                  lambda: st.get("seen_jump") and st.get("start_pos")
                          and abs(p.rect.x - st["start_pos"][0]) > TSIZE * 5,
                  task="Осмотрись и попрыгай"),
+            Step("Обучение: выбери ячейку — колесо мыши или клавиши 1-0 (там меч и кирка)",
+                 lambda: st.get("seen_cell"),
+                 task="Выбери ячейку (меч/кирка)"),
             Step("Обучение: добудь 3 дерева — зажми [ЛКМ] на стволе",
                  lambda: count_in_inventory(inv, WOOD_ITEM) >= 3,
                  task="Добудь дерево",
@@ -134,6 +137,11 @@ class TutorialHints:
             st["seen_jump"] = True
         if game.player.inventory.ui.opened:
             st["seen_inventory"] = True
+        ac = game.player.inventory.active_cell
+        if st.get("last_cell") is None:
+            st["last_cell"] = ac
+        elif ac != st["last_cell"]:
+            st["seen_cell"] = True
 
         self._steps = steps = self.steps()
         if step_i >= len(steps):

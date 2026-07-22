@@ -134,5 +134,8 @@
   "Пройти обучение": "Play tutorial",
   "Пока нет миров — начните с обучения": "No worlds yet — start with the tutorial",
   "Esc — назад   •   колесо — прокрутка": "Esc — back   •   wheel — scroll",
-  "[Esc] — меню": "[Esc] — menu"
+  "[Esc] — меню": "[Esc] — menu",
+  "Вертикальная синхронизация: {}": "V-Sync: {}",
+  "Выбери ячейку (меч/кирка)": "Select a cell (sword/pickaxe)",
+  "Обучение: выбери ячейку — колесо мыши или клавиши 1-0 (там меч и кирка)": "Tutorial: select a cell — mouse wheel or keys 1-0 (sword and pickaxe there)"
 }

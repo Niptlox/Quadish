@@ -590,7 +590,12 @@ def test_tutorial_world_and_steps():
     tut.update()
     assert gm.tutorial_step == 1
 
-    # шаг 1: добыть 3 дерева; маркер находит ближайший ствол
+    # шаг 1: выбор ячейки хотбара
+    gm.tutorial_state["seen_cell"] = True
+    tut.update()
+    assert gm.tutorial_step == 2
+
+    # шаг 2: добыть 3 дерева; маркер находит ближайший ствол
     px, py = game.player.rect.centerx // TSIZE, game.player.rect.centery // TSIZE
     gm.set_static_tile(px + 3, py, 110)
     game.elapsed_time = 16
@@ -600,43 +605,43 @@ def test_tutorial_world_and_steps():
     assert tut.target_tile is not None, "маркер должен найти ствол дерева"
     inv.put_to_inventory(ItemsTile(game, 12, count=2))
     tut.update()
-    assert gm.tutorial_step == 1, "двух брёвен мало — нужно 3"
+    assert gm.tutorial_step == 2, "двух брёвен мало — нужно 3"
     inv.put_to_inventory(ItemsTile(game, 12, count=1))
     tut.update()
-    assert gm.tutorial_step == 2
+    assert gm.tutorial_step == 3
     assert game.player.achievements.is_completed("tutorial_wood")
     tut.draw(game.display)
     assert tut._task_text is not None
 
-    # шаг 2: инвентарь
+    # шаг 3: инвентарь
     gm.tutorial_state["seen_inventory"] = True
     tut.update()
-    assert gm.tutorial_step == 3
-    # шаг 3: доски (2 шт — один крафт)
+    assert gm.tutorial_step == 4
+    # шаг 4: доски (2 шт — один крафт)
     inv.put_to_inventory(ItemsTile(game, 11, count=2))
     tut.update()
-    assert gm.tutorial_step == 4
-    # шаг 4: блоки
+    assert gm.tutorial_step == 5
+    # шаг 5: блоки
     game.player.blocks_placed_count = 5
     tut.update()
-    assert gm.tutorial_step == 5
-    # шаг 5: стол — касание верстака
+    assert gm.tutorial_step == 6
+    # шаг 6: стол — касание верстака
     game.player.collisions_ttile = {121}
     tut.update()
-    assert gm.tutorial_step == 6
-    # шаг 6: припасы из сундука — маркер ведёт к нему
+    assert gm.tutorial_step == 7
+    # шаг 7: припасы из сундука — маркер ведёт к нему
     assert tuple(tut.target_tile) == tuple(chest_pos), "маркер должен вести к сундуку"
     inv.put_to_inventory(ItemsTile(game, 66, count=2))
     tut.update()
-    assert gm.tutorial_step == 7
-    # шаги 7-8: печка и котёл
+    assert gm.tutorial_step == 8
+    # шаги 8-9: печка и котёл
     game.player.collisions_ttile = {131}
     tut.update()
-    assert gm.tutorial_step == 8
+    assert gm.tutorial_step == 9
     game.player.collisions_ttile = {125}
     tut.update()
-    assert gm.tutorial_step == 9
-    # шаг 9: зелье; финальный шаг закрывается сам
+    assert gm.tutorial_step == 10
+    # шаг 10: зелье; финальный шаг закрывается сам
     inv.put_to_inventory(ItemsTile(game, 351, count=1))
     tut.update()
     tut.update()

@@ -399,6 +399,9 @@ class MainSettingsUI(TitleUI):
                              "Лимит FPS: {}", states_text_lst=fps_values_lst,
                              start_state_index=fps_values_lst.index(config.GameSettings.max_fps)
                              if config.GameSettings.max_fps in fps_values_lst else 1),
+            ChangeTextButton(self.set_vsync, btn_rect,
+                             "Вертикальная синхронизация: {}", states_text_lst=ru_bool_lst,
+                             start_state_index=eng_bool_lst.index(config.GameSettings.vsync)),
             ChangeTextButton(self.set_dynamic_dump, btn_rect,
                              "Выгрузка карты: {}", states_text_lst=ru_bool_lst,
                              start_state_index=eng_bool_lst.index(config.GameSettings.dynamic_dump)),
@@ -425,6 +428,10 @@ class MainSettingsUI(TitleUI):
 
     def set_max_fps(self, button, state):
         config.GameSettings.set_max_fps(state)
+        self.sys_message.send_reload_game_for_change()
+
+    def set_vsync(self, button, state):
+        config.GameSettings.set_vsync(bool_dict[state])
         self.sys_message.send_reload_game_for_change()
 
     def set_dynamic_dump(self, button, state):
@@ -491,15 +498,15 @@ class WorldListUI(UI):
     accent = "#FDE047"
     text_color = "#FFFFFF"
     sub_color = "#A1A1AA"
-    font_title = pygame.font.Font(MAIN_FONT_PATH, 26)
-    font_name = pygame.font.Font(MAIN_FONT_PATH, 22)
-    font_sub = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 15)
-    font_hint = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 14)
-    font_empty = pygame.font.Font(MAIN_FONT_PATH, 20)
-    header_h = 50
-    footer_h = 28
-    card_h = 56
-    card_gap = 10
+    font_title = pygame.font.Font(MAIN_FONT_PATH, 24)
+    font_name = pygame.font.Font(MAIN_FONT_PATH, 18)
+    font_sub = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 14)
+    font_hint = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 13)
+    font_empty = pygame.font.Font(MAIN_FONT_PATH, 18)
+    header_h = 44
+    footer_h = 26
+    card_h = 46
+    card_gap = 8
 
     def __init__(self, scene) -> None:
         super().__init__(scene)
@@ -512,18 +519,19 @@ class WorldListUI(UI):
         bx = self.rect.x
         by = self.rect.y
         self.btn_back = TextButton(lambda _: self.scene.back(),
-                                   (bx + self.rect.w - 110, by + 9, 92, 32), "Назад",
+                                   (bx + self.rect.w - 96, by + 8, 82, 28), "Назад",
                                    font=self.font_sub)
-        act_y = self.header_h + 10
+        act_y = self.header_h + 8
+        act_h = 30
         half = (self.rect.w - 40 - 12) // 2
         self.btn_tutorial = TextButton(lambda _: self.scene.create_tutorial_world(),
-                                       (bx + 20, by + act_y, half, 36), "Пройти обучение",
+                                       (bx + 20, by + act_y, half, act_h), "Пройти обучение",
                                        font=self.font_sub)
         self.btn_new = TextButton(lambda _: self.scene.new_world(),
-                                  (bx + 20 + half + 12, by + act_y, half, 36), "+ Новый мир",
+                                  (bx + 20 + half + 12, by + act_y, half, act_h), "+ Новый мир",
                                   font=self.font_sub)
 
-        self.list_top = act_y + 36 + 12
+        self.list_top = act_y + act_h + 12
         self.scroll_y = 0
         self.worlds = []
         self.card_btns = []      # (name_btn, del_btn, meta, base_y)

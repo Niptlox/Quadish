@@ -65,7 +65,10 @@ pygame.display.set_caption('Quadish')
 Icon = pg.image.load("data/sprites/Icon.png")
 pygame.display.set_icon(Icon)
 
-screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags, vsync=1)
+# vsync можно отключить: при включённом vsync слабое железо в фуллскрине
+# нередко «залипает» на половине развёртки (60→30 FPS).
+screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags,
+                                  vsync=1 if config.GameSettings.vsync else 0)
 display_ = pygame.Surface(WINDOW_SIZE).convert()
 
 print(pg.display.get_allow_screensaver())

@@ -21,6 +21,51 @@ COLORKEY = (0, 255, 0)
 SIZE_2X = "2x"
 
 
+def create_player_sprite(size=None):
+    """Процедурный игрок примитивами (лицом вправо): голова, тело, ноги."""
+    w, h = size or (TSIZE - 10, TSIZE - 2)
+    s = pygame.Surface((w, h)).convert_alpha()
+    s.fill((0, 0, 0, 0))
+    skin = (242, 205, 165)
+    hair = (92, 64, 42)
+    shirt = (60, 120, 180)
+    pants = (52, 58, 80)
+    boots = (40, 40, 46)
+    outline = (26, 22, 20)
+    head_h = max(6, int(h * 0.36))
+    body_h = max(6, int(h * 0.40))
+    leg_top = head_h + body_h
+    leg_w = max(2, w // 2 - 1)
+    # ноги и ботинки
+    pygame.draw.rect(s, pants, (1, leg_top, leg_w, h - leg_top - 3))
+    pygame.draw.rect(s, pants, (w - 1 - leg_w, leg_top, leg_w, h - leg_top - 3))
+    pygame.draw.rect(s, boots, (1, h - 3, leg_w, 3))
+    pygame.draw.rect(s, boots, (w - 1 - leg_w, h - 3, leg_w, 3))
+    # торс
+    pygame.draw.rect(s, shirt, (0, head_h, w, body_h + 1), border_radius=3)
+    # голова
+    hw = int(w * 0.82)
+    hx = (w - hw) // 2
+    pygame.draw.rect(s, skin, (hx, 1, hw, head_h + 1), border_radius=4)
+    pygame.draw.rect(s, hair, (hx, 1, hw, max(3, head_h // 3)),
+                     border_top_left_radius=4, border_top_right_radius=4)
+    # глаз (смотрит вправо)
+    pygame.draw.rect(s, outline, (hx + int(hw * 0.55), 1 + int(head_h * 0.45), 3, 4))
+    pygame.draw.rect(s, outline, (0, 0, w, h), width=1, border_radius=3)
+    return s
+
+
+def create_hand_sprite(diameter=None):
+    """Кисть руки — кружок телесного цвета."""
+    d = max(6, diameter or HAND_SIZE)
+    r = d // 2
+    s = pygame.Surface((d, d)).convert_alpha()
+    s.fill((0, 0, 0, 0))
+    pygame.draw.circle(s, (26, 22, 20), (r, r), r)
+    pygame.draw.circle(s, (242, 205, 165), (r, r), r - 1)
+    return s
+
+
 def load_img(path, size=TILE_RECT, colorkey=COLORKEY, alpha=None, scale=1, is_tile=False):
     # виндовые пути с '\' приводим к универсальным '/'
     path = path.replace("\\", "/")

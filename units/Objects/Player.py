@@ -425,7 +425,8 @@ class Player(PhysicalObject):
         scroll = self.game.screen_map.scroll
         player_display_pos = (min(WSIZE[0], max(-TSIZE, self.rect.x - scroll[0])),
                               min(WSIZE[0], max(-TSIZE, self.rect.y - scroll[1])))
-        surface.blit(self.player_img, player_display_pos)
+        img = pg.transform.flip(self.player_img, True, False) if self.flip else self.player_img
+        surface.blit(img, player_display_pos)
 
         self.death_animation.draw(surface, player_display_pos)
         if self.tool:

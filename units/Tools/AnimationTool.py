@@ -1,3 +1,6 @@
+import math
+from time import time
+
 from pygame import Vector2
 
 from units.Tiles import tile_many_imgs
@@ -22,44 +25,6 @@ class AnimationTool:
 
     def end(self):
         self.animation = False
-
-
-class AnimationHand(AnimationTool):
-    distance_norm = TSIZE * 0.7
-    distance_start = TSIZE * 0.6
-    max_distance = TSIZE * 1
-    speed = 1
-
-    def __init__(self, tool):
-        super().__init__(tool)
-        self.dist = self.distance_norm
-        self.direction = 1
-
-    def start(self):
-        super().start()
-        self.dist = self.distance_start
-        self.direction = 1
-
-    def draw(self, surface, x, y):
-        if self.sprite:
-            vec: Vector2 = Vector2(self.tool.vector_to_mouse)
-            dist = self.distance_start + (self.max_distance - self.distance_start) * self.tool.process_percent
-            if vec.x == vec.y == 0:
-                vec = Vector2(dist, 0)
-            else:
-                vec.scale_to_length(dist)
-            vec -= Vector2(HAND_SIZE // 2, HAND_SIZE // 2)
-            surface.blit(self.sprite, (x + int(vec.x), y + int(vec.y)))
-
-    def update(self):
-        pass
-        # if self.animation:
-        #     self.dist += self.speed * self.direction
-        #     if self.dist >= self.max_distance:
-        #         self.direction *= -1
-        #     elif self.dist <= self.distance_norm:
-        #         self.animation = False
-        #         self.dist = self.distance_norm
 
 
 class AnimationSword(AnimationTool):
@@ -99,36 +64,39 @@ class AnimationSword(AnimationTool):
 
 
 class AnimationHand(AnimationTool):
-    distance_norm = TSIZE * 0.7
-    distance_start = TSIZE * 0.6
-    max_distance = TSIZE * 1
-    speed = 1
+    """Рука: всегда видна в покое, при действии плавно взмахивает к цели.
+
+    Взмах привязан ко времени (не к кадрам) и идёт по синусу 0→1→0, поэтому
+    он мягкий и совпадает с моментом действия (start())."""
+    rest_dist = TSIZE * 0.45
+    reach_dist = TSIZE * 0.95
+    duration = 0.16  # секунд на взмах
 
     def __init__(self, tool):
         super().__init__(tool)
-        self.dist = self.distance_norm
-        self.direction = 1
+        self.start_time = -10
 
     def start(self):
         super().start()
-        self.dist = self.distance_start
-        self.direction = 1
+        self.start_time = time()
 
     def draw(self, surface, x, y):
-        if self.sprite:
-            vec: Vector2 = Vector2(self.tool.vector_to_mouse)
-            if vec.x == vec.y == 0:
-                vec = Vector2(self.dist, 0)
-            else:
-                vec.scale_to_length(self.dist)
-            vec -= Vector2(HAND_SIZE // 2, HAND_SIZE // 2)
-            surface.blit(self.sprite, (x + int(vec.x), y + int(vec.y)))
+        if not self.sprite:
+            return
+        t = (time() - self.start_time) / self.duration
+        if self.animation and 0.0 <= t <= 1.0:
+            ease = math.sin(math.pi * t)  # плавно вперёд и назад
+        else:
+            self.animation = False
+            ease = 0.0
+        dist = self.rest_dist + (self.reach_dist - self.rest_dist) * ease
+        vec: Vector2 = Vector2(self.tool.vector_to_mouse)
+        if vec.x == vec.y == 0:
+            vec = Vector2(dist * (-1 if self.tool.flip else 1), 0)
+        else:
+            vec.scale_to_length(dist)
+        vec -= Vector2(self.sprite.get_width() // 2, self.sprite.get_height() // 2)
+        surface.blit(self.sprite, (x + int(vec.x), y + int(vec.y)))
 
     def update(self):
-        if self.animation:
-            self.dist += self.speed * self.direction
-            if self.dist >= self.max_distance:
-                self.direction *= -1
-            elif self.dist <= self.distance_norm:
-                self.animation = False
-                self.dist = self.distance_norm
+        pass

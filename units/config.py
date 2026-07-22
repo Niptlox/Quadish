@@ -70,6 +70,7 @@ class GameSettings(__Settings):
     language = config.get(section, 'language')
     max_fps = config.getint(section, 'max_fps', fallback=60)
     dynamic_dump = config.getboolean(section, 'dynamic_dump', fallback=True)
+    vsync = config.getboolean(section, 'vsync', fallback=True)
     if language not in all_languages:
         language = "en"
 
@@ -96,6 +97,10 @@ class GameSettings(__Settings):
     @classmethod
     def set_dynamic_dump(cls, state):
         cls.set("dynamic_dump", bool(state))
+
+    @classmethod
+    def set_vsync(cls, state):
+        cls.set("vsync", bool(state))
 
 
 class VolumeSettings(__Settings):

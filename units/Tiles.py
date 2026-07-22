@@ -29,14 +29,13 @@ cloud_images = load_imgs("data/sprites/clouds/cloud-{}.png", 7, size=None, scale
 star_images = load_imgs("data/sprites/stars/star-{}.png", 5, size=None, scale=2)
 star_chances = [i for i in range(len(star_images))], [(i + 1) / 10 for i in range(len(star_images))]
 
-player_img = create_tile_image("#E7E5E4", size=(TSIZE - 10, TSIZE - 2), bd=2)
+player_img = create_player_sprite(size=(TSIZE - 10, TSIZE - 2))
 live_imgs = load_imgs("data/sprites/player/lives_{}.png", 5, size=(20, 20))
 goldlive_imgs = load_imgs("data/sprites/player/goldherts_{}.png", 5, size=(20, 20))
 bg_live_img = load_img("data/sprites/player/bg_live.png", size=(20, 20))
 bg_livecreative_img = load_img("data/sprites/player/bg_livecreative.png", size=(24, 24))
 
-# hand_pass_img = pygame.transform.smoothscale(player_img, HAND_RECT)
-hand_pass_img = None
+hand_pass_img = create_hand_sprite(HAND_SIZE)
 player_hand_img = hand_pass_img
 
 break_imgs_cnt = 4

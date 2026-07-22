@@ -739,6 +739,17 @@ class GameMap(SavedObject):
         if tutorial:
             self._build_tutorial_island()
             self._place_tutorial_chest()
+            self._give_tutorial_items()
+
+    def _give_tutorial_items(self):
+        """Выдать игроку меч и кирку в инвентарь на старте обучения."""
+        inv = self.game.player.inventory
+        for idx in (530, 501):  # деревянная кирка, меч
+            if idx in TOOLS:
+                item = TOOLS[idx](self.game)
+                item.set_owner(inv)
+                inv.put_to_inventory(item)
+        inv.ui.redraw_top()
 
     def _build_tutorial_island(self):
         """Гарантированный островок с деревом у спавна — не зависит от генерации,
