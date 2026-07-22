@@ -330,6 +330,90 @@ class TitleUI(UI):
         self.sys_message.send_reload_game_for_change()
 
 
+def make_screen_icon(h=22):
+    """Иконка монитора — чтобы было ясно, что настройка привязана к экрану."""
+    w = int(h * 1.3)
+    s = pg.Surface((w, h)).convert_alpha()
+    s.fill((0, 0, 0, 0))
+    fg = (212, 212, 216)
+    pg.draw.rect(s, fg, (0, 0, w, h - 5), border_radius=3, width=2)
+    pg.draw.rect(s, fg, (2, 2, w - 4, h - 9))
+    pg.draw.rect(s, fg, (w // 2 - 4, h - 5, 8, 2))
+    pg.draw.rect(s, fg, (w // 2 - 8, h - 3, 16, 2), border_radius=1)
+    return s
+
+
+class Dropdown:
+    """Выпадающий список для настроек: шапка с текущим значением, по клику
+    раскрывается перечень вариантов. Координаты — экранные."""
+    bg = (63, 63, 70)
+    bg_open = (39, 39, 42)
+    bg_hover = (82, 82, 91)
+    border = (161, 161, 170)
+    accent = "#FDE047"
+
+    def __init__(self, rect, label, options, index, on_select, font, icon=None):
+        self.rect = pg.Rect(rect)
+        self.label = label            # "Размер: {}" или "Монитор"
+        self.options = list(options)  # отображаемые строки
+        self.index = max(0, min(index, len(self.options) - 1))
+        self.on_select = on_select    # (value, index) -> None
+        self.font = font
+        self.icon = icon
+        self.opened = False
+        self.opt_h = self.rect.h
+
+    def current_text(self):
+        val = self.options[self.index] if self.options else ""
+        return self.label.format(val) if "{}" in self.label else f"{self.label}: {val}"
+
+    def _opt_rect(self, i):
+        return pg.Rect(self.rect.x, self.rect.bottom + 2 + i * self.opt_h, self.rect.w, self.opt_h)
+
+    def draw(self, surface):
+        pg.draw.rect(surface, self.bg_open if self.opened else self.bg, self.rect, border_radius=5)
+        pg.draw.rect(surface, self.border, self.rect, width=1, border_radius=5)
+        t = self.font.render(self.current_text(), True, WHITE)
+        surface.blit(t, (self.rect.x + (36 if self.icon else 12),
+                         self.rect.centery - t.get_height() // 2))
+        if self.icon:
+            surface.blit(self.icon, (self.rect.x + 8, self.rect.centery - self.icon.get_height() // 2))
+        # стрелка
+        cx, cy = self.rect.right - 16, self.rect.centery
+        d = 4 if not self.opened else -4
+        pg.draw.polygon(surface, self.border,
+                        [(cx - 5, cy - d // 2), (cx + 5, cy - d // 2), (cx, cy + d)])
+
+    def draw_options(self, surface):
+        if not self.opened:
+            return
+        mouse = pg.mouse.get_pos()
+        for i, opt in enumerate(self.options):
+            r = self._opt_rect(i)
+            hover = r.collidepoint(mouse)
+            pg.draw.rect(surface, self.bg_hover if hover else self.bg_open, r, border_radius=4)
+            color = self.accent if i == self.index else WHITE
+            t = self.font.render(str(opt), True, color)
+            surface.blit(t, (r.x + 12, r.centery - t.get_height() // 2))
+
+    def pg_event(self, event) -> bool:
+        if event.type != pg.MOUSEBUTTONDOWN or event.button != 1:
+            return False
+        if self.opened:
+            for i in range(len(self.options)):
+                if self._opt_rect(i).collidepoint(event.pos):
+                    self.index = i
+                    self.opened = False
+                    self.on_select(self.options[i], i)
+                    return True
+            self.opened = False  # клик вне списка — закрыть
+            return self.rect.collidepoint(event.pos)
+        if self.rect.collidepoint(event.pos):
+            self.opened = True
+            return True
+        return False
+
+
 fps_values_lst = [30, 60, 120]
 
 
@@ -338,6 +422,7 @@ class MainSettingsUI(TitleUI):
     window_sizes_lst = ["1920,1080", "1600,900", "1366,768", "1280,720",
                         "1240,720", "1054,612", "960,540", "720,480"]
     header_title = "Настройки"
+    font_item = pygame.font.Font(MAIN_FONT_PATH, 20)
 
     def __init__(self, scene):
         super(MainSettingsUI, self).__init__(scene)
@@ -345,103 +430,127 @@ class MainSettingsUI(TitleUI):
         # но не добавлен в objects — draw_background его обновляет вхолостую)
         self.objects = GroupUI([])
 
-        # компактный заголовок вверху вместо большого логотипа
         htxt = add_outline_to_image(textfont_btn.render(get_translated_text(self.header_title), True, WHITE),
                                     2, "#1C1917")
-        header = SurfaceUI(((0, 0), htxt.get_size())).convert_alpha()
-        header.blit(htxt, (0, 0))
-        header.rect.centerx = self.rect.centerx
-        header.rect.top = 22
+        self.header_surf = htxt
+        self.header_pos = (self.rect.centerx - htxt.get_width() // 2, 20)
 
-        btn_w, btn_h = 400, 35
-        btns = self.get_pre_buttons(pg.Rect(0, 0, btn_w, btn_h))
-        n = max(1, len(btns))
-
-        # динамическая вертикальная раскладка: кнопки всегда влезают между
-        # заголовком и низом экрана при любом размере окна (фикс наложения)
-        top = header.rect.bottom + 18
-        avail = max(btn_h, self.rect.h - top - 20)
-        slot = min(btn_h + 15, max(btn_h + 4, avail // n))
-        step = slot - btn_h
+        items = self.get_settings_items()
+        n = max(1, len(items))
+        w, wh = 460, 34
+        top = self.header_pos[1] + htxt.get_height() + 14
+        avail = max(wh, self.rect.h - top - 18)
+        slot = min(wh + 10, max(wh + 3, avail // n))
         start_y = top + max(0, (avail - slot * n) // 2)
-        obj_btns = createVSteckTextButtons((btn_w, btn_h), self.rect.centerx, start_y, step, btns,
-                                           screen_position=(self.rect.x, self.rect.y),
-                                           font=textfont_btn)
+        x = self.rect.centerx - w // 2
 
-        self.objects.add_lst(obj_btns)
-        self.objects.add(header)
-        self.keynav = KeyboardNav(obj_btns)
-        self.objects.add(self.sys_message)
+        self.widgets, self.dropdowns, self.buttons = [], [], []
+        y = start_y
+        for spec in items:
+            rect = (x, y, w, wh)
+            if spec[0] == "dd":
+                _, label, options, index, on_select, icon = spec
+                dd = Dropdown(rect, get_translated_text(label), options, index,
+                              on_select, self.font_item, icon)
+                self.widgets.append(dd)
+                self.dropdowns.append(dd)
+            else:
+                _, text, func = spec
+                b = TextButton(func, rect, text, font=self.font_item)
+                self.widgets.append(b)
+                self.buttons.append(b)
+            y += slot
+        self.keynav = KeyboardNav(self.buttons)
 
-    def get_pre_buttons(self, btn_rect):
-        if config.Window.size in self.window_sizes_lst:
-            size_start_state_index = self.window_sizes_lst.index(config.Window.size)
-        else:
-            self.window_sizes_lst.append(config.Window.size)
-            size_start_state_index = len(self.window_sizes_lst) - 1
+    # ---------- элементы настроек ----------
 
-        btns = [
-            ChangeTextButton(self.set_window_size, btn_rect, "Размер: ({})",
-                             states_text_lst=self.window_sizes_lst, start_state_index=size_start_state_index),
-            ChangeTextButton(self.set_fullscreen, btn_rect,
-                             "Полноэкранный режим: {}", states_text_lst=ru_bool_lst,
-                             start_state_index=eng_bool_lst.index(config.Window.fullscreen)),
-            ChangeTextButton(lambda _, state: config.GameSettings.set_clouds_state(bool_dict[state]), btn_rect,
-                             "Отображение облаков: {}", states_text_lst=ru_bool_lst,
-                             start_state_index=eng_bool_lst.index(config.GameSettings.clouds)),
-            ChangeTextButton(lambda _, state: config.GameSettings.set_stars_state(bool_dict[state]), btn_rect,
-                             "Отображение звёзд: {}", states_text_lst=ru_bool_lst,
-                             start_state_index=eng_bool_lst.index(config.GameSettings.stars)),
-            ChangeTextButton(lambda _, state: config.GameSettings.set_item_index_state(bool_dict[state]), btn_rect,
-                             "ID предмета: {}", states_text_lst=ru_bool_lst,
-                             start_state_index=eng_bool_lst.index(config.GameSettings.view_item_index)),
-            ChangeTextButton(self.set_max_fps, btn_rect,
-                             "Лимит FPS: {}", states_text_lst=fps_values_lst,
-                             start_state_index=fps_values_lst.index(config.GameSettings.max_fps)
-                             if config.GameSettings.max_fps in fps_values_lst else 1),
-            ChangeTextButton(self.set_vsync, btn_rect,
-                             "Вертикальная синхронизация: {}", states_text_lst=ru_bool_lst,
-                             start_state_index=eng_bool_lst.index(config.GameSettings.vsync)),
-            ChangeTextButton(self.set_dynamic_dump, btn_rect,
-                             "Выгрузка карты: {}", states_text_lst=ru_bool_lst,
-                             start_state_index=eng_bool_lst.index(config.GameSettings.dynamic_dump)),
-            ("Звуки и музыка...", lambda _: self.scene.set_ui(self.scene.sound_settings_ui)),
-            ("Создать мир обучения", lambda _: self.scene.create_tutorial_world()),
-            ("В главное меню", lambda _: self.scene.set_ui(self.scene.title_ui)),
+    def get_settings_items(self):
+        gs = config.GameSettings
+        win = config.Window
+        n_mon = max(1, len(pygame.display.get_desktop_sizes()))
+        scr_icon = make_screen_icon()
 
-        ]
-        return btns
-
-    def set_window_size(self, button, size):
-        config.Window.set_size(size)
-        self.sys_message.send_reload_game_for_change()
-
-    def set_fullscreen(self, button, state):
-        config.Window.set_fullscreen(state)
-        # с флагом SCALED фуллскрин можно переключать на лету, без перезапуска
-        want = bool(bool_dict.get(state, state))
-        try:
-            if pg.display.is_fullscreen() != want:
-                pg.display.toggle_fullscreen()
-        except Exception:
+        def set_auto(value, i):
+            win.set_auto_size(value == ru_bool_lst[0])
             self.sys_message.send_reload_game_for_change()
 
-    def set_max_fps(self, button, state):
-        config.GameSettings.set_max_fps(state)
-        self.sys_message.send_reload_game_for_change()
+        def set_mon(value, i):
+            win.set_monitor(i)
+            self.sys_message.send_reload_game_for_change()
 
-    def set_vsync(self, button, state):
-        config.GameSettings.set_vsync(bool_dict[state])
-        self.sys_message.send_reload_game_for_change()
+        def set_size(value, i):
+            win.set_size(value)
+            self.sys_message.send_reload_game_for_change()
 
-    def set_dynamic_dump(self, button, state):
-        enabled = bool_dict[state]
-        config.GameSettings.set_dynamic_dump(enabled)
-        # применяем сразу к текущему миру
-        try:
-            self.scene.app.game_scene.game_map.dynamic_dump = enabled
-        except Exception:
-            pass
+        def set_fs(value, i):
+            want = bool_dict[value]
+            win.set_fullscreen(want)
+            try:
+                if pg.display.is_fullscreen() != want:
+                    pg.display.toggle_fullscreen()
+            except Exception:
+                self.sys_message.send_reload_game_for_change()
+
+        def set_fps(value, i):
+            gs.set_max_fps(value)
+            self.sys_message.send_reload_game_for_change()
+
+        def set_dump(value, i):
+            gs.set_dynamic_dump(bool_dict[value])
+            try:
+                self.scene.app.game_scene.game_map.dynamic_dump = bool_dict[value]
+            except Exception:
+                pass
+
+        size_idx = self.window_sizes_lst.index(win.size) if win.size in self.window_sizes_lst else 0
+        fps_idx = fps_values_lst.index(gs.max_fps) if gs.max_fps in fps_values_lst else 1
+        items = [
+            ("dd", "Размер экрана: {}", ["Авто", "Ручной"], 0 if win.auto_size else 1, set_auto, scr_icon),
+            ("dd", "Монитор: {}", [str(i + 1) for i in range(n_mon)],
+             win.monitor if win.monitor < n_mon else 0, set_mon, scr_icon),
+            ("dd", "Размер (ручной): {}", self.window_sizes_lst, size_idx, set_size, None),
+            ("dd", "Полноэкранный режим: {}", ru_bool_lst, 0 if win.fullscreen else 1, set_fs, scr_icon),
+            ("dd", "Лимит FPS: {}", fps_values_lst, fps_idx, set_fps, None),
+            ("dd", "Вертикальная синхронизация: {}", ru_bool_lst, 0 if gs.vsync else 1,
+             lambda v, i: (gs.set_vsync(bool_dict[v]), self.sys_message.send_reload_game_for_change()), None),
+            ("dd", "Выгрузка карты: {}", ru_bool_lst, 0 if gs.dynamic_dump else 1, set_dump, None),
+            ("dd", "Отображение облаков: {}", ru_bool_lst, 0 if gs.clouds else 1,
+             lambda v, i: gs.set_clouds_state(bool_dict[v]), None),
+            ("dd", "Отображение звёзд: {}", ru_bool_lst, 0 if gs.stars else 1,
+             lambda v, i: gs.set_stars_state(bool_dict[v]), None),
+            ("dd", "ID предмета: {}", ru_bool_lst, 0 if gs.view_item_index else 1,
+             lambda v, i: gs.set_item_index_state(bool_dict[v]), None),
+            ("btn", "Звуки и музыка...", lambda _: self.scene.set_ui(self.scene.sound_settings_ui)),
+            ("btn", "Создать мир обучения", lambda _: self.scene.create_tutorial_world()),
+            ("btn", "В главное меню", lambda _: self.scene.set_ui(self.scene.title_ui)),
+        ]
+        return items
+
+    # ---------- события/отрисовка ----------
+
+    def pg_event(self, event: pg.event.Event):
+        open_dd = next((d for d in self.dropdowns if d.opened), None)
+        if open_dd is not None:
+            open_dd.pg_event(event)
+            return
+        if self.keynav.pg_event(event):
+            return
+        for wdg in self.widgets:
+            if wdg.pg_event(event):
+                for d in self.dropdowns:
+                    if d is not wdg:
+                        d.opened = False
+                return
+
+    def draw(self):
+        self.draw_background()
+        self.screen.blit(self.header_surf, self.header_pos)
+        for wdg in self.widgets:
+            wdg.draw(self.screen)
+        for dd in self.dropdowns:      # раскрытый список — поверх остального
+            dd.draw_options(self.screen)
+        self.sys_message.draw(self.screen)
+        pg.display.flip()
 
 
 categories_sounds = {
@@ -458,27 +567,20 @@ volume_values_lst = [0, 10, 20, 30, 40, 50, 60, 70, 80, 100]
 class SoundSettingsUI(MainSettingsUI):
     header_title = "Звук и музыка"
 
-    def get_pre_buttons(self, btn_rect):
-        btns = [
-            ChangeTextButton(lambda _, state: set_category_volume("background", state / 100), btn_rect, "Музыка {}%",
-                             states_text_lst=volume_values_lst,
-                             start_state_index=self._volume_index(config.VolumeSettings.background_volume)),
-            ChangeTextButton(lambda _, state: set_category_volume("game", state / 100), btn_rect, "Звуки игры {}%",
-                             states_text_lst=volume_values_lst,
-                             start_state_index=self._volume_index(config.VolumeSettings.game_volume)),
-            ChangeTextButton(lambda _, state: set_category_volume("player", state / 100), btn_rect, "Игрок {}%",
-                             states_text_lst=volume_values_lst,
-                             start_state_index=self._volume_index(config.VolumeSettings.player_volume)),
-            ChangeTextButton(lambda _, state: set_category_volume("creatures", state / 100), btn_rect, "Существа {}%",
-                             states_text_lst=volume_values_lst,
-                             start_state_index=self._volume_index(config.VolumeSettings.creatures_volume)),
-            ChangeTextButton(lambda _, state: set_category_volume("ui", state / 100), btn_rect, "Интерфейс {}%",
-                             states_text_lst=volume_values_lst,
-                             start_state_index=self._volume_index(config.VolumeSettings.ui_volume)),
-            ("Назад", lambda _: self.scene.set_ui(self.scene.settings_ui)),
+    def get_settings_items(self):
+        vs = config.VolumeSettings
 
+        def vol(cat):
+            return lambda value, i: set_category_volume(cat, value / 100)
+
+        return [
+            ("dd", "Музыка: {}%", volume_values_lst, self._volume_index(vs.background_volume), vol("background"), None),
+            ("dd", "Звуки игры: {}%", volume_values_lst, self._volume_index(vs.game_volume), vol("game"), None),
+            ("dd", "Игрок: {}%", volume_values_lst, self._volume_index(vs.player_volume), vol("player"), None),
+            ("dd", "Существа: {}%", volume_values_lst, self._volume_index(vs.creatures_volume), vol("creatures"), None),
+            ("dd", "Интерфейс: {}%", volume_values_lst, self._volume_index(vs.ui_volume), vol("ui"), None),
+            ("btn", "Назад", lambda _: self.scene.set_ui(self.scene.settings_ui)),
         ]
-        return btns
 
     @staticmethod
     def _volume_index(volume):

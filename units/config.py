@@ -41,6 +41,11 @@ class Window(__Settings):
     section = 'window'
     size = config.get(section, 'size')
     fullscreen = config.getboolean(section, 'fullscreen')
+    # auto_size: логический размер рендера выбирается по монитору (в 2 раза
+    # меньше на широких экранах >1600 — это держит 60 FPS в фуллскрине).
+    auto_size = config.getboolean(section, 'auto_size', fallback=True)
+    # индекс монитора (для нескольких экранов)
+    monitor = config.getint(section, 'monitor', fallback=0)
 
     @classmethod
     def set_fullscreen(cls, value):
@@ -49,6 +54,14 @@ class Window(__Settings):
     @classmethod
     def set_size(cls, value):
         cls.set('size', str(value))
+
+    @classmethod
+    def set_auto_size(cls, value):
+        cls.set('auto_size', bool(value))
+
+    @classmethod
+    def set_monitor(cls, value):
+        cls.set('monitor', int(value))
 
 
 class UISettings(__Settings):

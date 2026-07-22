@@ -45,9 +45,25 @@ print("INIT GAME VARS")
 last_versions = ["0.9.1", "0.1.3-alpha", "0.1.5-alpha", "0.1.6-alpha"]
 GAME_VERSION = "0.1.7-alpha"
 
-WINDOW_SIZE = tuple(map(int, config.Window.size.split(",")))
 FULLSCREEN = config.Window.fullscreen
-desktop_size = pygame.display.get_desktop_sizes()[0]
+
+# Мониторы (для нескольких экранов): выбираем нужный по индексу, но помним
+# про все — если выбранного нет, берём первый.
+MONITORS = pygame.display.get_desktop_sizes()
+MONITOR_INDEX = config.Window.monitor if 0 <= config.Window.monitor < len(MONITORS) else 0
+desktop_size = MONITORS[MONITOR_INDEX]
+
+# Авто-размер логического рендера: на широких экранах (>1600 px) рендерим в
+# 2 раза меньше и растягиваем через SCALED — это в разы дешевле (60 FPS
+# вместо 30 в фуллскрине), картинка при этом занимает весь экран.
+if config.Window.auto_size:
+    if desktop_size[0] > 1600:
+        WINDOW_SIZE = (desktop_size[0] // 2, desktop_size[1] // 2)
+    else:
+        WINDOW_SIZE = desktop_size
+else:
+    WINDOW_SIZE = tuple(map(int, config.Window.size.split(",")))
+print("RENDER SIZE", WINDOW_SIZE, "monitor", MONITOR_INDEX, "of", MONITORS)
 
 # pygame.SCALED: игра рендерится в логический размер WINDOW_SIZE, а pygame
 # сам масштабирует картинку под реальное окно/фуллскрин (сохраняя пропорции)
@@ -67,8 +83,13 @@ pygame.display.set_icon(Icon)
 
 # vsync можно отключить: при включённом vsync слабое железо в фуллскрине
 # нередко «залипает» на половине развёртки (60→30 FPS).
-screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags,
-                                  vsync=1 if config.GameSettings.vsync else 0)
+try:
+    screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags, display=MONITOR_INDEX,
+                                      vsync=1 if config.GameSettings.vsync else 0)
+except pygame.error:
+    # display= может не поддерживаться — откат на монитор по умолчанию
+    screen_ = pygame.display.set_mode(WINDOW_SIZE, flags=flags,
+                                      vsync=1 if config.GameSettings.vsync else 0)
 display_ = pygame.Surface(WINDOW_SIZE).convert()
 
 print(pg.display.get_allow_screensaver())
