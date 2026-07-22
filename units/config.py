@@ -46,6 +46,9 @@ class Window(__Settings):
     auto_size = config.getboolean(section, 'auto_size', fallback=True)
     # индекс монитора (для нескольких экранов)
     monitor = config.getint(section, 'monitor', fallback=0)
+    # сколько тайлов должно быть видно по ширине экрана (при auto_size) —
+    # задаёт постоянный "зум" мира независимо от разрешения/монитора.
+    view_tiles_width = config.getint(section, 'view_tiles_width', fallback=50)
 
     @classmethod
     def set_fullscreen(cls, value):
@@ -62,6 +65,10 @@ class Window(__Settings):
     @classmethod
     def set_monitor(cls, value):
         cls.set('monitor', int(value))
+
+    @classmethod
+    def set_view_tiles_width(cls, value):
+        cls.set('view_tiles_width', int(value))
 
 
 class UISettings(__Settings):

@@ -597,6 +597,20 @@ def test_world_screen_split():
     assert game.player.inventory.ui.get_size() == game.screen.get_size()
 
 
+def test_view_tiles_width_setting():
+    """WSIZE при auto_size подбирается так, чтобы по ширине экрана было
+    видно ровно config.Window.view_tiles_width тайлов (не больше SCREEN_SIZE -
+    иначе был бы апскейл/блюр вместо честного даунскейла)."""
+    import units.common as common
+    import units.config as config
+    win = config.Window
+    if win.auto_size:
+        expected_w = min(max(10, win.view_tiles_width) * common.TSIZE, common.SCREEN_SIZE[0])
+        assert common.WSIZE[0] == expected_w
+    assert common.WSIZE[0] <= common.SCREEN_SIZE[0]
+    assert common.WSIZE[1] <= common.SCREEN_SIZE[1]
+
+
 def test_game_frame_renders():
     game = fresh_world(10)
     game.elapsed_time = 16
@@ -809,6 +823,24 @@ def test_help_ui():
 
 
 # ===================== конфиг =====================
+
+def test_settings_ui_view_tiles_dropdown():
+    """Настройка 'Обзор (блоков в ширину)' должна строиться без падений и
+    сохранять выбор через config.Window.set_view_tiles_width."""
+    from units import config as cfg
+    app = get_app()
+    ui = app.title_scene.settings_ui
+    ui.draw()  # не должен падать
+    dd = next(d for d in ui.dropdowns if "Обзор" in d.label)
+    assert str(cfg.Window.view_tiles_width) == dd.options[dd.index]
+    old = cfg.Window.view_tiles_width
+    try:
+        new_value = 40 if old != 40 else 50
+        dd.on_select(str(new_value), dd.options.index(str(new_value)))
+        assert cfg.Window.view_tiles_width == new_value
+    finally:
+        cfg.Window.set_view_tiles_width(old)
+
 
 def test_config_values():
     from units import config as cfg

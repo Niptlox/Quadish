@@ -427,6 +427,7 @@ class Dropdown:
 
 
 fps_values_lst = [30, 60, 120]
+view_tiles_lst = [30, 40, 50, 60, 70]
 
 
 class MainSettingsUI(TitleUI):
@@ -506,6 +507,10 @@ class MainSettingsUI(TitleUI):
             gs.set_max_fps(value)
             self.sys_message.send_reload_game_for_change()
 
+        def set_view_tiles(value, i):
+            win.set_view_tiles_width(value)
+            self.sys_message.send_reload_game_for_change()
+
         def set_dump(value, i):
             gs.set_dynamic_dump(bool_dict[value])
             try:
@@ -515,10 +520,13 @@ class MainSettingsUI(TitleUI):
 
         size_idx = self.window_sizes_lst.index(win.size) if win.size in self.window_sizes_lst else 0
         fps_idx = fps_values_lst.index(gs.max_fps) if gs.max_fps in fps_values_lst else 1
+        view_tiles_idx = view_tiles_lst.index(win.view_tiles_width) if win.view_tiles_width in view_tiles_lst else 2
         items = [
             ("dd", "Размер экрана: {}", ["Авто", "Ручной"], 0 if win.auto_size else 1, set_auto, scr_icon),
             ("dd", "Монитор: {}", [str(i + 1) for i in range(n_mon)],
              win.monitor if win.monitor < n_mon else 0, set_mon, scr_icon),
+            ("dd", "Обзор (блоков в ширину): {}", [str(v) for v in view_tiles_lst], view_tiles_idx,
+             set_view_tiles, scr_icon),
             ("dd", "Размер (ручной): {}", self.window_sizes_lst, size_idx, set_size, None),
             ("dd", "Полноэкранный режим: {}", ru_bool_lst, 0 if win.fullscreen else 1, set_fs, scr_icon),
             ("dd", "Лимит FPS: {}", fps_values_lst, fps_idx, set_fps, None),

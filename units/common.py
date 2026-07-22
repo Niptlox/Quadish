@@ -75,8 +75,20 @@ elif config.Window.auto_size:
 else:
     SCREEN_SIZE = tuple(map(int, config.Window.size.split(",")))
 
-if config.Window.auto_size and SCREEN_SIZE[0] > 1600:
-    WSIZE = (SCREEN_SIZE[0] // 2, SCREEN_SIZE[1] // 2)
+# Размер тайла в мировых пикселях — вынесен сюда (а не в раздел TILE ниже),
+# т.к. нужен уже для расчёта WSIZE.
+_WORLD_TILE_SIZE = 32
+
+# При auto_size WSIZE подбирается так, чтобы по ширине экрана было видно
+# ровно view_tiles_width тайлов ("50 блоков в ширину" и т.п.) — это даёт
+# одинаковый "зум" мира на любом разрешении/мониторе вместо прежнего грубого
+# "шире 1600 — уполовинить". WSIZE не может быть больше SCREEN_SIZE (иначе
+# был бы апскейл вместо честного даунскейла — блюр вместо экономии рендера).
+if config.Window.auto_size:
+    _view_w = max(10, config.Window.view_tiles_width) * _WORLD_TILE_SIZE
+    _view_w = min(_view_w, SCREEN_SIZE[0])
+    _view_h = round(_view_w * SCREEN_SIZE[1] / SCREEN_SIZE[0])
+    WSIZE = (_view_w, _view_h)
 else:
     WSIZE = SCREEN_SIZE
 print("SCREEN_SIZE (экран/UI)", SCREEN_SIZE, "WSIZE (мир)", WSIZE,
@@ -119,8 +131,7 @@ print(pg.display.get_allow_screensaver())
 
 # TILE ==================================================
 
-TILE_SIZE = 32
-# TILE_SIZE = 2
+TILE_SIZE = _WORLD_TILE_SIZE
 TSIZE = TILE_SIZE
 
 # TILE_SIZE = 16
