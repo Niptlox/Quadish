@@ -4,7 +4,8 @@ from units.Inventory import Inventory
 from units.Objects import Entities
 from units.Objects.Items import Items, ItemsTile
 from units.Objects.TileClass import Tile
-from units.Tiles import WOOD_TILES, furnace_imgs, ACTIVATE_TILES
+from units.Tiles import (WOOD_TILES, furnace_imgs, ACTIVATE_TILES, SIGNAL_TILES,
+                         lever_on_img, lever_off_img, lamp_on_img, lamp_off_img)
 from units.common import *
 
 
@@ -30,17 +31,42 @@ class Chest(Tile):
     def items_of_break(self):
         return self.inventory.items_of_break()
 
+class SignalTile(Tile):
+    """Общая база для всех тайлов схемы (активатор/таймер/датчик/провод/
+    рычаг/лампа/вентили). activating сбрасывался бы "не вовремя": тайлы
+    обновляются в порядке растрового обхода видимых тайлов на кадре, а не
+    "сначала все источники, потом все приёмники" — если просто сбрасывать
+    activating=False в update() и полагаться, что сосед успеет включить
+    заново, результат кадра зависел бы от взаимного расположения тайлов
+    (иногда сброс происходил бы уже ПОСЛЕ того, как сосед включил).
+    Поэтому вместо "сбросить и понадеяться" храним activated_tact — номер
+    такта (self.game.tact), когда тайл последний раз коснулся bfs_activate.
+    "Включён" — activated_tact не старше 1 такта: допуск в 1 такт (~16мс,
+    незаметно) снимает зависимость от порядка обхода тайлов на кадре."""
+    activating = False
+    activated_tact = -1
+
+    def is_active(self):
+        return self.activated_tact >= self.game.tact - 1
+
+    def refresh_activating(self):
+        self.activating = self.is_active()
+
+
 def bfs_activate(game_map, origin):
     """Обходит связную сеть активируемых блоков (Activator/TimerBlock/
-    PressurePlate) итеративно (очередь, не рекурсия) — на большом скоплении
-    рекурсивный обход уходил вглубь на сотни вложенных вызовов и был уязвим
-    к RecursionError; visited по id защищает от повторной активации того же
-    блока (циклы/сетки). Общая логика для всех источников активации."""
+    PressurePlate/Wire/Lever/Lamp) итеративно (очередь, не рекурсия) — на
+    большом скоплении рекурсивный обход уходил вглубь на сотни вложенных
+    вызовов и был уязвим к RecursionError; visited по id защищает от
+    повторной активации того же блока (циклы/сетки). Общая логика для всех
+    источников активации."""
+    tact = origin.game.tact
     visited = {origin.id}
     queue = [origin]
     while queue:
         current = queue.pop()
         current.activating = True
+        current.activated_tact = tact
         for i in range(-1, 2):
             for j in range(-1, 2):
                 if i == 0 and j == 0:
@@ -56,12 +82,26 @@ def bfs_activate(game_map, origin):
                         Entities.activate_dynamite(game_map, x, y, tile[0])
 
 
-class Activator(Tile):
-    index = 210
+def count_active_neighbors(game_map, tile_obj):
+    """Считает соседние сигнальные тайлы (провода/рычаги/активаторы/другие
+    вентили), которые сейчас включены — основа для вычисления вентилей
+    (НЕ/И/ИЛИ). Читает activated_tact соседа напрямую (не is_active(),
+    чтобы не требовать от Wire собственного update() только ради этого)."""
+    tact = tile_obj.game.tact
+    n = 0
+    for i in range(-1, 2):
+        for j in range(-1, 2):
+            if i == 0 and j == 0:
+                continue
+            x, y = tile_obj.tx + i, tile_obj.ty + j
+            tile, neighbor = game_map.get_tile_and_obj(x, y)
+            if tile[0] in SIGNAL_TILES and neighbor is not None and neighbor.activated_tact >= tact - 1:
+                n += 1
+    return n
 
-    def __init__(self, game, tile_pos):
-        super().__init__(game, tile_pos)
-        self.activating = False
+
+class Activator(SignalTile):
+    index = 210
 
     def activate_nearby_tiles(self):
         bfs_activate(self.game_map, self)
@@ -71,14 +111,14 @@ class Activator(Tile):
             self.activate_nearby_tiles()
 
     def update(self, elapsed_time):
-        self.activating = False
+        self.refresh_activating()
 
     def right_click(self, mouse_local_pos):
         if not self.activating:
             self.activate_nearby_tiles()
 
 
-class TimerBlock(Tile):
+class TimerBlock(SignalTile):
     """Таймер: сам, без участия игрока, периодически запускает подключённую
     сеть активаторов — авто-клокер для командных блоков/активаторов/динамита
     (не нужно нажимать вручную каждый раз)."""
@@ -87,11 +127,10 @@ class TimerBlock(Tile):
 
     def __init__(self, game, tile_pos):
         super().__init__(game, tile_pos)
-        self.activating = False
         self.timer = 0
 
     def update(self, elapsed_time):
-        self.activating = False
+        self.refresh_activating()
         self.timer += 1
         if self.timer >= self.interval:
             self.timer = 0
@@ -102,22 +141,106 @@ class TimerBlock(Tile):
         bfs_activate(self.game_map, self)
 
 
-class PressurePlate(Tile):
+class PressurePlate(SignalTile):
     """Нажимная плита: запускает подключённую сеть активаторов, пока на ней
-    (в её клетке) стоит игрок — датчик присутствия для авто-дверей/ловушек."""
+    (в её клетке) стоит игрок — датчик присутствия для авто-дверей/ловушек.
+    Дожигает сеть КАЖДЫЙ такт, пока игрок стоит (не только на переднем
+    фронте) — иначе всё за ней (например лампа) гасло бы через 1 такт,
+    хотя игрок всё ещё стоит на плите."""
     index = 212
 
     def __init__(self, game, tile_pos):
         super().__init__(game, tile_pos)
-        self.activating = False
         self.pressed = False
 
     def update(self, elapsed_time):
-        was_pressed = self.pressed
+        self.refresh_activating()
         self.pressed = self.rect.colliderect(self.game.player.rect)
-        self.activating = self.pressed
-        if self.pressed and not was_pressed:
+        if self.pressed:
             bfs_activate(self.game_map, self)
+
+
+class Wire(SignalTile):
+    """Провод — пассивный узел сети: только передаёт сигнал дальше, своего
+    поведения нет, поэтому update() не нужен (не входит в
+    CLASS_UPDATING_TILES) — activated_tact ему проставляет bfs_activate
+    того, кто до него дотянулся."""
+    index = 213
+
+
+class Lever(SignalTile):
+    """Рычаг — ручной переключатель с фиксацией: в отличие от нажимной
+    плиты не требует, чтобы игрок стоял на месте, включается/выключается
+    правым кликом и остаётся в этом состоянии."""
+    index = 214
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.on = False
+
+    def update(self, elapsed_time):
+        self.refresh_activating()
+        if self.on:
+            bfs_activate(self.game_map, self)
+        return lever_on_img if self.on else lever_off_img
+
+    def right_click(self, mouse_local_pos):
+        self.on = not self.on
+
+
+class Lamp(SignalTile):
+    """Лампа — видимый индикатор сигнала: светится, пока сеть перед ней
+    активна. Сама тоже сквозной узел (ACTIVATE_TILES) — можно продолжить
+    провод дальше через неё."""
+    index = 215
+
+    def update(self, elapsed_time):
+        self.refresh_activating()
+        return lamp_on_img if self.activating else lamp_off_img
+
+
+class LogicGate(SignalTile):
+    """Общая база вентилей (НЕ/И/ИЛИ). В отличие от провода/лампы НЕ входит
+    в ACTIVATE_TILES — чужой bfs_activate не должен "затапливать" вентиль
+    напрямую, иначе он был бы просто ещё одним проводом. Вместо этого
+    вентиль каждый такт сам читает соседей (count_active_neighbors) и, если
+    по своей логике должен быть включён, сам становится источником —
+    вызывает bfs_activate(self), продолжая сеть дальше."""
+
+    def evaluate(self, active_neighbors: int) -> bool:
+        raise NotImplementedError
+
+    def update(self, elapsed_time):
+        if self.evaluate(count_active_neighbors(self.game_map, self)):
+            bfs_activate(self.game_map, self)
+        self.refresh_activating()
+
+
+class NotGate(LogicGate):
+    """НЕ: включён, когда нет ни одного активного соседа. Замкнутый сам на
+    себя через провод превращается в автогенератор (мигает раз в 2 такта,
+    как и положено вентилю НЕ с обратной связью) — это следствие модели
+    с допуском в 1 такт, а не отдельная фича."""
+    index = 216
+
+    def evaluate(self, active_neighbors):
+        return active_neighbors == 0
+
+
+class AndGate(LogicGate):
+    """И: включён, когда активны минимум 2 соседних сигнальных тайла."""
+    index = 217
+
+    def evaluate(self, active_neighbors):
+        return active_neighbors >= 2
+
+
+class OrGate(LogicGate):
+    """ИЛИ: включён, когда активен минимум 1 соседний сигнальный тайл."""
+    index = 218
+
+    def evaluate(self, active_neighbors):
+        return active_neighbors >= 1
 
 
 furnace_burn_tiles = {
@@ -199,5 +322,6 @@ class Furnace(Tile):
         return sum([inv.items_of_break() for inv in inventories], [])
 
 
-classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate}
+classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate,
+          Wire, Lever, Lamp, NotGate, AndGate, OrGate}
 tiles_class = {cls.index: cls for cls in classes}

@@ -290,7 +290,9 @@ def test_timer_block_auto_triggers_network():
 
 def test_pressure_plate_triggers_on_player_step():
     """PressurePlate должна активировать сеть, когда игрок встаёт на неё, и
-    не срабатывать повторно, пока он с неё не сойдёт."""
+    продолжать держать сеть активной, пока он с неё не сойдёт (не только в
+    момент наступания — иначе всё дальше по сети, например лампа, гасло бы
+    через 1 такт, хотя игрок всё ещё стоит на плите)."""
     game = fresh_world(24)
     gm = game.game_map
     gm.set_static_tile(0, 0, 212)  # нажимная плита
@@ -306,9 +308,148 @@ def test_pressure_plate_triggers_on_player_step():
     assert not activator.activating
 
     game.player.rect.topleft = plate.rect.topleft  # встал на плиту
+    for _ in range(3):
+        game.tact += 1
+        plate.update(16)
+        activator.update(16)
+        assert plate.pressed
+        assert activator.activating, "сеть должна оставаться активной, пока игрок стоит на плите"
+
+    game.player.rect.topleft = (TSIZE * 100, TSIZE * 100)  # сошёл с плиты
+    game.tact += 1
     plate.update(16)
-    assert plate.pressed
-    assert activator.activating
+    assert not plate.pressed
+    game.tact += 2  # запас на допуск в 1 такт у activator.is_active()
+    activator.update(16)
+    assert not activator.activating, "после ухода игрока сеть должна погаснуть"
+
+
+def test_signal_tact_freshness_independent_of_update_order():
+    """Регресс: activator.update() раньше безусловно сбрасывал activating
+    каждый кадр (self.activating = False), а тайлы обновляются в порядке
+    растрового обхода видимых тайлов, а не 'сначала источники, потом
+    приёмники'. Если бы Lamp читала голый activating без допуска в такт,
+    результат кадра зависел бы от того, кто из них обновился раньше.
+    Проверяем оба порядка вызова update() в одном такте — итог должен
+    быть одинаковым."""
+    game = fresh_world(26)
+    gm = game.game_map
+    gm.set_static_tile(0, 0, 214)  # рычаг
+    gm.set_static_tile(1, 0, 215)  # лампа рядом
+
+    lever = gm.get_tile_obj(*gm.to_chunk_xy(0, 0), gm.get_static_tile(0, 0)[3])
+    lamp = gm.get_tile_obj(*gm.to_chunk_xy(1, 0), gm.get_static_tile(1, 0)[3])
+    lever.on = True
+
+    from units.Tiles import lamp_on_img, lamp_off_img
+
+    # Порядок 1: лампа обновляется РАНЬШЕ рычага в этом такте
+    game.tact += 1
+    img = lamp.update(16)
+    lever.update(16)
+    assert img is lamp_off_img  # рычаг ещё не успел коснуться лампы в этом такте
+    game.tact += 1
+    img = lamp.update(16)  # но со следующего такта (допуск в 1) уже видно
+    lever.update(16)
+    assert img is lamp_on_img
+
+    # Порядок 2: рычаг обновляется РАНЬШЕ лампы — тоже должно корректно засветиться
+    lever2_pos = (5, 0)
+    gm.set_static_tile(*lever2_pos, 214)
+    gm.set_static_tile(6, 0, 215)
+    lever2 = gm.get_tile_obj(*gm.to_chunk_xy(*lever2_pos), gm.get_static_tile(*lever2_pos)[3])
+    lamp2 = gm.get_tile_obj(*gm.to_chunk_xy(6, 0), gm.get_static_tile(6, 0)[3])
+    lever2.on = True
+    game.tact += 1
+    lever2.update(16)
+    img = lamp2.update(16)
+    assert img is lamp_on_img
+
+
+def test_logic_gates_not_and_or():
+    """НЕ/И/ИЛИ должны корректно вычисляться по числу активных соседей."""
+    game = fresh_world(27)
+    gm = game.game_map
+
+    def tick(*tiles):
+        # имитирует кадр игры: каждый причастный тайл обновляется на
+        # каждом такте (иначе "источник" сам перестанет числиться активным)
+        game.tact += 1
+        for t in tiles:
+            t.update(16)
+
+    # НЕ: горит, пока нет сигнала; гаснет, когда сосед-рычаг включён
+    gm.set_static_tile(0, 0, 216)  # NOT
+    not_gate = gm.get_tile_obj(*gm.to_chunk_xy(0, 0), gm.get_static_tile(0, 0)[3])
+    tick(not_gate)
+    assert not_gate.activating, "без входов вентиль НЕ должен быть включён"
+
+    gm.set_static_tile(1, 0, 214)  # рычаг рядом с NOT
+    lever = gm.get_tile_obj(*gm.to_chunk_xy(1, 0), gm.get_static_tile(1, 0)[3])
+    lever.on = True
+    tick(lever, not_gate)
+    tick(lever, not_gate)
+    tick(lever, not_gate)
+    assert not not_gate.activating, "с активным соседом вентиль НЕ должен погаснуть"
+
+    # И: горит только при двух активных соседях
+    gm.set_static_tile(10, 0, 217)  # AND
+    and_gate = gm.get_tile_obj(*gm.to_chunk_xy(10, 0), gm.get_static_tile(10, 0)[3])
+    gm.set_static_tile(9, 0, 214)
+    gm.set_static_tile(11, 0, 214)
+    lever_a = gm.get_tile_obj(*gm.to_chunk_xy(9, 0), gm.get_static_tile(9, 0)[3])
+    lever_b = gm.get_tile_obj(*gm.to_chunk_xy(11, 0), gm.get_static_tile(11, 0)[3])
+
+    lever_a.on = True
+    tick(lever_a, lever_b, and_gate)
+    tick(lever_a, lever_b, and_gate)
+    assert not and_gate.activating, "с одним активным входом И ещё не должен включиться"
+
+    lever_b.on = True
+    tick(lever_a, lever_b, and_gate)
+    tick(lever_a, lever_b, and_gate)
+    assert and_gate.activating, "с двумя активными входами И должен включиться"
+
+    # ИЛИ: горит уже при одном активном соседе
+    gm.set_static_tile(20, 0, 218)  # OR
+    or_gate = gm.get_tile_obj(*gm.to_chunk_xy(20, 0), gm.get_static_tile(20, 0)[3])
+    gm.set_static_tile(19, 0, 214)
+    lever_c = gm.get_tile_obj(*gm.to_chunk_xy(19, 0), gm.get_static_tile(19, 0)[3])
+    lever_c.on = True
+    tick(lever_c, or_gate)
+    tick(lever_c, or_gate)
+    assert or_gate.activating, "ИЛИ должен включиться уже от одного активного соседа"
+
+
+def test_wire_lamp_chain():
+    """Рычаг -> провод(а) -> лампа: лампа должна оставаться включённой всё
+    время, пока рычаг ON, и погаснуть в течение допуска после выключения."""
+    game = fresh_world(28)
+    gm = game.game_map
+    gm.set_static_tile(0, 0, 214)  # рычаг
+    gm.set_static_tile(1, 0, 213)  # провод
+    gm.set_static_tile(2, 0, 213)  # провод
+    gm.set_static_tile(3, 0, 215)  # лампа
+
+    lever = gm.get_tile_obj(*gm.to_chunk_xy(0, 0), gm.get_static_tile(0, 0)[3])
+    lamp = gm.get_tile_obj(*gm.to_chunk_xy(3, 0), gm.get_static_tile(3, 0)[3])
+
+    from units.Tiles import lamp_on_img, lamp_off_img
+
+    lever.on = True
+    for _ in range(4):
+        game.tact += 1
+        lever.update(16)
+        img = lamp.update(16)
+    assert img is lamp_on_img, "лампа должна загореться через провод от рычага"
+
+    lever.on = False
+    img = None
+    for _ in range(3):
+        game.tact += 1
+        lever.update(16)
+        img = lamp.update(16)
+    assert img is lamp_off_img, "лампа должна погаснуть после выключения рычага"
 
 
 # ===================== хранилище миров =====================

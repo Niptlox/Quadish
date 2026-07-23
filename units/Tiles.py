@@ -135,6 +135,87 @@ def create_pressure_plate_img():
 timer_block_img = create_timer_block_img()
 pressure_plate_img = create_pressure_plate_img()
 
+
+def create_wire_img():
+    """Провод: тонкий медный крест поверх обычного блока."""
+    img = create_tile_image("#44403C")
+    w, h = img.get_size()
+    cx, cy = w // 2, h // 2
+    pygame.draw.line(img, "#EA580C", (2, cy), (w - 3, cy), 3)
+    pygame.draw.line(img, "#EA580C", (cx, 2), (cx, h - 3), 3)
+    pygame.draw.circle(img, "#FDBA74", (cx, cy), 2)
+    return img
+
+
+def create_lever_img(on):
+    """Рычаг: диагональная планка на подставке — наклон меняется вкл/выкл."""
+    img = create_tile_image("#57534E")
+    w, h = img.get_size()
+    pygame.draw.rect(img, "#3F3A36", (w // 3, h - 8, w // 3, 6), border_radius=1)
+    color = "#22C55E" if on else "#71717A"
+    base = (w // 2, h - 8)
+    tip = (w // 2 + (6 if on else -6), 6)
+    pygame.draw.line(img, color, base, tip, 3)
+    pygame.draw.circle(img, color, base, 3)
+    return img
+
+
+def create_lamp_img(on):
+    """Лампа: колба, светится жёлтым во включённом состоянии."""
+    img = create_tile_image("#3F3A36")
+    w, h = img.get_size()
+    cx, cy = w // 2, h // 2
+    r = min(w, h) // 2 - 5
+    color = "#FDE047" if on else "#57534E"
+    pygame.draw.circle(img, color, (cx, cy), r)
+    pygame.draw.circle(img, "#1C1917", (cx, cy), r, width=1)
+    if on:
+        pygame.draw.circle(img, (255, 255, 255, 90), (cx - r // 3, cy - r // 3), max(1, r // 3))
+    return img
+
+
+def create_not_gate_img():
+    """НЕ: классический символ инвертора — треугольник с кружком на выходе."""
+    img = create_tile_image("#78716C")
+    w, h = img.get_size()
+    tri = [(4, 5), (4, h - 5), (w - 9, h // 2)]
+    pygame.draw.polygon(img, "#F5F5F4", tri)
+    pygame.draw.polygon(img, "#1C1917", tri, width=1)
+    pygame.draw.circle(img, "#F5F5F4", (w - 5, h // 2), 3)
+    pygame.draw.circle(img, "#1C1917", (w - 5, h // 2), 3, width=1)
+    return img
+
+
+def create_and_gate_img():
+    """И: D-образная форма — классический символ вентиля И."""
+    img = create_tile_image("#78716C")
+    w, h = img.get_size()
+    rect = pygame.Rect(4, 5, w // 2, h - 10)
+    pygame.draw.rect(img, "#F5F5F4", rect, border_top_right_radius=0, border_bottom_right_radius=0)
+    pygame.draw.circle(img, "#F5F5F4", (rect.right, h // 2), (h - 10) // 2)
+    pygame.draw.rect(img, "#1C1917", rect, width=1)
+    return img
+
+
+def create_or_gate_img():
+    """ИЛИ: форма "щита" с выпуклой передней гранью — символ вентиля ИЛИ."""
+    img = create_tile_image("#78716C")
+    w, h = img.get_size()
+    pygame.draw.polygon(img, "#F5F5F4", [(4, 5), (w // 2, 5), (w // 2, h - 5), (4, h - 5)])
+    pygame.draw.circle(img, "#F5F5F4", (w // 2, h // 2), (h - 10) // 2 + 2)
+    pygame.draw.circle(img, "#1C1917", (w // 2, h // 2), (h - 10) // 2 + 2, width=1)
+    return img
+
+
+wire_img = create_wire_img()
+lever_on_img = create_lever_img(True)
+lever_off_img = create_lever_img(False)
+lamp_on_img = create_lamp_img(True)
+lamp_off_img = create_lamp_img(False)
+not_gate_img = create_not_gate_img()
+and_gate_img = create_and_gate_img()
+or_gate_img = create_or_gate_img()
+
 tnt_img = create_tile_image("#B91C1C")  # tnt
 
 # granite_img = create_tile_image("#09070A")
@@ -301,6 +382,12 @@ tile_imgs = {None: none_img,
              408: space_dust_item_img,
              211: timer_block_img,
              212: pressure_plate_img,
+             213: wire_img,
+             214: lever_off_img,
+             215: lamp_off_img,
+             216: not_gate_img,
+             217: and_gate_img,
+             218: or_gate_img,
              501: sword_1_img,
              502: sword_77_img,
              503: sword_2_img,
@@ -359,15 +446,22 @@ STONE_TILES = {3, 4, 5, 31, 32, 33, 21, 22, 23, 24, 25, 131}
 WOOD_TILES = {12, 110, 11, 121, 122, 123, 124, 126, 127, 128, 129, 131, 251}
 
 # блоки у которых есть прграммный класс
-CLASS_TILE = {131, 129, 200, 210, 211, 212}
-# которые надо обновлять
-CLASS_UPDATING_TILES = {131, 200, 210, 211, 212}
+CLASS_TILE = {131, 129, 200, 210, 211, 212, 213, 214, 215, 216, 217, 218}
+# которые надо обновлять (213 провод не входит — у него нет своей логики)
+CLASS_UPDATING_TILES = {131, 200, 210, 211, 212, 214, 215, 216, 217, 218}
 # CLASS_UPDATING_TILES_IN_UI = {131}
 # которые надо обновлять не зависимо от загрузки чанка те всегда
 CLASS_ALLWAYS_UPDATING_TILES = {200, }
-# блоки которые можно активировать (и/или сами активируют сеть) —
-# 211 таймер (авто-клокер), 212 нажимная плита (датчик игрока)
-ACTIVATE_TILES = {200, 210, 9, 211, 212}
+# блоки-узлы сети активации (участвуют в bfs_activate как проводники) —
+# 211 таймер (авто-клокер), 212 нажимная плита (датчик игрока),
+# 213 провод, 214 рычаг, 215 лампа. Вентили (216-218) намеренно НЕ входят
+# сюда — иначе чужой bfs_activate "затапливал" бы их напрямую, как ещё
+# один провод; вместо этого они сами читают соседей и решают, включаться
+# ли (см. LogicGate в units/Objects/TileClasses.py).
+ACTIVATE_TILES = {200, 210, 9, 211, 212, 213, 214, 215}
+# то же самое + вентили — только для того, чтобы вентили могли читать
+# состояние соседей (включая другие вентили), не участвуя в самом обходе
+SIGNAL_TILES = ACTIVATE_TILES | {216, 217, 218}
 
 # Блоки у которых state это массив
 ITEM_WITH_STATE_IS_LIST = {126}
@@ -506,6 +600,12 @@ original_tile_words = {None: "None",
                        408: "Космическая пыль",
                        211: "Таймер",
                        212: "Нажимная плита",
+                       213: "Провод",
+                       214: "Рычаг",
+                       215: "Лампа",
+                       216: "Вентиль НЕ",
+                       217: "Вентиль И",
+                       218: "Вентиль ИЛИ",
                        501: "Железный меч",
                        502: "Золотой меч",
                        503: "Ядовитый меч",
