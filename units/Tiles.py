@@ -216,13 +216,40 @@ not_gate_img = create_not_gate_img()
 and_gate_img = create_and_gate_img()
 or_gate_img = create_or_gate_img()
 
-tnt_img = create_tile_image("#B91C1C")  # tnt
+def create_dynamite_img(lit=False, spark_bright=False):
+    """Динамит: пучок из 3 шашек с бандажами и фитилём (раньше был просто
+    закрашенный красный квадрат). lit — фитиль подожжён (анимация мигания
+    после активации, см. Dynamite в units/Objects/Entities.py)."""
+    img = create_tile_image("#57534E")
+    w, h = img.get_size()
+    stick_w = max(2, w // 4)
+    gap = 1
+    total_w = stick_w * 3 + gap * 2
+    x0 = (w - total_w) // 2
+    top, bottom = 5, h - 3
+    for i in range(3):
+        x = x0 + i * (stick_w + gap)
+        pygame.draw.rect(img, "#B91C1C", (x, top, stick_w, bottom - top), border_radius=1)
+        pygame.draw.rect(img, "#78350F", (x, top + 2, stick_w, 2))
+        pygame.draw.rect(img, "#78350F", (x, bottom - 4, stick_w, 2))
+        pygame.draw.rect(img, "#1C1917", (x, top, stick_w, bottom - top), width=1, border_radius=1)
+    fuse_x = w // 2
+    fuse_color = "#FDBA74" if lit else "#78716C"
+    pygame.draw.line(img, fuse_color, (fuse_x, top), (fuse_x + 3, max(0, top - 5)), 2)
+    if lit:
+        spark_r = 3 if spark_bright else 2
+        spark_color = "#FDE047" if spark_bright else "#F97316"
+        pygame.draw.circle(img, spark_color, (fuse_x + 3, max(0, top - 5)), spark_r)
+    return img
+
+
+tnt_img = create_dynamite_img(lit=False)  # tnt
 
 # granite_img = create_tile_image("#09070A")
 granite_img = load_img("data/sprites/tiles/Granite.PNG")
 
-tnt_1_img = create_tile_image("#F87171")  # tnt activ
-tnt_imgs = [tnt_1_img, create_tile_image("#FECACA")]  # tnt activ
+tnt_1_img = create_dynamite_img(lit=True, spark_bright=True)  # tnt activ
+tnt_imgs = [tnt_1_img, create_dynamite_img(lit=True, spark_bright=False)]  # tnt activ
 
 wood_img = load_img("data/sprites/tiles/wood.png", colorkey=None)
 plank_img = load_img("data/sprites/tiles/plank.png", colorkey=None)
@@ -268,7 +295,25 @@ bedroll_of_pelts_item_img = load_img("data/sprites/tiles/bedroll_of_pelts_item.p
 group_img = load_img("data/sprites/tiles/group.png")
 build_img = load_img("data/sprites/tiles/build.png")
 structure_pass_img = load_img("data/sprites/tiles/structure_pass.png")
-activator_img = load_img("data/sprites/tiles/activator.png")
+def create_activator_img():
+    """Активатор: металлическая панель с большой красной кнопкой-триггером
+    (раньше была декоративная жёлто-оранжевая розетка без связи с ролью
+    блока — не читалось как "нажми, чтобы сработало")."""
+    img = create_tile_image("#44403C")
+    w, h = img.get_size()
+    cx, cy = w // 2, h // 2
+    r = min(w, h) // 2 - 3
+    pygame.draw.circle(img, "#78716C", (cx, cy), r)
+    pygame.draw.circle(img, "#1C1917", (cx, cy), r, width=1)
+    pygame.draw.circle(img, "#DC2626", (cx, cy), r - 3)
+    pygame.draw.circle(img, "#1C1917", (cx, cy), r - 3, width=1)
+    pygame.draw.circle(img, "#F87171", (cx - r // 4, cy - r // 4), max(1, r // 4))
+    for bx, by in ((5, 5), (w - 5, 5), (5, h - 5), (w - 5, h - 5)):
+        pygame.draw.circle(img, "#292524", (bx, by), 2)
+    return img
+
+
+activator_img = create_activator_img()
 commandblock_img = load_img("data/sprites/tiles/commandblock.png")
 commandblock_imgs = load_imgs("data/sprites/tiles/CommandBlock/commandblock_{}.png", 14)
 
