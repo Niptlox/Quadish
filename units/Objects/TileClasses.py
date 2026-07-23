@@ -5,7 +5,8 @@ from units.Objects import Entities
 from units.Objects.Items import Items, ItemsTile
 from units.Objects.TileClass import Tile
 from units.Tiles import (WOOD_TILES, furnace_imgs, ACTIVATE_TILES, SIGNAL_TILES,
-                         lever_on_img, lever_off_img, lamp_on_img, lamp_off_img)
+                         lever_on_img, lever_off_img, lamp_on_img, lamp_off_img,
+                         chunk_loader_on_img, chunk_loader_off_img)
 from units.common import *
 
 
@@ -44,7 +45,10 @@ class SignalTile(Tile):
     "Включён" — activated_tact не старше 1 такта: допуск в 1 такт (~16мс,
     незаметно) снимает зависимость от порядка обхода тайлов на кадре."""
     activating = False
-    activated_tact = -1
+    # -inf, а не -1: "-1 >= tact - 1" случайно стало бы True в первые 1-2
+    # такта свежего мира (tact == 0 или 1) — сигнальный тайл читался бы как
+    # включённый, ни разу не будучи затронут bfs_activate.
+    activated_tact = float("-inf")
 
     def is_active(self):
         return self.activated_tact >= self.game.tact - 1
@@ -243,6 +247,21 @@ class OrGate(LogicGate):
         return active_neighbors >= 1
 
 
+class ChunkLoader(SignalTile):
+    """Прогрузчик чанка: пока получает сигнал от сети (провод/рычаг/датчик/
+    таймер), удерживает от выгрузки чанки в радиусе вокруг себя даже когда
+    игрок ушёл далеко (см. GameMap.unload_far_chunks) — держать автоматику
+    (фермы триггеров, авто-клокеры) работающей без игрока рядом. Без
+    сигнала — обычный чанк, выгружается по общим правилам. Сам является
+    узлом сети (ACTIVATE_TILES), сигнал через него можно вести дальше."""
+    index = 219
+    radius = 2  # в чанках
+
+    def update(self, elapsed_time):
+        self.refresh_activating()
+        return chunk_loader_on_img if self.activating else chunk_loader_off_img
+
+
 furnace_burn_tiles = {
     52: 82,
     56: 86,
@@ -323,5 +342,5 @@ class Furnace(Tile):
 
 
 classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate,
-          Wire, Lever, Lamp, NotGate, AndGate, OrGate}
+          Wire, Lever, Lamp, NotGate, AndGate, OrGate, ChunkLoader}
 tiles_class = {cls.index: cls for cls in classes}

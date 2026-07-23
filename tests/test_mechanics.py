@@ -452,6 +452,62 @@ def test_wire_lamp_chain():
     assert img is lamp_off_img, "лампа должна погаснуть после выключения рычага"
 
 
+def test_chunk_loader_protects_area_when_active():
+    """ChunkLoader должен защищать чанки в радиусе от выгрузки, только пока
+    получает сигнал от сети — переключается рычагом, как и остальные
+    сигнальные блоки (см. GameMap.unload_far_chunks)."""
+    from units.common import CHUNK_SIZE
+    game = fresh_world(322)
+    gm = game.game_map
+    gm.dynamic_dump = True
+    game.player.rect.x = 0
+    game.player.rect.y = 0
+    game.player.update_chunk_pos()
+
+    loader_chunk = (300, 300)
+    near_chunk = (301, 300)  # в радиусе 2 от прогрузчика
+    far_chunk = (310, 300)  # далеко за радиусом
+
+    loader_tx, loader_ty = loader_chunk[0] * CHUNK_SIZE, loader_chunk[1] * CHUNK_SIZE
+    gm.set_static_tile(loader_tx, loader_ty, 219)
+    loader = gm.get_tile_obj(*loader_chunk, gm.get_static_tile(loader_tx, loader_ty)[3])
+    assert loader is not None and loader.radius == 2
+
+    # без сигнала: прогрузчик ничего не защищает сверх обычных правил
+    gm.create_pass_chunk(near_chunk)
+    gm.create_pass_chunk(far_chunk)
+    loader.update(16)
+    gm.unload_far_chunks()
+    assert near_chunk not in gm.game_map, "без сигнала прогрузчик не должен защищать соседние чанки"
+    assert far_chunk not in gm.game_map
+
+    # включаем сигнал рычагом вплотную к прогрузчику
+    gm.create_pass_chunk(near_chunk)
+    gm.create_pass_chunk(far_chunk)
+    lever_x, lever_y = loader_tx - 1, loader_ty
+    gm.set_static_tile(lever_x, lever_y, 214)
+    lever = gm.get_tile_obj(*gm.to_chunk_xy(lever_x, lever_y), gm.get_static_tile(lever_x, lever_y)[3])
+    lever.on = True
+    game.tact += 1
+    lever.update(16)
+    loader.update(16)
+
+    gm.unload_far_chunks()
+    assert near_chunk in gm.game_map, "активный прогрузчик должен защитить соседний чанк в радиусе"
+    assert far_chunk not in gm.game_map, "чанк за радиусом прогрузчика должен выгружаться как обычно"
+
+    # выключаем рычаг — защита должна сняться (с учётом допуска в 1 такт)
+    lever.on = False
+    game.tact += 1
+    lever.update(16)
+    loader.update(16)
+    game.tact += 2
+    loader.update(16)
+
+    gm.unload_far_chunks()
+    assert near_chunk not in gm.game_map, "после выключения сигнала прогрузчик не должен защищать чанк"
+
+
 # ===================== хранилище миров =====================
 
 def test_world_storage_crud():

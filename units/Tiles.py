@@ -216,6 +216,27 @@ not_gate_img = create_not_gate_img()
 and_gate_img = create_and_gate_img()
 or_gate_img = create_or_gate_img()
 
+
+def create_chunk_loader_img(on):
+    """Прогрузчик чанка: маячок-антенна, светится, пока держит область
+    вокруг себя от выгрузки."""
+    img = create_tile_image("#3F3A36")
+    w, h = img.get_size()
+    cx = w // 2
+    pygame.draw.rect(img, "#57534E", (cx - 2, h // 3, 4, h - h // 3 - 4))
+    pygame.draw.polygon(img, "#78716C", [(cx - w // 3, h - 4), (cx + w // 3, h - 4),
+                                         (cx + 3, h // 3), (cx - 3, h // 3)])
+    color = "#22D3EE" if on else "#44403C"
+    pygame.draw.circle(img, color, (cx, h // 3 - 2), 4)
+    pygame.draw.circle(img, "#1C1917", (cx, h // 3 - 2), 4, width=1)
+    if on:
+        pygame.draw.circle(img, (34, 211, 238, 110), (cx, h // 3 - 2), 6, width=1)
+    return img
+
+
+chunk_loader_on_img = create_chunk_loader_img(True)
+chunk_loader_off_img = create_chunk_loader_img(False)
+
 def create_dynamite_img(lit=False, spark_bright=False):
     """Динамит: пучок из 3 шашек с бандажами и фитилём (раньше был просто
     закрашенный красный квадрат). lit — фитиль подожжён (анимация мигания
@@ -433,6 +454,7 @@ tile_imgs = {None: none_img,
              216: not_gate_img,
              217: and_gate_img,
              218: or_gate_img,
+             219: chunk_loader_off_img,
              501: sword_1_img,
              502: sword_77_img,
              503: sword_2_img,
@@ -491,19 +513,20 @@ STONE_TILES = {3, 4, 5, 31, 32, 33, 21, 22, 23, 24, 25, 131}
 WOOD_TILES = {12, 110, 11, 121, 122, 123, 124, 126, 127, 128, 129, 131, 251}
 
 # блоки у которых есть прграммный класс
-CLASS_TILE = {131, 129, 200, 210, 211, 212, 213, 214, 215, 216, 217, 218}
+CLASS_TILE = {131, 129, 200, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219}
 # которые надо обновлять (213 провод не входит — у него нет своей логики)
-CLASS_UPDATING_TILES = {131, 200, 210, 211, 212, 214, 215, 216, 217, 218}
+CLASS_UPDATING_TILES = {131, 200, 210, 211, 212, 214, 215, 216, 217, 218, 219}
 # CLASS_UPDATING_TILES_IN_UI = {131}
 # которые надо обновлять не зависимо от загрузки чанка те всегда
 CLASS_ALLWAYS_UPDATING_TILES = {200, }
 # блоки-узлы сети активации (участвуют в bfs_activate как проводники) —
 # 211 таймер (авто-клокер), 212 нажимная плита (датчик игрока),
-# 213 провод, 214 рычаг, 215 лампа. Вентили (216-218) намеренно НЕ входят
-# сюда — иначе чужой bfs_activate "затапливал" бы их напрямую, как ещё
-# один провод; вместо этого они сами читают соседей и решают, включаться
-# ли (см. LogicGate в units/Objects/TileClasses.py).
-ACTIVATE_TILES = {200, 210, 9, 211, 212, 213, 214, 215}
+# 213 провод, 214 рычаг, 215 лампа, 219 прогрузчик чанка. Вентили
+# (216-218) намеренно НЕ входят сюда — иначе чужой bfs_activate
+# "затапливал" бы их напрямую, как ещё один провод; вместо этого они сами
+# читают соседей и решают, включаться ли (см. LogicGate в
+# units/Objects/TileClasses.py).
+ACTIVATE_TILES = {200, 210, 9, 211, 212, 213, 214, 215, 219}
 # то же самое + вентили — только для того, чтобы вентили могли читать
 # состояние соседей (включая другие вентили), не участвуя в самом обходе
 SIGNAL_TILES = ACTIVATE_TILES | {216, 217, 218}
@@ -651,6 +674,7 @@ original_tile_words = {None: "None",
                        216: "Вентиль НЕ",
                        217: "Вентиль И",
                        218: "Вентиль ИЛИ",
+                       219: "Прогрузчик чанка",
                        501: "Железный меч",
                        502: "Золотой меч",
                        503: "Ядовитый меч",

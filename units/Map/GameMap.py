@@ -8,7 +8,7 @@ from units.Objects.Creatures import (Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp,
 from units.Objects.Entities import PortalMainGate
 from units.Objects.Entity import PhysicalObject
 from units.Objects.Items import ItemsTile
-from units.Objects.TileClasses import tiles_class
+from units.Objects.TileClasses import tiles_class, ChunkLoader
 from units.Tools import TOOLS
 from units.Map import WorldStorage
 from units.Trees import grow_tree
@@ -337,17 +337,36 @@ class GameMap(SavedObject):
 
         Удаляются только чанки без правок игрока/структур (modified_chunks),
         без динамики (существ/предметов) и тайл-объектов — при возврате они
-        регенерируются идентично из сида. Отключается настройкой."""
+        регенерируются идентично из сида. Отключается настройкой.
+
+        Активный ChunkLoader (219, включается сигнальной сетью — провод/
+        рычаг/таймер/датчик) дополнительно защищает от выгрузки чанки в
+        своём радиусе, даже далеко от игрока — держит автоматику (фермы
+        триггеров, авто-клокеры) работающей без игрока рядом. Без сигнала
+        ChunkLoader ничего не защищает сверх обычных правил (сам его чанк
+        всё равно защищён — в нём есть тайл-объект, см. ниже)."""
         if not self.dynamic_dump:
             return 0
         pcx, pcy = self.game.player.chunk_pos
         r = self.dump_keep_radius
         gate_pos = self.gate.chunk_pos if self.gate is not None else None
+
+        force_loaded = set()
+        for (cx, cy), chunk in self.game_map.items():
+            for tile_obj in chunk[2].values():
+                if isinstance(tile_obj, ChunkLoader) and tile_obj.is_active():
+                    rad = tile_obj.radius
+                    for dx in range(-rad, rad + 1):
+                        for dy in range(-rad, rad + 1):
+                            force_loaded.add((cx + dx, cy + dy))
+
         to_del = []
         for (cx, cy), chunk in self.game_map.items():
             if abs(cx - pcx) <= r and abs(cy - pcy) <= r:
                 continue
             if (cx, cy) in self.modified_chunks or (cx, cy) == gate_pos:
+                continue
+            if (cx, cy) in force_loaded:
                 continue
             if chunk[1] or chunk[2]:  # есть существа/предметы или тайл-объекты
                 continue
