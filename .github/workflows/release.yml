@@ -72,6 +72,12 @@ jobs:
           else
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          sparse-checkout: |
+            CHANGELOG.md
+          sparse-checkout-cone-mode: false
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -88,7 +94,23 @@ jobs:
           files+=(artifacts/SHA256SUMS.txt)
           TAG="${{ steps.tag.outputs.tag }}"
           REPO="${{ github.repository }}"
-          NOTES="Автоматическая сборка Quadish. Python не требуется, собрано на Python 3.13.
+          # Секция этого тега из CHANGELOG.md (между "## [TAG]" и следующим "## [")
+          CHANGELOG_SECTION=""
+          if [ -f CHANGELOG.md ]; then
+            CHANGELOG_SECTION=$(awk -v tag="## [$TAG]" '
+              index($0, "## [") == 1 && index($0, tag) == 1 { found=1; next }
+              index($0, "## [") == 1 && found { exit }
+              found { print }
+            ' CHANGELOG.md)
+          fi
+          CHANGELOG_BLOCK=""
+          if [ -n "$CHANGELOG_SECTION" ]; then
+            CHANGELOG_BLOCK="## Что изменилось
+          $CHANGELOG_SECTION
+
+          "
+          fi
+          NOTES="${CHANGELOG_BLOCK}Автоматическая сборка Quadish. Python не требуется, собрано на Python 3.13.
 
           **Скачать и запустить:**
           - **Windows** — \`Quadish-*-windows-x64.zip\`: распакуйте и запустите \`Quadish.exe\`
