@@ -508,6 +508,70 @@ def test_chunk_loader_protects_area_when_active():
     assert near_chunk not in gm.game_map, "после выключения сигнала прогрузчик не должен защищать чанк"
 
 
+def test_delay_block_fires_after_delay_not_before():
+    """DelayBlock не может быть собран из готовых блоков — bfs_activate
+    распространяется мгновенно на весь связный участок (нет задержки по
+    расстоянию), поэтому нужен отдельный узел с памятью о такте выстрела."""
+    game = fresh_world(29)
+    gm = game.game_map
+    gm.set_static_tile(0, 0, 220)  # задержка
+    gm.set_static_tile(1, 0, 214)  # рычаг рядом
+
+    delay = gm.get_tile_obj(*gm.to_chunk_xy(0, 0), gm.get_static_tile(0, 0)[3])
+    lever = gm.get_tile_obj(*gm.to_chunk_xy(1, 0), gm.get_static_tile(1, 0)[3])
+    assert delay.delay > 1
+
+    lever.on = True
+    for _ in range(delay.delay):
+        game.tact += 1
+        lever.update(16)
+        delay.update(16)
+    assert not delay.activating, "раньше срока задержка не должна срабатывать"
+
+    game.tact += 1
+    lever.update(16)
+    delay.update(16)
+    assert delay.activating, "ровно через delay тактов после фронта сигнала должна сработать"
+
+
+def test_music_block_plays_note_on_signal_rising_edge():
+    """MusicBlock должен проигрывать ноту (зависящую от предмета в ячейке)
+    ровно один раз на фронт сигнала, а не на каждый такт, пока сигнал
+    держится (иначе вместо ноты был бы жужжащий треск при удержании рычага)."""
+    from units.Objects.Items import ItemsTile
+    from units.Tiles import music_block_img, music_block_flash_img
+
+    game = fresh_world(30)
+    gm = game.game_map
+    gm.set_static_tile(0, 0, 221)  # муз-блок
+    gm.set_static_tile(1, 0, 214)  # рычаг рядом
+
+    music = gm.get_tile_obj(*gm.to_chunk_xy(0, 0), gm.get_static_tile(0, 0)[3])
+    lever = gm.get_tile_obj(*gm.to_chunk_xy(1, 0), gm.get_static_tile(1, 0)[3])
+    music.inventory.put_to_inventory(ItemsTile(game, 3, count=1))  # камень задаёт ноту
+
+    img = music.update(16)
+    assert img is music_block_img, "без сигнала муз-блок не вспыхивает"
+
+    lever.on = True
+    game.tact += 1
+    lever.update(16)
+    img = music.update(16)
+    assert img is music_block_flash_img, "на фронте сигнала должна быть вспышка (и играть нота)"
+
+    game.tact += 1
+    lever.update(16)
+    img = music.update(16)
+    assert img is music_block_img, "пока сигнал держится дальше, повторной вспышки/ноты быть не должно"
+
+
+def test_note_sound_for_item_differs_by_item():
+    """Разные предметы в ячейке — разные ноты."""
+    from units.sound import note_sound_for_item
+    assert note_sound_for_item(3) is note_sound_for_item(3)  # кэш - тот же объект
+    assert note_sound_for_item(3) is not note_sound_for_item(12)
+
+
 # ===================== хранилище миров =====================
 
 def test_world_storage_crud():

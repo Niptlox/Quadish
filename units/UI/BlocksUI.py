@@ -272,7 +272,44 @@ class InventoryPlayerFurnaceUI(InventoryPlayerWithBlockUI):
         super(InventoryPlayerFurnaceUI, self).__init__(player, FurnaceUI())
 
 
+class MusicBlockUI(BlockUI):
+    """Одна ячейка — какой предмет положен, такая нота играет (см.
+    MusicBlock в units/Objects/TileClasses.py)."""
+    background = bg_color
+
+    def __init__(self):
+        rect = pg.Rect(0, 0, cell_size * 2, cell_size * 2)
+        super().__init__(rect)
+        self.convert_alpha()
+        self.slot_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
+        self.slot_ui.get_draw_rect().topleft = cell_size * 0.5, cell_size * 0.5
+
+    def set_work_rect(self, value):
+        self.slot_ui.work_rect = value
+
+    def draw(self, surface):
+        self.fill(self.background)
+        self.slot_ui.draw(self)
+        surface.blit(self, self.rect)
+
+    def set_block(self, block_obj):
+        super().set_block(block_obj)
+        self.slot_ui.inventory = block_obj.inventory
+
+    def pg_event(self, event: pg.event.Event):
+        if super().pg_event(event):
+            return True
+        return self.slot_ui.pg_event(event) or self.check_mouse_event(event)
+
+
+class InventoryPlayerMusicBlockUI(InventoryPlayerWithBlockUI):
+    index = 221
+
+    def __init__(self, player):
+        super().__init__(player, MusicBlockUI())
+
+
 BLOCKS_UI = {cls.index: cls for cls in
-             [InventoryPlayerChestUI, InventoryPlayerFurnaceUI, CommandBlockUI]
+             [InventoryPlayerChestUI, InventoryPlayerFurnaceUI, CommandBlockUI, InventoryPlayerMusicBlockUI]
              }
 BLOCKS_UI_SET = set(BLOCKS_UI)

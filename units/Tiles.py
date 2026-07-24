@@ -237,6 +237,42 @@ def create_chunk_loader_img(on):
 chunk_loader_on_img = create_chunk_loader_img(True)
 chunk_loader_off_img = create_chunk_loader_img(False)
 
+
+def create_delay_block_img():
+    """Задержка сигнала: песочные часы поверх обычного блока."""
+    img = create_tile_image("#57534E")
+    w, h = img.get_size()
+    pad = 6
+    top = [(pad, pad), (w - pad, pad), (w // 2, h // 2)]
+    bottom = [(pad, h - pad), (w - pad, h - pad), (w // 2, h // 2)]
+    pygame.draw.polygon(img, "#FDBA74", top)
+    pygame.draw.polygon(img, "#FDBA74", bottom)
+    pygame.draw.polygon(img, "#1C1917", top, width=1)
+    pygame.draw.polygon(img, "#1C1917", bottom, width=1)
+    pygame.draw.line(img, "#1C1917", (pad, pad), (w - pad, pad), 2)
+    pygame.draw.line(img, "#1C1917", (pad, h - pad), (w - pad, h - pad), 2)
+    return img
+
+
+delay_block_img = create_delay_block_img()
+
+
+def create_music_block_img(flash=False):
+    """Муз-блок: деревянная панель с нотой, вспыхивает при срабатывании."""
+    base_color = "#FDE047" if flash else "#8B6D4C"
+    img = create_tile_image(base_color)
+    w, h = img.get_size()
+    note_color = "#1C1917" if flash else "#F5F5F4"
+    stem_x = int(w * 0.55)
+    pygame.draw.line(img, note_color, (stem_x, int(h * 0.2)), (stem_x, int(h * 0.65)), 2)
+    pygame.draw.line(img, note_color, (stem_x, int(h * 0.2)), (int(w * 0.75), int(h * 0.28)), 2)
+    pygame.draw.ellipse(img, note_color, (int(w * 0.3), int(h * 0.55), int(w * 0.28), int(h * 0.22)))
+    return img
+
+
+music_block_img = create_music_block_img(False)
+music_block_flash_img = create_music_block_img(True)
+
 def create_dynamite_img(lit=False, spark_bright=False):
     """Динамит: пучок из 3 шашек с бандажами и фитилём (раньше был просто
     закрашенный красный квадрат). lit — фитиль подожжён (анимация мигания
@@ -455,6 +491,8 @@ tile_imgs = {None: none_img,
              217: and_gate_img,
              218: or_gate_img,
              219: chunk_loader_off_img,
+             220: delay_block_img,
+             221: music_block_img,
              501: sword_1_img,
              502: sword_77_img,
              503: sword_2_img,
@@ -513,23 +551,23 @@ STONE_TILES = {3, 4, 5, 31, 32, 33, 21, 22, 23, 24, 25, 131}
 WOOD_TILES = {12, 110, 11, 121, 122, 123, 124, 126, 127, 128, 129, 131, 251}
 
 # блоки у которых есть прграммный класс
-CLASS_TILE = {131, 129, 200, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219}
+CLASS_TILE = {131, 129, 200, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221}
 # которые надо обновлять (213 провод не входит — у него нет своей логики)
-CLASS_UPDATING_TILES = {131, 200, 210, 211, 212, 214, 215, 216, 217, 218, 219}
+CLASS_UPDATING_TILES = {131, 200, 210, 211, 212, 214, 215, 216, 217, 218, 219, 220, 221}
 # CLASS_UPDATING_TILES_IN_UI = {131}
 # которые надо обновлять не зависимо от загрузки чанка те всегда
 CLASS_ALLWAYS_UPDATING_TILES = {200, }
 # блоки-узлы сети активации (участвуют в bfs_activate как проводники) —
 # 211 таймер (авто-клокер), 212 нажимная плита (датчик игрока),
-# 213 провод, 214 рычаг, 215 лампа, 219 прогрузчик чанка. Вентили
-# (216-218) намеренно НЕ входят сюда — иначе чужой bfs_activate
-# "затапливал" бы их напрямую, как ещё один провод; вместо этого они сами
-# читают соседей и решают, включаться ли (см. LogicGate в
-# units/Objects/TileClasses.py).
-ACTIVATE_TILES = {200, 210, 9, 211, 212, 213, 214, 215, 219}
-# то же самое + вентили — только для того, чтобы вентили могли читать
-# состояние соседей (включая другие вентили), не участвуя в самом обходе
-SIGNAL_TILES = ACTIVATE_TILES | {216, 217, 218}
+# 213 провод, 214 рычаг, 215 лампа, 219 прогрузчик чанка, 221 муз-блок.
+# Вентили и задержка (216-218, 220) намеренно НЕ входят сюда — иначе
+# чужой bfs_activate "затапливал" бы их напрямую, как ещё один провод;
+# вместо этого они сами читают соседей и решают, включаться ли (см.
+# LogicGate в units/Objects/TileClasses.py).
+ACTIVATE_TILES = {200, 210, 9, 211, 212, 213, 214, 215, 219, 221}
+# то же самое + вентили/задержка — только для того, чтобы они могли
+# читать состояние соседей (включая друг друга), не участвуя в самом обходе
+SIGNAL_TILES = ACTIVATE_TILES | {216, 217, 218, 220}
 
 # Блоки у которых state это массив
 ITEM_WITH_STATE_IS_LIST = {126}
@@ -675,6 +713,8 @@ original_tile_words = {None: "None",
                        217: "Вентиль И",
                        218: "Вентиль ИЛИ",
                        219: "Прогрузчик чанка",
+                       220: "Задержка сигнала",
+                       221: "Муз-блок",
                        501: "Железный меч",
                        502: "Золотой меч",
                        503: "Ядовитый меч",

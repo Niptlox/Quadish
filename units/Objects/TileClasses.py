@@ -6,7 +6,9 @@ from units.Objects.Items import Items, ItemsTile
 from units.Objects.TileClass import Tile
 from units.Tiles import (WOOD_TILES, furnace_imgs, ACTIVATE_TILES, SIGNAL_TILES,
                          lever_on_img, lever_off_img, lamp_on_img, lamp_off_img,
-                         chunk_loader_on_img, chunk_loader_off_img)
+                         chunk_loader_on_img, chunk_loader_off_img,
+                         music_block_img, music_block_flash_img)
+from units.sound import note_sound_for_item
 from units.common import *
 
 
@@ -247,6 +249,34 @@ class OrGate(LogicGate):
         return active_neighbors >= 1
 
 
+class DelayBlock(LogicGate):
+    """Задержка сигнала: bfs_activate распространяется мгновенно на весь
+    связный участок сети (провода/активаторы не тормозят сигнал по
+    расстоянию), поэтому задержку нельзя собрать из уже существующих
+    блоков — нужен отдельный узел с собственной памятью. Получив фронт
+    сигнала (сосед стал активен), запоминает такт "выстрела" на delay
+    тактов вперёд и лишь тогда сам становится источником. Пока сигнал
+    держится или пока ждём отложенный выстрел — повторно не планирует
+    (один фронт - один отложенный импульс)."""
+    index = 220
+    delay = FPS  # тактов задержки (~1с при 60 FPS)
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.pending_tact = None
+        self._had_input = False
+
+    def evaluate(self, active_neighbors):
+        has_input = active_neighbors > 0
+        if has_input and not self._had_input:
+            self.pending_tact = self.game.tact + self.delay
+        self._had_input = has_input
+        if self.pending_tact is not None and self.game.tact >= self.pending_tact:
+            self.pending_tact = None
+            return True
+        return False
+
+
 class ChunkLoader(SignalTile):
     """Прогрузчик чанка: пока получает сигнал от сети (провод/рычаг/датчик/
     таймер), удерживает от выгрузки чанки в радиусе вокруг себя даже когда
@@ -260,6 +290,42 @@ class ChunkLoader(SignalTile):
     def update(self, elapsed_time):
         self.refresh_activating()
         return chunk_loader_on_img if self.activating else chunk_loader_off_img
+
+
+class MusicBlock(SignalTile):
+    """Муз-блок: играет ноту, когда получает сигнал от сети — высота ноты
+    зависит от предмета, положенного в единственную ячейку (правый клик,
+    как топливо у печки), а не от отдельного счётчика/ползунка. Играет
+    один раз на фронт сигнала (переход выкл->вкл), а не на каждый такт,
+    пока сигнал держится — иначе вместо ноты был бы жужжащий треск."""
+    index = 221
+    not_save_vars = Tile.not_save_vars | {"inventory"}
+    view_interface_on_click = True
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.inventory = Inventory(self.game_map, self, [1, 1])
+        self._was_active = False
+
+    def get_vars(self):
+        d = super().get_vars()
+        d.update(self.inventory.get_vars())
+        return d
+
+    def set_vars(self, d):
+        self.inventory.set_vars(d)
+
+    def items_of_break(self):
+        return self.inventory.items_of_break()
+
+    def update(self, elapsed_time):
+        self.refresh_activating()
+        just_triggered = self.activating and not self._was_active
+        if just_triggered:
+            item = self.inventory[0]
+            note_sound_for_item(item.index if item else None).play()
+        self._was_active = self.activating
+        return music_block_flash_img if just_triggered else music_block_img
 
 
 furnace_burn_tiles = {
@@ -342,5 +408,5 @@ class Furnace(Tile):
 
 
 classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate,
-          Wire, Lever, Lamp, NotGate, AndGate, OrGate, ChunkLoader}
+          Wire, Lever, Lamp, NotGate, AndGate, OrGate, DelayBlock, ChunkLoader, MusicBlock}
 tiles_class = {cls.index: cls for cls in classes}
