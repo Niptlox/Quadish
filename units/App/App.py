@@ -1,3 +1,4 @@
+import units.common as common
 from units.common import *
 from pygame.locals import *
 
@@ -5,8 +6,17 @@ EXIT = 0
 
 
 class App:
-    screen = screen_
-    rect = pg.Rect((0, 0), SCREEN_SIZE)
+    # @property, а не обычный атрибут: после живого ресайза/переключения
+    # полноэкранного режима (units.common.apply_resize) pygame создаёт
+    # НОВЫЙ Surface — статический класс-атрибут просто держал бы старую,
+    # осиротевшую поверхность вместо актуальной.
+    @property
+    def screen(self):
+        return pygame.display.get_surface() or common.screen_
+
+    @property
+    def rect(self):
+        return pg.Rect((0, 0), tuple(common.SCREEN_SIZE))
 
     def __init__(self, scene=None):
         self.clock = pg.time.Clock()
@@ -57,7 +67,27 @@ class Scene(App):
             self.pg_event(event)
 
     def pg_event(self, event):
-        pass
+        # Единая точка входа для живого ресайза/фуллскрина — сюда попадают
+        # события ЛЮБОЙ сцены (SceneMenu/ScenePopupMenu/GameScene и т.д.,
+        # все они зовут self.pg_event(event) из своего pg_events()), так
+        # что F11 и растягивание окна работают одинаково и в меню, и в паузе,
+        # и в игре, без правок в каждой сцене по отдельности.
+        if event.type == pygame.VIDEORESIZE:
+            if not common.FULLSCREEN:
+                common.apply_resize((event.w, event.h))
+                self._on_screen_changed()
+                return True
+        elif event.type == KEYDOWN and event.key == K_F11:
+            common.apply_resize(fullscreen=not common.FULLSCREEN)
+            self._on_screen_changed()
+            return True
+        return False
+
+    def _on_screen_changed(self):
+        ui = getattr(self, "ui", None)
+        relayout = getattr(ui, "relayout", None)
+        if relayout is not None:
+            relayout()
 
     def main(self):
         self.running = True

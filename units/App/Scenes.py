@@ -128,10 +128,10 @@ class PauseScenePopupMenu(ScenePopupMenu):
         self.set_scene(self.app.title_scene)
 
     def editfullscreen(self):
-        Window.set_fullscreen(not Window.fullscreen)
-        self.app.game_scene.ui.new_sys_message("Перезапустите игру", draw_now=True)
-        print("toggle_fullscreen")
-        # pygame.display.toggle_fullscreen()
+        # Живое переключение (как F11) — common.apply_resize сам обновляет
+        # Window.fullscreen и пересчитывает SCREEN_SIZE, перезапуск не нужен.
+        common.apply_resize(fullscreen=not common.FULLSCREEN)
+        self._on_screen_changed()
 
 
 class AchievementsSceneUI(ScenePopupMenu):

@@ -68,29 +68,34 @@ desktop_size = MONITORS[MONITOR_INDEX]
 # тянул на весь монитор одним махом — из-за этого замыливался и текст, и
 # мир. Теперь ресайзится (масштабируется) только мир, а меню — никогда.
 # ==========================================================================
+# SCREEN_SIZE — список (не кортеж!) намеренно: apply_resize() ниже мутирует
+# его ПО МЕСТУ (SCREEN_SIZE[:] = ...), а не переприсваивает — это даёт
+# всем модулям, сделавшим "from units.common import *", видеть текущий
+# размер без необходимости что-либо у себя менять (общая ссылка на один
+# и тот же список).
 if FULLSCREEN:
-    SCREEN_SIZE = desktop_size
-elif config.Window.auto_size:
-    SCREEN_SIZE = desktop_size
+    SCREEN_SIZE = list(desktop_size)
 else:
-    SCREEN_SIZE = tuple(map(int, config.Window.size.split(",")))
+    SCREEN_SIZE = list(map(int, config.Window.size.split(",")))
 
 # Размер тайла в мировых пикселях — вынесен сюда (а не в раздел TILE ниже),
 # т.к. нужен уже для расчёта WSIZE.
 _WORLD_TILE_SIZE = 32
 
-# При auto_size WSIZE подбирается так, чтобы по ширине экрана было видно
-# ровно view_tiles_width тайлов ("50 блоков в ширину" и т.п.) — это даёт
-# одинаковый "зум" мира на любом разрешении/мониторе вместо прежнего грубого
-# "шире 1600 — уполовинить". WSIZE не может быть больше SCREEN_SIZE (иначе
-# был бы апскейл вместо честного даунскейла — блюр вместо экономии рендера).
-if config.Window.auto_size:
-    _view_w = max(10, config.Window.view_tiles_width) * _WORLD_TILE_SIZE
-    _view_w = min(_view_w, SCREEN_SIZE[0])
-    _view_h = round(_view_w * SCREEN_SIZE[1] / SCREEN_SIZE[0])
-    WSIZE = (_view_w, _view_h)
-else:
-    WSIZE = SCREEN_SIZE
+
+def _compute_wsize(screen_size):
+    """WSIZE подбирается так, чтобы по ширине экрана было видно ровно
+    view_tiles_width тайлов ("50 блоков в ширину" и т.п.) — одинаковый
+    "зум" мира на любом разрешении/мониторе. Не больше screen_size (иначе
+    был бы апскейл вместо честного даунскейла — блюр вместо экономии
+    рендера)."""
+    view_w = max(10, config.Window.view_tiles_width) * _WORLD_TILE_SIZE
+    view_w = min(view_w, screen_size[0])
+    view_h = round(view_w * screen_size[1] / screen_size[0])
+    return [view_w, view_h]
+
+
+WSIZE = _compute_wsize(SCREEN_SIZE)
 print("SCREEN_SIZE (экран/UI)", SCREEN_SIZE, "WSIZE (мир)", WSIZE,
      "monitor", MONITOR_INDEX, "of", MONITORS)
 
@@ -104,11 +109,12 @@ def screen_to_world_pos(pos):
     return pos[0] * WORLD_SCALE[0], pos[1] * WORLD_SCALE[1]
 
 
-flags = pygame.FULLSCREEN if FULLSCREEN else 0
-# намеренно без RESIZABLE: свободное перетаскивание рамки окна никак не
-# пересчитывает раскладку меню (та кэшируется при запуске) — вместо этого
-# размер меняется через настройки (по списку размеров) с перезапуском,
-# это и предсказуемо, и не даёт тексту "поплыть" на нестандартном размере.
+# Оконный режим теперь растягивается мышью (RESIZABLE) — раньше окно
+# намеренно создавалось без этого флага, т.к. свободное перетаскивание
+# рамки не пересчитывало раскладку меню (кэшировалась при запуске).
+# apply_resize() ниже это чинит: пересчитывает раскладку активного UI и
+# держит SCREEN_SIZE/WORLD_SCALE в актуальном состоянии.
+flags = pygame.FULLSCREEN if FULLSCREEN else pygame.RESIZABLE
 
 pygame.display.set_caption('Quadish')
 Icon = pg.image.load("data/sprites/Icon.png")
@@ -125,9 +131,65 @@ except pygame.error:
                                       vsync=1 if config.GameSettings.vsync else 0)
 # Мир рендерится в собственную (возможно, уменьшенную) поверхность и
 # растягивается на экран только этим слоем — см. GameUI.blit_world().
+# Этот Surface НЕ пересоздаётся при ресайзе окна (см. apply_resize) —
+# blit_world() масштабирует его под текущий self.screen.get_size() каждый
+# кадр в любом случае, так что несовпадение размеров не баг, а норма.
 display_ = pygame.Surface(WSIZE).convert()
 
 print(pg.display.get_allow_screensaver())
+
+
+def apply_resize(size=None, fullscreen=None):
+    """Применить новый размер окна и/или режим экрана. Единая точка входа
+    и для живого перетаскивания рамки (VIDEORESIZE), и для F11/переключателя
+    "Режим экрана" в настройках — раньше оба применялись только через
+    перезапуск игры.
+
+    Пересоздаёт screen_ (реальный display Surface) и обновляет SCREEN_SIZE/
+    WORLD_SCALE по месту, чтобы уже импортированные (from units.common import *)
+    ссылки увидели новые значения без правок на своей стороне. WSIZE/display_
+    (мировой рендер) намеренно не трогает — см. комментарий у display_ выше."""
+    global FULLSCREEN, flags, screen_, WORLD_SCALE
+    if fullscreen is not None:
+        FULLSCREEN = bool(fullscreen)
+        config.Window.set_fullscreen(FULLSCREEN)
+    if FULLSCREEN:
+        new_size = tuple(desktop_size)
+        new_flags = pygame.FULLSCREEN
+    else:
+        new_size = tuple(size) if size else tuple(SCREEN_SIZE)
+        new_flags = pygame.RESIZABLE
+    try:
+        new_screen = pygame.display.set_mode(new_size, flags=new_flags, display=MONITOR_INDEX,
+                                             vsync=1 if config.GameSettings.vsync else 0)
+    except pygame.error:
+        new_screen = pygame.display.set_mode(new_size, flags=new_flags,
+                                             vsync=1 if config.GameSettings.vsync else 0)
+    screen_ = new_screen
+    flags = new_flags
+    SCREEN_SIZE[:] = new_screen.get_size()
+    WORLD_SCALE = (WSIZE[0] / SCREEN_SIZE[0], WSIZE[1] / SCREEN_SIZE[1])
+    if not FULLSCREEN:
+        config.Window.set_size(f"{SCREEN_SIZE[0]},{SCREEN_SIZE[1]}")
+    return new_screen
+
+
+# "Размер меню" (Minecraft-style GUI Scale): множитель нативного размера
+# шрифтов/кнопок меню — НЕ postfactum-растяжение картинки (как WSIZE->
+# SCREEN_SIZE у мира), иначе текст меню размывался бы ровно так же, как до
+# фикса SCREEN_SIZE/WSIZE. "Авто" — эвристика от ширины экрана.
+_MENU_SIZE_SCALE = {"tiny": 0.8, "small": 0.9, "medium": 1.0, "large": 1.15, "huge": 1.3}
+MENU_SIZES = ["auto", "tiny", "small", "medium", "large", "huge"]
+
+
+def _compute_ui_scale():
+    menu_size = config.Window.menu_size
+    if menu_size in _MENU_SIZE_SCALE:
+        return _MENU_SIZE_SCALE[menu_size]
+    return max(0.8, min(1.3, SCREEN_SIZE[0] / 1600))
+
+
+UI_SCALE = _compute_ui_scale()
 
 # TILE ==================================================
 

@@ -70,6 +70,8 @@ class GameScene(Scene):
                 if self.game_map.world_id is not None:
                     self.game_map.save_current_game_map()
                 self.running = EXIT
+            if self.pg_event(event):
+                continue
             if self.blocks_ui_manager.pg_event(event):
                 continue
             if self.ui.pg_event(event):

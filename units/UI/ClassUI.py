@@ -16,12 +16,25 @@ def center_pos_2rects(rect, big_rect):
 class UI:
     def __init__(self, scene) -> None:
         self.scene = scene
-        self.screen = scene.screen
         self.display = self.scene.display
         self.rect = pg.Rect((0, 0), self.display.get_size())
 
+    # @property, а не обычный атрибут: после живого ресайза/переключения
+    # полноэкранного режима (units.common.apply_resize) pygame создаёт НОВЫЙ
+    # Surface — кэшированный self.screen у любого (в т.ч. неактивного в
+    # данный момент) UI-объекта стал бы осиротевшей поверхностью.
+    @property
+    def screen(self):
+        return self.scene.screen
+
     def init_ui(self):
         pass
+
+    def relayout(self):
+        """Безопасный дефолт: пересчитать self.rect под текущий экран.
+        Переопределяется экранами, у которых от rect зависит раскладка
+        кнопок/виджетов (см. TitleUI/MainSettingsUI/PauseUI/EndUI/...)."""
+        self.rect = pg.Rect((0, 0), self.screen.get_size())
 
     def draw(self):
         self.screen.blit(self.display, (0, 0))

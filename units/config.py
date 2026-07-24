@@ -39,16 +39,19 @@ class __Settings:
 
 class Window(__Settings):
     section = 'window'
+    # последний применённый размер окна — теперь обновляется автоматически
+    # при живом ресайзе (units.common.apply_resize), а не через выбор
+    # пресета в настройках.
     size = config.get(section, 'size')
     fullscreen = config.getboolean(section, 'fullscreen')
-    # auto_size: логический размер рендера выбирается по монитору (в 2 раза
-    # меньше на широких экранах >1600 — это держит 60 FPS в фуллскрине).
-    auto_size = config.getboolean(section, 'auto_size', fallback=True)
     # индекс монитора (для нескольких экранов)
     monitor = config.getint(section, 'monitor', fallback=0)
-    # сколько тайлов должно быть видно по ширине экрана (при auto_size) —
-    # задаёт постоянный "зум" мира независимо от разрешения/монитора.
+    # сколько тайлов должно быть видно по ширине экрана — задаёт
+    # постоянный "зум" мира независимо от разрешения/монитора.
     view_tiles_width = config.getint(section, 'view_tiles_width', fallback=50)
+    # "Размер меню" (GUI Scale): auto/tiny/small/medium/large/huge —
+    # см. units.common.UI_SCALE.
+    menu_size = config.get(section, 'menu_size', fallback="auto")
 
     @classmethod
     def set_fullscreen(cls, value):
@@ -59,16 +62,16 @@ class Window(__Settings):
         cls.set('size', str(value))
 
     @classmethod
-    def set_auto_size(cls, value):
-        cls.set('auto_size', bool(value))
-
-    @classmethod
     def set_monitor(cls, value):
         cls.set('monitor', int(value))
 
     @classmethod
     def set_view_tiles_width(cls, value):
         cls.set('view_tiles_width', int(value))
+
+    @classmethod
+    def set_menu_size(cls, value):
+        cls.set('menu_size', str(value))
 
 
 class UISettings(__Settings):

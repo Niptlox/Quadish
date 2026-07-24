@@ -1043,17 +1043,63 @@ def test_world_screen_split():
 
 
 def test_view_tiles_width_setting():
-    """WSIZE при auto_size подбирается так, чтобы по ширине экрана было
-    видно ровно config.Window.view_tiles_width тайлов (не больше SCREEN_SIZE -
-    иначе был бы апскейл/блюр вместо честного даунскейла)."""
+    """WSIZE подбирается так, чтобы по ширине экрана было видно ровно
+    config.Window.view_tiles_width тайлов (не больше SCREEN_SIZE - иначе
+    был бы апскейл/блюр вместо честного даунскейла)."""
     import units.common as common
     import units.config as config
     win = config.Window
-    if win.auto_size:
-        expected_w = min(max(10, win.view_tiles_width) * common.TSIZE, common.SCREEN_SIZE[0])
-        assert common.WSIZE[0] == expected_w
+    expected_w = min(max(10, win.view_tiles_width) * common.TSIZE, common.SCREEN_SIZE[0])
+    assert common.WSIZE[0] == expected_w
     assert common.WSIZE[0] <= common.SCREEN_SIZE[0]
     assert common.WSIZE[1] <= common.SCREEN_SIZE[1]
+
+
+def test_apply_resize_updates_screen_size_and_scale():
+    """apply_resize — единая точка входа для живого ресайза/F11: должна
+    пересоздать screen_, обновить SCREEN_SIZE/WORLD_SCALE по месту (не
+    трогая WSIZE — мир пересчитывать не нужно, см. common.py) и сохранить
+    новый размер в конфиг, если это не полноэкранный режим."""
+    import units.common as common
+    get_app()
+    orig_size = tuple(common.SCREEN_SIZE)
+    # fullscreen кwarg не передаём ни на ресайз, ни на восстановление — он
+    # уже False/не менялся, а apply_resize(fullscreen=...) при каждом
+    # непустом значении перезаписывает settings.ini (str(bool) вместо
+    # исходного "Off"/"On" из ini) без реальной необходимости
+    try:
+        wsize_before = tuple(common.WSIZE)
+        common.apply_resize((640, 480))
+        assert tuple(common.SCREEN_SIZE) == (640, 480)
+        assert tuple(common.WSIZE) == wsize_before, "WSIZE не должен меняться при ресайзе окна"
+        assert common.WORLD_SCALE == (common.WSIZE[0] / 640, common.WSIZE[1] / 480)
+        assert common.config.Window.size == "640,480"
+    finally:
+        common.apply_resize(orig_size)
+    assert tuple(common.SCREEN_SIZE) == orig_size
+
+
+def test_relayout_matches_screen_size_after_resize():
+    """После apply_resize+relayout меню (титульный экран/пауза/настройки)
+    должны занимать актуальный self.screen.get_size(), а не устаревший
+    размер, посчитанный один раз при создании сцены (баг «меню в углу»)."""
+    import units.common as common
+    app = get_app()
+    orig_size = tuple(common.SCREEN_SIZE)
+    try:
+        common.apply_resize((900, 640))
+        new_size = tuple(common.SCREEN_SIZE)
+
+        app.title_scene.title_ui.relayout()
+        assert app.title_scene.title_ui.rect.size == new_size
+
+        app.title_scene.settings_ui.relayout()
+        assert app.title_scene.settings_ui.rect.size == new_size
+
+        app.pause_scene.ui.relayout()
+        assert app.pause_scene.ui.rect.center == (new_size[0] // 2, new_size[1] // 2)
+    finally:
+        common.apply_resize(orig_size)
 
 
 def test_game_frame_renders():

@@ -12,7 +12,7 @@ from units.UI.ColorsUI import *
 from units.UI.FontsUI import *
 from units.creating_items import RECIPES
 
-cell_size = int(TSIZE * 1.5)  # in interface
+cell_size = int(TSIZE * 1.5 * UI_SCALE)  # in interface
 
 
 class InventoryUI(SurfaceUI):

@@ -224,16 +224,25 @@ class GameUI(UI):
 class TitleUI(UI):
     # заставка игры
     color_sky = "#a5f3fc"
-    background = title_background
-    background_layer_2 = title_background_layer_2
-    background = pg.transform.scale(background, (int(SCREEN_SIZE[0] * 1.5), int(SCREEN_SIZE[1] * 1.5)))
-    background_layer_2 = pg.transform.scale(background_layer_2, background.get_size())
-    background.set_colorkey(color_sky)
+    raw_background = title_background
+    raw_background_layer_2 = title_background_layer_2
     game_title_text = title_text
     step_objects = 15
 
     def __init__(self, scn):
         super(TitleUI, self).__init__(scn)
+        # титульный экран/настройки рисуются прямо на self.screen (реальном
+        # экране), а не на self.display (уменьшенный мир WSIZE) — базовый
+        # self.rect унаследован бы от WSIZE и на широких экранах вся
+        # раскладка ужалась бы в угол настоящего окна.
+        self.rect = pg.Rect((0, 0), self.screen.get_size())
+        # фон параллакса пересчитываем под текущий размер экрана (не как
+        # атрибут класса единожды при импорте) — иначе после живого
+        # растягивания окна по краям появлялись бы пустые полосы.
+        self.background = pg.transform.scale(
+            self.raw_background, (int(self.rect.w * 1.5), int(self.rect.h * 1.5)))
+        self.background_layer_2 = pg.transform.scale(self.raw_background_layer_2, self.background.get_size())
+        self.background.set_colorkey(self.color_sky)
         self.sys_message = SysMessege(align="bottom_center")
         self.objects = GroupUI([])
 
@@ -251,7 +260,7 @@ class TitleUI(UI):
 
         ]
 
-        btn_size = 250, 35
+        btn_size = int(250 * UI_SCALE), int(35 * UI_SCALE)
         step = self.step_objects
         btn_pos = 230, 300
         btn_pos = self.rect.w // 2 - btn_size[0] // 2, self.rect.h // 2 - (btn_size[1] + step) / 2 * len(btns) + 40
@@ -340,6 +349,12 @@ class TitleUI(UI):
     def change_lang(self, button, lang):
         config.GameSettings.set_language(lang)
         self.sys_message.send_reload_game_for_change()
+
+    def relayout(self):
+        # self.__init__ полиморфно резолвится в __init__ актуального
+        # подкласса (MainSettingsUI/SoundSettingsUI) — полностью
+        # пересобирает раскладку под новый self.screen.get_size().
+        self.__init__(self.scene)
 
 
 def make_screen_icon(h=22):
@@ -430,12 +445,13 @@ fps_values_lst = [30, 60, 120]
 view_tiles_lst = [30, 40, 50, 60, 70]
 
 
+menu_size_labels = ["Авто", "Крошечный", "Малый", "Средний", "Большой", "Огромный"]
+
+
 class MainSettingsUI(TitleUI):
     # меню с основными настройками
-    window_sizes_lst = ["1920,1080", "1600,900", "1366,768", "1280,720",
-                        "1240,720", "1054,612", "960,540", "720,480"]
     header_title = "Настройки"
-    font_item = pygame.font.Font(MAIN_FONT_PATH, 20)
+    font_item = pygame.font.Font(MAIN_FONT_PATH, int(20 * UI_SCALE))
 
     def __init__(self, scene):
         super(MainSettingsUI, self).__init__(scene)
@@ -450,7 +466,7 @@ class MainSettingsUI(TitleUI):
 
         items = self.get_settings_items()
         n = max(1, len(items))
-        w, wh = 460, 34
+        w, wh = int(460 * UI_SCALE), int(34 * UI_SCALE)
         top = self.header_pos[1] + htxt.get_height() + 14
         avail = max(wh, self.rect.h - top - 18)
         slot = min(wh + 10, max(wh + 3, avail // n))
@@ -483,24 +499,20 @@ class MainSettingsUI(TitleUI):
         n_mon = max(1, len(pygame.display.get_desktop_sizes()))
         scr_icon = make_screen_icon()
 
-        def set_auto(value, i):
-            win.set_auto_size(value == ru_bool_lst[0])
-            self.sys_message.send_reload_game_for_change()
-
         def set_mon(value, i):
             win.set_monitor(i)
             self.sys_message.send_reload_game_for_change()
 
-        def set_size(value, i):
-            win.set_size(value)
-            self.sys_message.send_reload_game_for_change()
-
         def set_fs(value, i):
-            # без живого переключения: экран/мир разделены на два разных
-            # размера (см. common.py), и без полного пересчёта раскладки меню
-            # "на лету" вёрстка бы поехала — поэтому, как и для размера окна,
-            # применяем через перезапуск
-            win.set_fullscreen(bool_dict[value])
+            # живое переключение — apply_resize сам пересоздаёт окно
+            # и обновляет SCREEN_SIZE, затем relayout() пересобирает меню
+            apply_resize(fullscreen=(i == 1))
+            self.scene._on_screen_changed()
+
+        def set_menu_size(value, i):
+            win.set_menu_size(MENU_SIZES[i])
+            # шрифты грузятся один раз при старте под нативный UI_SCALE —
+            # в отличие от режима экрана, тут без перезапуска не обойтись
             self.sys_message.send_reload_game_for_change()
 
         def set_fps(value, i):
@@ -518,17 +530,16 @@ class MainSettingsUI(TitleUI):
             except Exception:
                 pass
 
-        size_idx = self.window_sizes_lst.index(win.size) if win.size in self.window_sizes_lst else 0
         fps_idx = fps_values_lst.index(gs.max_fps) if gs.max_fps in fps_values_lst else 1
         view_tiles_idx = view_tiles_lst.index(win.view_tiles_width) if win.view_tiles_width in view_tiles_lst else 2
+        menu_size_idx = MENU_SIZES.index(win.menu_size) if win.menu_size in MENU_SIZES else 0
         items = [
-            ("dd", "Размер экрана: {}", ["Авто", "Ручной"], 0 if win.auto_size else 1, set_auto, scr_icon),
             ("dd", "Монитор: {}", [str(i + 1) for i in range(n_mon)],
              win.monitor if win.monitor < n_mon else 0, set_mon, scr_icon),
             ("dd", "Обзор (блоков в ширину): {}", [str(v) for v in view_tiles_lst], view_tiles_idx,
              set_view_tiles, scr_icon),
-            ("dd", "Размер (ручной): {}", self.window_sizes_lst, size_idx, set_size, None),
-            ("dd", "Полноэкранный режим: {}", ru_bool_lst, 0 if win.fullscreen else 1, set_fs, scr_icon),
+            ("dd", "Режим экрана: {}", ["Оконный", "Полноэкранный"], 1 if win.fullscreen else 0, set_fs, scr_icon),
+            ("dd", "Размер меню: {}", menu_size_labels, menu_size_idx, set_menu_size, None),
             ("dd", "Лимит FPS: {}", fps_values_lst, fps_idx, set_fps, None),
             ("dd", "Вертикальная синхронизация: {}", ru_bool_lst, 0 if gs.vsync else 1,
              lambda v, i: (gs.set_vsync(bool_dict[v]), self.sys_message.send_reload_game_for_change()), None),
@@ -767,6 +778,9 @@ class WorldListUI(UI):
         self.screen.blit(hint, (self.rect.x + 18, self.rect.y + self.rect.h - self.footer_h + 4))
         pygame.display.flip()
 
+    def relayout(self):
+        self.__init__(self.scene)
+
 
 class EndUI(UI):
     def __init__(self, scn):
@@ -798,6 +812,9 @@ class EndUI(UI):
         self.btn_relive.pg_event(event)
         if event.type == pg.KEYDOWN:
             self.scene.relive()
+
+    def relayout(self):
+        self.__init__(self.scene)
 
 
 class PauseUI(UI):
@@ -852,6 +869,9 @@ class PauseUI(UI):
         for btn in self.btns:
             btn.pg_event(event)
 
+    def relayout(self):
+        self.__init__(self.scene)
+
 
 class AchievementsUI(UI):
     bg = (82, 82, 91, 150)
@@ -868,6 +888,17 @@ class AchievementsUI(UI):
         self.surface = pg.Surface(self.rect.size).convert_alpha()
         self.surface.fill((82, 82, 91, 150))
         self.surface_achievements = pg.Surface((1, 1))
+
+    def relayout(self):
+        # не зовём self.__init__: конструктору нужен player_achievements,
+        # который тут не хранится (сам параметр не используется) — вместо
+        # этого напрямую пересчитываем то же, что делает __init__.
+        self.rect = pg.Rect((0, 0, 370, 400))
+        w, h = self.screen.get_size()
+        self.rect.center = w // 2, h // 2
+        self.surface = pg.Surface(self.rect.size).convert_alpha()
+        self.surface.fill((82, 82, 91, 150))
+        self._ach_key = None  # форсируем пересборку surface_achievements под новый rect.w
 
     def redraw_achievements(self):
         achievs = self.scene.app.game_scene.player.achievements
@@ -1050,3 +1081,6 @@ class HelpUI(UI):
         panel.blit(self.hint_surf, (20, self.rect.h - self.footer_h + 4))
         self.screen.blit(panel, self.rect)
         pg.display.flip()
+
+    def relayout(self):
+        self.__init__(self.scene)
