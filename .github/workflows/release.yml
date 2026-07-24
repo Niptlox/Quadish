@@ -60,10 +60,6 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
       - name: Resolve tag
         id: tag
         run: |
@@ -72,12 +68,20 @@ jobs:
           else
             echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           fi
+      # ВАЖНО: checkout должен идти до download-artifact — checkout по
+      # умолчанию чистит (clean: true) содержимое рабочей директории, и
+      # если он выполняется после скачивания артефактов, он же их и стирает
+      # (файлы-архивы удалялись прямо перед шагом создания релиза).
       - uses: actions/checkout@v4
         with:
           ref: ${{ steps.tag.outputs.tag }}
           sparse-checkout: |
             CHANGELOG.md
           sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
