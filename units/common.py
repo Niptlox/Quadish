@@ -204,6 +204,11 @@ freq_y = 14 * cof
 CHUNK_CREATURE_LIMIT = 4
 CHUNK_CREATURE_CHANCE = 0.2
 
+# Дальность дистанционного передатчика (в тайлах) — рация должна работать
+# в пределах обжитой базы, а не телепортировать сигнал в любую точку
+# загруженного мира (см. docs/SIGNAL_NETWORK_CONCEPT.md).
+TRANSMITTER_RANGE = CHUNK_SIZE * 4
+
 CNT_BUILDS_OF_STRUCTURE_BLOCK = 400
 
 START_SPACE_Y = -1000

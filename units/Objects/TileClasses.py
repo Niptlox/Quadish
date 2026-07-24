@@ -7,7 +7,8 @@ from units.Objects.TileClass import Tile
 from units.Tiles import (WOOD_TILES, furnace_imgs, ACTIVATE_TILES, SIGNAL_TILES,
                          lever_on_img, lever_off_img, lamp_on_img, lamp_off_img,
                          chunk_loader_on_img, chunk_loader_off_img,
-                         music_block_img, music_block_flash_img)
+                         music_block_img, music_block_flash_img,
+                         receiver_img, transmitter_img)
 from units.sound import note_sound_for_item
 from units.common import *
 
@@ -328,6 +329,95 @@ class MusicBlock(SignalTile):
         return music_block_flash_img if just_triggered else music_block_img
 
 
+class Receiver(SignalTile):
+    """Приёмник рации: цель для Передатчика с такой же 4-предметной
+    "частотой" (см. docs/SIGNAL_NETWORK_CONCEPT.md). Сам по себе пассивен —
+    обычный узел сети (ACTIVATE_TILES), просто регистрирует себя в
+    GameMap.signal_receivers по своей комбинации, чтобы Передатчик находил
+    его без перебора всего загруженного мира."""
+    index = 222
+    view_interface_on_click = True
+    not_save_vars = Tile.not_save_vars | {"inventory"}
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self._registered_code = None
+        self.inventory = Inventory(self.game_map, self, [2, 2], items_update_event=self._reregister)
+        self._reregister()
+
+    def code(self):
+        return tuple(sorted(item.index for item in self.inventory.inventory if item))
+
+    def _reregister(self):
+        if self._registered_code is not None:
+            self.game_map.unregister_receiver(self._registered_code, self)
+        self._registered_code = self.code()
+        self.game_map.register_receiver(self._registered_code, self)
+
+    def get_vars(self):
+        d = super().get_vars()
+        d.update(self.inventory.get_vars())
+        return d
+
+    def set_vars(self, d):
+        self.inventory.set_vars(d)
+
+    def items_of_break(self):
+        if self._registered_code is not None:
+            self.game_map.unregister_receiver(self._registered_code, self)
+            self._registered_code = None
+        return self.inventory.items_of_break()
+
+    def update(self, elapsed_time):
+        self.refresh_activating()
+        return receiver_img
+
+
+class Transmitter(SignalTile):
+    """Передатчик рации: пока сам получает сигнал от локальной проводной
+    сети (провод/рычаг/активатор рядом), каждый такт ищет все Приёмники с
+    такой же 4-предметной "частотой" в радиусе TRANSMITTER_RANGE и держит
+    их включёнными — без физического провода между ними. Обычный узел сети
+    (ACTIVATE_TILES), локальную сеть после себя тоже продолжает."""
+    index = 223
+    view_interface_on_click = True
+    not_save_vars = Tile.not_save_vars | {"inventory"}
+    range = TRANSMITTER_RANGE
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.inventory = Inventory(self.game_map, self, [2, 2])
+
+    def code(self):
+        return tuple(sorted(item.index for item in self.inventory.inventory if item))
+
+    def get_vars(self):
+        d = super().get_vars()
+        d.update(self.inventory.get_vars())
+        return d
+
+    def set_vars(self, d):
+        self.inventory.set_vars(d)
+
+    def items_of_break(self):
+        return self.inventory.items_of_break()
+
+    def update(self, elapsed_time):
+        self.refresh_activating()
+        if self.activating:
+            self._broadcast()
+        return transmitter_img
+
+    def _broadcast(self):
+        code = self.code()
+        if not code:
+            return
+        for receiver in tuple(self.game_map.signal_receivers.get(code, ())):
+            dx, dy = receiver.tx - self.tx, receiver.ty - self.ty
+            if max(abs(dx), abs(dy)) <= self.range:
+                bfs_activate(self.game_map, receiver)
+
+
 furnace_burn_tiles = {
     52: 82,
     56: 86,
@@ -408,5 +498,6 @@ class Furnace(Tile):
 
 
 classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate,
-          Wire, Lever, Lamp, NotGate, AndGate, OrGate, DelayBlock, ChunkLoader, MusicBlock}
+          Wire, Lever, Lamp, NotGate, AndGate, OrGate, DelayBlock, ChunkLoader, MusicBlock,
+          Receiver, Transmitter}
 tiles_class = {cls.index: cls for cls in classes}

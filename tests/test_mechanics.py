@@ -572,6 +572,83 @@ def test_note_sound_for_item_differs_by_item():
     assert note_sound_for_item(3) is not note_sound_for_item(12)
 
 
+def test_transmitter_receiver_matching_frequency():
+    """Передатчик должен удалённо включать только Приёмники с такой же
+    4-предметной комбинацией и в пределах TRANSMITTER_RANGE — без
+    физического провода между ними (см. docs/SIGNAL_NETWORK_CONCEPT.md)."""
+    from units.Objects.Items import ItemsTile
+    from units.common import TRANSMITTER_RANGE
+
+    game = fresh_world(31)
+    gm = game.game_map
+    gm.set_static_tile(0, 0, 223)  # передатчик
+    gm.set_static_tile(1, 0, 214)  # рычаг рядом (локальный источник)
+    gm.set_static_tile(50, 0, 222)  # приёмник в радиусе, та же частота
+    gm.set_static_tile(500, 0, 222)  # приёмник далеко за радиусом
+
+    tx = gm.get_tile_obj(*gm.to_chunk_xy(0, 0), gm.get_static_tile(0, 0)[3])
+    lever = gm.get_tile_obj(*gm.to_chunk_xy(1, 0), gm.get_static_tile(1, 0)[3])
+    rx_near = gm.get_tile_obj(*gm.to_chunk_xy(50, 0), gm.get_static_tile(50, 0)[3])
+    rx_far = gm.get_tile_obj(*gm.to_chunk_xy(500, 0), gm.get_static_tile(500, 0)[3])
+    assert 50 <= TRANSMITTER_RANGE < 500
+
+    tx.inventory.put_to_inventory(ItemsTile(game, 3, count=1))
+    rx_near.inventory.put_to_inventory(ItemsTile(game, 3, count=1))
+    rx_far.inventory.put_to_inventory(ItemsTile(game, 3, count=1))
+    assert gm.signal_receivers[(3,)] == {rx_near, rx_far}
+
+    lever.on = True
+    game.tact += 1
+    lever.update(16)
+    tx.update(16)
+    rx_near.update(16)
+    rx_far.update(16)
+
+    assert rx_near.activating, "приёмник в радиусе с той же частотой должен включиться"
+    assert not rx_far.activating, "приёмник за пределами радиуса не должен включиться"
+
+
+def test_receiver_ignores_mismatched_frequency():
+    """Приёмник с другой комбинацией предметов не должен реагировать."""
+    from units.Objects.Items import ItemsTile
+
+    game = fresh_world(32)
+    gm = game.game_map
+    gm.set_static_tile(0, 0, 223)
+    gm.set_static_tile(1, 0, 214)
+    gm.set_static_tile(10, 0, 222)
+
+    tx = gm.get_tile_obj(*gm.to_chunk_xy(0, 0), gm.get_static_tile(0, 0)[3])
+    lever = gm.get_tile_obj(*gm.to_chunk_xy(1, 0), gm.get_static_tile(1, 0)[3])
+    rx = gm.get_tile_obj(*gm.to_chunk_xy(10, 0), gm.get_static_tile(10, 0)[3])
+
+    tx.inventory.put_to_inventory(ItemsTile(game, 3, count=1))
+    rx.inventory.put_to_inventory(ItemsTile(game, 12, count=1))  # другой предмет - другая частота
+
+    lever.on = True
+    game.tact += 1
+    lever.update(16)
+    tx.update(16)
+    rx.update(16)
+    assert not rx.activating, "разная частота - приёмник не должен реагировать"
+
+
+def test_receiver_unregisters_on_break():
+    """Сломанный приёмник должен исчезать из GameMap.signal_receivers, а не
+    висеть там мёртвой ссылкой."""
+    from units.Objects.Items import ItemsTile
+
+    game = fresh_world(33)
+    gm = game.game_map
+    gm.set_static_tile(0, 0, 222)
+    rx = gm.get_tile_obj(*gm.to_chunk_xy(0, 0), gm.get_static_tile(0, 0)[3])
+    rx.inventory.put_to_inventory(ItemsTile(game, 3, count=1))
+    assert rx in gm.signal_receivers.get((3,), set())
+
+    rx.items_of_break()
+    assert (3,) not in gm.signal_receivers or rx not in gm.signal_receivers[(3,)]
+
+
 # ===================== хранилище миров =====================
 
 def test_world_storage_crud():

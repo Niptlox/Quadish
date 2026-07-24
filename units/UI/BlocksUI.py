@@ -309,7 +309,52 @@ class InventoryPlayerMusicBlockUI(InventoryPlayerWithBlockUI):
         super().__init__(player, MusicBlockUI())
 
 
+class RadioBlockUI(BlockUI):
+    """4 ячейки (2x2) — комбинация предметов задаёт "частоту" рации, общая
+    UI для Приёмника и Передатчика (units/Objects/TileClasses.py)."""
+    background = bg_color
+
+    def __init__(self):
+        rect = pg.Rect(0, 0, cell_size * 3, cell_size * 3)
+        super().__init__(rect)
+        self.convert_alpha()
+        self.slots_ui = InventoryUI(None, [2, 2], margin_table=0, ui_owner=self)
+        self.slots_ui.get_draw_rect().topleft = cell_size * 0.5, cell_size * 0.5
+
+    def set_work_rect(self, value):
+        self.slots_ui.work_rect = value
+
+    def draw(self, surface):
+        self.fill(self.background)
+        self.slots_ui.draw(self)
+        surface.blit(self, self.rect)
+
+    def set_block(self, block_obj):
+        super().set_block(block_obj)
+        self.slots_ui.inventory = block_obj.inventory
+
+    def pg_event(self, event: pg.event.Event):
+        if super().pg_event(event):
+            return True
+        return self.slots_ui.pg_event(event) or self.check_mouse_event(event)
+
+
+class InventoryPlayerReceiverUI(InventoryPlayerWithBlockUI):
+    index = 222
+
+    def __init__(self, player):
+        super().__init__(player, RadioBlockUI())
+
+
+class InventoryPlayerTransmitterUI(InventoryPlayerWithBlockUI):
+    index = 223
+
+    def __init__(self, player):
+        super().__init__(player, RadioBlockUI())
+
+
 BLOCKS_UI = {cls.index: cls for cls in
-             [InventoryPlayerChestUI, InventoryPlayerFurnaceUI, CommandBlockUI, InventoryPlayerMusicBlockUI]
+             [InventoryPlayerChestUI, InventoryPlayerFurnaceUI, CommandBlockUI, InventoryPlayerMusicBlockUI,
+              InventoryPlayerReceiverUI, InventoryPlayerTransmitterUI]
              }
 BLOCKS_UI_SET = set(BLOCKS_UI)

@@ -20,7 +20,7 @@ from units.sound import sound_gate
 
 class GameMap(SavedObject):
     not_save_vars = SavedObject.not_save_vars | {"gate", "particles", "world_id", "world_meta",
-                                                 "dynamic_dump", "dump_keep_radius"}
+                                                 "dynamic_dump", "dump_keep_radius", "signal_receivers"}
     # держим в памяти чанки в этом радиусе (в чанках) вокруг игрока
     DUMP_KEEP_RADIUS = 8
 
@@ -53,6 +53,12 @@ class GameMap(SavedObject):
         self.dynamic_dump = config.GameSettings.dynamic_dump
         self.dump_keep_radius = self.DUMP_KEEP_RADIUS
         self.gate = None
+        # Индекс Приёмников (222) по их 4-предметной "частоте" — чтобы
+        # Передатчик (223) не перебирал весь загруженный мир при каждом
+        # срабатывании, см. docs/SIGNAL_NETWORK_CONCEPT.md. Чисто runtime-
+        # кэш (в not_save_vars), заполняется самими Receiver при создании/
+        # загрузке (см. Receiver._reregister в TileClasses.py).
+        self.signal_receivers = {}
         if self.base_generation is None:
             self.new_base_generation()
 
@@ -331,6 +337,16 @@ class GameMap(SavedObject):
 
     def del_particle_of_idx(self, idx):
         return self.particles.pop(idx)
+
+    def register_receiver(self, code, receiver):
+        self.signal_receivers.setdefault(code, set()).add(receiver)
+
+    def unregister_receiver(self, code, receiver):
+        bucket = self.signal_receivers.get(code)
+        if bucket:
+            bucket.discard(receiver)
+            if not bucket:
+                del self.signal_receivers[code]
 
     def unload_far_chunks(self):
         """Выгрузить из памяти дальние немодифицированные чанки.
