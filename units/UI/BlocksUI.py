@@ -491,12 +491,29 @@ class InventoryPlayerGolemNestUI(InventoryPlayerWithBlockUI):
         super().__init__(player, LogisticBlockUI())
 
 
+class InventoryPlayerDustCollectorUI(InventoryPlayerWithBlockUI):
+    index = 235
+
+    def __init__(self, player):
+        super().__init__(player, LogisticBlockUI())
+
+
+class InventoryPlayerChunkLoaderUI(InventoryPlayerWithBlockUI):
+    """У прогрузчика чанка появилось топливо (космическая пыль), значит
+    ему нужен и интерфейс — раньше это был блок без содержимого."""
+    index = 219
+
+    def __init__(self, player):
+        super().__init__(player, LogisticBlockUI())
+
+
 BLOCKS_UI = {cls.index: cls for cls in
              [InventoryPlayerChestUI, InventoryPlayerFurnaceUI, CommandBlockUI, InventoryPlayerMusicBlockUI,
               InventoryPlayerReceiverUI, InventoryPlayerTransmitterUI, LoreTabletUI,
               InventoryPlayerHopperUI, InventoryPlayerDropperUI,
               InventoryPlayerFuelEngineUI, InventoryPlayerCreativeEngineUI,
               InventoryPlayerSpaceEngineUI, InventoryPlayerHellEngineUI,
-              InventoryPlayerPortalUI, InventoryPlayerGolemNestUI]
+              InventoryPlayerPortalUI, InventoryPlayerGolemNestUI,
+              InventoryPlayerDustCollectorUI, InventoryPlayerChunkLoaderUI]
              }
 BLOCKS_UI_SET = set(BLOCKS_UI)

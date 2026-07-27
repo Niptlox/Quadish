@@ -6,6 +6,7 @@ from units.noise_compat import snoise2 as noise2
 
 from units.Objects.Creatures import (Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion,
                                      Rabbit, Deer, Fox, Camel, Penguin, Boar, Crab, Bat, StoneGolem, SpaceDrifter,
+                                     DustSwarm, VoidSentinel,
                                      MOD_CREATURES)
 from units.Objects.Entities import PortalMainGate
 from units.Objects.Entity import PhysicalObject
@@ -18,6 +19,7 @@ from units.biomes import biome_of_pos
 from units.Map.Structures import Structures_chance, Structures, Structures_all, structure_start
 from units.Tiles import *
 from units.sound import sound_gate
+from units.Updater import parse_version
 
 
 class GameMap(SavedObject):
@@ -134,9 +136,9 @@ class GameMap(SavedObject):
                         # if random.random() < 0.005:
                         x, y = tile_xy[0] * TSIZE, tile_xy[1] * TSIZE
                         biome = biome_of_pos(tile_xy[0], tile_xy[1])[0]
-                        Crt = random_creature_selection(tile_xy[1], biome)
+                        Crt = random_creature_selection(tile_xy[1], biome, tile_xy[0])
                         if Crt is not None:
-                            dynamic_tiles.append(Crt(self.game, (x, y)))
+                            dynamic_tiles.append(spawn_creature(Crt, self.game, *tile_xy))
                             crt_cash[1] += 1
 
     def chunk_gen(self, xy):
@@ -390,6 +392,25 @@ class GameMap(SavedObject):
                 if tile[3][TILE_TIMER] != 0:
                     grow_tree((tile_x, tile_y), game_map=self)
 
+    @staticmethod
+    def _asteroid_tile(tile_x, tile_y, base):
+        """Тип блока астероида в этом тайле космоса или None (вакуум).
+
+        Форму задаёт свой шум с растянутой вертикалью — иначе астероиды
+        выходили бы вытянутыми колоннами, как обычный рельеф. Жилы считаются
+        отдельными сидами, поэтому они связные, а не рассыпаны по пикселю.
+        """
+        if noise2(tile_x * 0.035, tile_y * 0.05, 3, persistence=0.45,
+                  base=base + 21, lacunarity=1.8) >= ASTEROID_THRESHOLD:
+            return None
+        if noise2(tile_x * 0.09, tile_y * 0.09, 2, persistence=0.5,
+                  base=base + 22, lacunarity=1.6) < ASTEROID_CRYSTAL_THRESHOLD:
+            return 28   # звёздный кристалл (рубины)
+        if noise2(tile_x * 0.07, tile_y * 0.07, 2, persistence=0.5,
+                  base=base + 23, lacunarity=1.6) < ASTEROID_DUST_THRESHOLD:
+            return 27   # пылевая жила
+        return 26       # астероидный камень
+
     def forced_chunk_coords(self):
         """Чанки, которые держат включённые прогрузчики."""
         forced = set()
@@ -551,6 +572,23 @@ class GameMap(SavedObject):
             if terrain_is_solid(tile_x, y, base):
                 return y
         return None
+
+    def surface_top_at(self, tile_x, from_y):
+        """Верх породы в столбце, даже если from_y уже внутри горы.
+
+        surface_y_at() ищет только ВНИЗ: если начать внутри породы, он
+        вернёт ту же точку, и «поверхностью» окажется середина скалы. Здесь
+        сначала поднимаемся до воздуха, а потом падаем на первую твердь.
+        """
+        base = self.base_generation
+        y = int(from_y)
+        for _ in range(self.SURFACE_SCAN):
+            if not terrain_is_solid(tile_x, y, base):
+                break
+            y -= 1
+        else:
+            return None
+        return self.surface_y_at(tile_x, y)
 
     def _snap_to_surface(self, pos, size):
         """Опустить структуру на поверхность: её низ должен лечь на землю.
@@ -896,9 +934,10 @@ class GameMap(SavedObject):
                                     static_tiles[pl_i + 2] = state_img
                                     static_tiles[pl_i + 3] = state
                                     if config.GameSettings.creatures and cnt_creatures < CHUNK_CREATURE_LIMIT:
-                                        Crt = random_creature_selection(tile_y, biome_info[i][0])
+                                        Crt = random_creature_selection(tile_y, biome_info[i][0], tile_x)
                                         if Crt is not None:
-                                            dynamic_tiles.append(Crt(self.game, (tile_x * TSIZE, tile_y * TSIZE)))
+                                            dynamic_tiles.append(
+                                                spawn_creature(Crt, self.game, tile_x, tile_y))
                                             cnt_creatures += 1
                 else:
                     # пусто
@@ -909,6 +948,17 @@ class GameMap(SavedObject):
                         if noise2(tile_x * 0.04, tile_y * 0.09, 2, persistence=0.5,
                                   base=base + 11, lacunarity=1.6) < LAVA_THRESHOLD:
                             tile_type = 140  # лава
+                    # Астероиды: единственная твердь в космосе. Без них выше
+                    # атмосферы вообще нечего было делать — ни встать, ни
+                    # копать, ни спавниться существам.
+                    elif tile_y < START_SPACE_Y - ASTEROID_MARGIN:
+                        tile_type = self._asteroid_tile(tile_x, tile_y, base)
+                        if tile_type is not None and y_pos > 0 and \
+                                static_tiles[tile_index - self.chunk_arr_width] == 0:
+                            # тайл над астероидом — площадка для спавна;
+                            # on_ground_tiles заполняется только в ветке
+                            # породы, а космос идёт по ветке пустоты
+                            on_ground_tiles.add((tile_x, tile_y - 1))
                     # ставим растение
                     if tile_type is None and y_pos == CHUNK_SIZE - 1 and \
                             self.get_static_tile(tile_x, tile_y + 1, default=0) == 1:
@@ -988,7 +1038,10 @@ class GameMap(SavedObject):
             self.game.ui.new_sys_message(self._load_error_message(exc), draw_now=True)
             return None
         version = data.get("game_version", "0.4")
-        if version != GAME_VERSION:
+        # Предупреждаем только при разной major.minor: точное сравнение
+        # означало бы, что после каждого патч-релиза игрок видит это
+        # сообщение на каждом своём мире, хотя формат сейва не менялся.
+        if parse_version(version)[:2] != parse_version(GAME_VERSION)[:2]:
             # пробуем загрузить, но предупреждаем
             self.game.ui.new_sys_message(
                 get_translated_text("Мир из другой версии: ") + str(version), draw_now=True)
@@ -1039,10 +1092,63 @@ class GameMap(SavedObject):
         self.game.player.tp_to(config.GameSettings.start_pos)
         self.spawn_gate()
         self._place_altar_tablet()
+        self._build_starter_grove()
         if tutorial:
             self._build_tutorial_island()
             self._place_tutorial_chest()
             self._give_tutorial_items()
+
+    # Стартовая роща: сколько тайлов вокруг спавна засеваем и сколько
+    # деревьев ставим сразу. Раньше рядом со спавном могло не оказаться ни
+    # одного дерева — а дерево это доски, стол, кирка, топливо, то есть
+    # ВСЯ первая цепочка. Игра начиналась с долгой ходьбы наугад.
+    GROVE_RADIUS = 26
+    GROVE_TREES = 5
+    GROVE_BUSHES = 4
+
+    def _build_starter_grove(self):
+        """Гарантировать у спавна деревья и ягодные кусты.
+
+        Ставим только растительность и только на существующий дёрн: платформ
+        и сундуков в обычном мире быть не должно — это обучение, а не
+        песочница. Задача скромнее: чтобы первые пять минут игрок собирал
+        ресурсы, а не искал, есть ли они вообще.
+        """
+        sx = config.GameSettings.start_pos[0] // TSIZE
+        sy = config.GameSettings.start_pos[1] // TSIZE
+        spots = []
+        for tx in range(sx - self.GROVE_RADIUS, sx + self.GROVE_RADIUS + 1):
+            top = self.surface_top_at(tx, sy)
+            if top is None:
+                continue
+            if self.get_static_tile_type(tx, top, default=0, create_chunk=True) not in (1, 2):
+                continue
+            if self.get_static_tile_type(tx, top - 1, default=0, create_chunk=True) != 0:
+                continue
+            spots.append((tx, top - 1))
+        if not spots:
+            return
+        rnd = random.Random(self.base_generation)      # роща одинакова для сида
+        rnd.shuffle(spots)
+        # деревья ставим не вплотную — иначе grow_tree сцепит их в сплошную
+        # стену из стволов, и рубить будет нечего, кроме одной колонны
+        placed = []
+        for tx, ty in spots:
+            if len(placed) >= self.GROVE_TREES:
+                break
+            if any(abs(tx - px) < 4 for px in placed):
+                continue
+            grow_tree((tx, ty), game_map=self)
+            placed.append(tx)
+        bushes_left = self.GROVE_BUSHES
+        for tx, ty in spots[::-1]:
+            if bushes_left <= 0:
+                break
+            if self.get_static_tile_type(tx, ty, default=0, create_chunk=True) != 0:
+                continue                                # тут уже вырос ствол
+            self.set_static_tile(tx, ty, 101)
+            self.set_static_tile_state_img(tx, ty, 3)   # куст сразу с ягодами
+            bushes_left -= 1
 
     def _give_tutorial_items(self):
         """Выдать игроку меч и кирку в инвентарь на старте обучения."""
@@ -1167,10 +1273,38 @@ def random_plant_selection(biome=None):
     return None
 
 
-def random_creature_selection(tile_y=None, biome=None):
+def spawn_creature(cls, game, tile_x, tile_y):
+    """Создать существо с поправкой на кривую сложности места.
+
+    Множитель ставится на экземпляр, а не на класс: одна и та же змея у
+    спавна и в аду должна отличаться, а трогать класс значило бы менять
+    её сразу везде.
+    """
+    creature = cls(game, (tile_x * TSIZE, tile_y * TSIZE))
+    scale = difficulty_scale(tile_x, tile_y)
+    if scale != 1.0 and creature.max_lives > 0:
+        creature.max_lives = max(1, int(round(creature.max_lives * scale)))
+        creature.lives = creature.max_lives
+        creature.punch_damage = max(1, int(round(creature.punch_damage * scale)))
+    return creature
+
+
+# Существа, которых не выпускаем в «песочнице» у спавна: слайм-босс это
+# 250 HP и 35 урона — встреча с ним на первой минуте не сложность, а стена.
+HARD_CREATURES = (SlimeBigBoss,)
+
+
+def near_spawn(tile_x):
+    if tile_x is None:
+        return False
+    start_x = config.GameSettings.start_pos[0] // TSIZE
+    return abs(tile_x - start_x) <= DIFFICULTY_SAFE_RADIUS
+
+
+def random_creature_selection(tile_y=None, biome=None, tile_x=None):
     """tile_y и biome задают биом/глубину-зависимость спавна вместо единого
     для всего мира пула мобов:
-    - космос (tile_y < START_SPACE_Y) — космические дрейферы
+    - космос (tile_y < START_SPACE_Y) — пылевые рои, дрейферы, стражи
     - ад (tile_y > START_HELL_Y) — бесы, волки, слаймы
     - глубокие пещеры (BOTTOM_MIDDLE_WORLD < tile_y <= START_HELL_Y) —
       летучие мыши, каменные големы
@@ -1189,7 +1323,7 @@ def random_creature_selection(tile_y=None, biome=None):
         return None
 
     if tile_y is not None and tile_y < START_SPACE_Y:
-        zone, pool, weights = "space", [SpaceDrifter], [1]
+        zone, pool, weights = "space", [DustSwarm, SpaceDrifter, VoidSentinel], [10, 4, 1]
     elif tile_y is not None and tile_y > START_HELL_Y:
         zone, pool, weights = "hell", [Slime, Wolf, Imp], [10, 3, 4]
     elif tile_y is not None and tile_y > BOTTOM_MIDDLE_WORLD:
@@ -1208,6 +1342,11 @@ def random_creature_selection(tile_y=None, biome=None):
         zone = "surface"
         pool = [Slime, Cow, Snake, Wolf, SlimeBigBoss, Rabbit]
         weights = [20, 5, 1, 0.7, 0.25, 6]
+
+    if zone == "surface" and near_spawn(tile_x):
+        filtered = [(c, w) for c, w in zip(pool, weights) if c not in HARD_CREATURES]
+        if filtered:
+            pool, weights = [c for c, _ in filtered], [w for _, w in filtered]
 
     # мод-существа ДОБАВЛЯЮТСЯ к ванильному пулу, а не заменяют его —
     # иначе один мод выключил бы всех обычных мобов в своём биоме

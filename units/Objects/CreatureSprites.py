@@ -267,6 +267,39 @@ DRIFTER = [
 ]
 
 
+# --- Пылевой рой: 11x9 -> сгусток пыли с глазами --------------------
+DUST_SWARM = [
+    "..K.....K..",
+    ".KBK.K.KBK.",
+    "KBBBKBKBBBK",
+    "KBBeBBBeBBK",
+    "KBBBBBBBBBK",
+    ".KBBBBBBBK.",
+    "..KBBBBBK..",
+    "...KBBBK...",
+    "....KKK....",
+]
+
+# --- Пустотный страж: 13x15 -> тяжёлая фигура из пустотного камня ----
+VOID_SENTINEL = [
+    "....KKKKK....",
+    "...KBBBBBK...",
+    "...KBrBrBK...",
+    "...KBBBBBK...",
+    "....KBBBK....",
+    "..KKKKKKKKK..",
+    ".KBBKBBBKBBK.",
+    "KBBBKBBBKBBBK",
+    "KBBBKBBBKBBBK",
+    ".KKKKBBBKKKK.",
+    "....KBBBK....",
+    "....KBBBK....",
+    "....KBBBK....",
+    "...KBBKBBK...",
+    "...KKK.KKK...",
+]
+
+
 def _maker(rows, default_base):
     """Собрать функцию-фабрику спрайта с прежней сигнатурой.
 
@@ -292,3 +325,5 @@ create_penguin_sprite = _maker(PENGUIN, "#1E293B")
 create_bat_sprite = _maker(BAT, "#3F3A36")
 create_golem_sprite = _maker(GOLEM, "#78716C")
 create_space_drifter_sprite = _maker(DRIFTER, "#818CF8")
+create_dust_swarm_sprite = _maker(DUST_SWARM, "#7DD3FC")
+create_void_sentinel_sprite = _maker(VOID_SENTINEL, "#312E81")

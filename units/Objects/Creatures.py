@@ -12,7 +12,8 @@ from units.Objects.CreatureSprites import (
     create_cow_sprite, create_wolf_sprite, create_snake_sprite, create_imp_sprite,
     create_scorpion_sprite, create_rabbit_sprite, create_deer_sprite, create_fox_sprite,
     create_camel_sprite, create_penguin_sprite, create_boar_sprite, create_crab_sprite,
-    create_bat_sprite, create_golem_sprite, create_space_drifter_sprite)
+    create_bat_sprite, create_golem_sprite, create_space_drifter_sprite,
+    create_dust_swarm_sprite, create_void_sentinel_sprite)
 from units.common import *
 
 
@@ -632,6 +633,64 @@ class SpaceDrifter(Wolf):
         self.sprite = create_space_drifter_sprite(self.color, self.rect.size)
 
 
+class DustSwarm(Wolf):
+    """Пылевой рой — слабый и быстрый обитатель астероидов.
+
+    Основной ручной источник космической пыли: дрейфер бьёт больно и
+    редок, а рой можно фармить мечом. С него и начинается космос —
+    иначе пылеуловитель нечем было бы оплатить.
+    """
+    not_save_vars = Wolf.not_save_vars
+    bio_kingdom = KINGDOM_ANIMALIA
+    bio_species = "dust_swarm"
+    bio_subspecies = "dust swarm"
+    width, height = int(TSIZE * 0.7), int(TSIZE * 0.6)
+    color = "#7DD3FC"
+    max_lives = 18
+    drop_items = [(ItemsTile, (408, (1, 2)))]
+
+    move_speed = 5
+    jump_speed = 9
+
+    enemy = True
+    punch_damage = 4
+    punch_speed = 3
+    punch_discard = 3
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.sprite = create_dust_swarm_sprite(self.color, self.rect.size)
+
+
+class VoidSentinel(Wolf):
+    """Пустотный страж — тяжёлый враг глубокого космоса.
+
+    Космический аналог каменного голема: медленный, много бьёт и много
+    отдаёт. Держит верхний край сложности, чтобы космос не оказался
+    безопаснее пещер только потому, что он новый.
+    """
+    not_save_vars = Wolf.not_save_vars
+    bio_kingdom = KINGDOM_ANIMALIA
+    bio_species = "void_sentinel"
+    bio_subspecies = "void sentinel"
+    width, height = int(TSIZE * 1.4), int(TSIZE * 1.7)
+    color = "#312E81"
+    max_lives = 150
+    drop_items = [(ItemsTile, (408, (2, 5))), (ItemsTile, (65, (1, 2))), (ItemsTile, (66, (0, 1)))]
+
+    move_speed = 1.4
+    jump_speed = 5
+
+    enemy = True
+    punch_damage = 22
+    punch_speed = 1
+    punch_discard = 15
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.sprite = create_void_sentinel_sprite(self.color, self.rect.size)
+
+
 class SlimeBigBoss(Slime):
     not_save_vars = Slime.not_save_vars | {"angry", "angry_player"}
     bio_subspecies = "huge slime"
@@ -679,7 +738,8 @@ class SlimeBigBoss(Slime):
 
 
 CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion,
-            Rabbit, Deer, Fox, Camel, Penguin, Boar, Crab, Bat, StoneGolem, SpaceDrifter]
+            Rabbit, Deer, Fox, Camel, Penguin, Boar, Crab, Bat, StoneGolem, SpaceDrifter,
+            DustSwarm, VoidSentinel]
 CREATURES_D = {cls.__name__: cls for cls in CREATURES}
 
 

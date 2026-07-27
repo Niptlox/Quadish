@@ -13,7 +13,8 @@ from units.Tiles import (WOOD_TILES, furnace_imgs, ACTIVATE_TILES, SIGNAL_TILES,
                          engine_fuel_on_img, engine_fuel_off_img, engine_creative_img,
                          engine_space_on_img, engine_space_off_img,
                          engine_hell_on_img, engine_hell_off_img,
-                         nest_on_img, nest_off_img)
+                         nest_on_img, nest_off_img,
+                         dust_collector_on_img, dust_collector_off_img)
 from units.sound import note_sound_for_item
 from units.common import *
 
@@ -291,11 +292,68 @@ class ChunkLoader(SignalTile):
     сигнала — обычный чанк, выгружается по общим правилам. Сам является
     узлом сети (ACTIVATE_TILES), сигнал через него можно вести дальше."""
     index = 219
-    radius = 2  # в чанках
+    view_interface_on_click = True
+    not_save_vars = Tile.not_save_vars | {"inventory"}
+    # Без топлива прогрузчик держит только ближайшие чанки — этого хватает,
+    # чтобы ферма у базы не вставала, пока игрок рядом копает. Большой
+    # радиус — самая сильная способность в игре (мир тикает без игрока), и
+    # она должна что-то стоить: космическая пыль.
+    BASE_RADIUS = 1
+    FUELED_RADIUS = 3
+    FUEL_ITEM = 408              # космическая пыль
+    FUEL_PERIOD = FPS * 90       # одна пыль на полторы минуты работы
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.inventory = Inventory(self.game_map, self, [3, 1])
+        self.inventory.filter_items = {self.FUEL_ITEM}
+        self.timer = 0
+        self.fueled = False
+
+    def get_vars(self):
+        d = super().get_vars()
+        d.update(self.inventory.get_vars())
+        return d
+
+    def set_vars(self, d):
+        # Миры, созданные до появления топлива, не содержат ключа
+        # "inventory" — грузим их обычным путём, иначе загрузка падала бы
+        # на KeyError у каждого старого прогрузчика.
+        if "inventory" in d:
+            self.inventory.set_vars(d)
+        else:
+            super().set_vars(d)
+
+    def items_of_break(self):
+        return self.inventory.items_of_break()
+
+    @property
+    def radius(self):
+        return self.FUELED_RADIUS if self.fueled else self.BASE_RADIUS
+
+    def take_fuel(self):
+        for i, cell in enumerate(self.inventory):
+            if cell is not None and cell.index == self.FUEL_ITEM:
+                cell.count -= 1
+                if cell.count <= 0:
+                    self.inventory.set_cell(i, None)
+                return True
+        return False
 
     def update(self, elapsed_time):
         self.refresh_activating()
-        return chunk_loader_on_img if self.activating else chunk_loader_off_img
+        if not self.activating:
+            self.fueled = False
+            return chunk_loader_off_img
+        self.timer += 1
+        if self.timer >= self.FUEL_PERIOD or not self.fueled:
+            if self.take_fuel():
+                self.fueled = True
+                self.timer = 0
+            elif self.timer >= self.FUEL_PERIOD:
+                self.fueled = False
+                self.timer = 0
+        return chunk_loader_on_img
 
 
 class MusicBlock(SignalTile):
@@ -1026,9 +1084,69 @@ class GolemNest(SignalTile):
         return nest_on_img
 
 
+class DustCollector(SignalTile):
+    """Пылеуловитель — ферма космической пыли (docs/SPACE.md).
+
+    Работает только в вакууме: тайл должен быть выше границы космоса, и
+    вокруг него должно быть пусто. Это и есть механика фермы — не «поставил
+    и ушёл», а «построй в космосе разрежённую сетку парусов»: заложишь
+    сеть блоками — она перестанет ловить.
+    """
+    not_save_vars = Tile.not_save_vars | {"inventory"}
+    index = 235
+    view_interface_on_click = True
+    size_table = [3, 1]
+    PERIOD = FPS * 30          # такт сбора
+    OPEN_NEEDED = 6            # сколько из 8 соседей должно быть вакуумом
+    DUST_ITEM = 408
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.inventory = Inventory(self.game_map, self, self.size_table)
+        self.timer = 0
+
+    def get_vars(self):
+        d = super().get_vars()
+        d.update(self.inventory.get_vars())
+        return d
+
+    def set_vars(self, d):
+        self.inventory.set_vars(d)
+
+    def items_of_break(self):
+        return self.inventory.items_of_break()
+
+    def open_neighbors(self):
+        """Сколько соседних тайлов — вакуум."""
+        n = 0
+        for i in range(-1, 2):
+            for j in range(-1, 2):
+                if i == 0 and j == 0:
+                    continue
+                if self.game_map.get_static_tile_type(self.tx + i, self.ty + j,
+                                                      default=0, create_chunk=False) == 0:
+                    n += 1
+        return n
+
+    def works(self):
+        return self.ty < START_SPACE_Y and self.open_neighbors() >= self.OPEN_NEEDED
+
+    def update(self, elapsed_time):
+        self.refresh_activating()
+        if not self.activating or not self.works():
+            self.timer = 0
+            return dust_collector_off_img
+        self.timer += 1
+        if self.timer >= self.PERIOD:
+            self.timer = 0
+            self.inventory.put_to_inventory(ItemsTile(self.game, self.DUST_ITEM, count=1))
+        return dust_collector_on_img
+
+
 classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate,
           Wire, Lever, Lamp, NotGate, AndGate, OrGate, DelayBlock, ChunkLoader, MusicBlock,
           Receiver, Transmitter, LoreTablet,
           Hopper, Conveyor, Dropper, Chopper,
-          FuelEngine, CreativeEngine, SpaceEngine, HellEngine, Portal, GolemNest}
+          FuelEngine, CreativeEngine, SpaceEngine, HellEngine, Portal, GolemNest,
+          DustCollector}
 tiles_class = {cls.index: cls for cls in classes}

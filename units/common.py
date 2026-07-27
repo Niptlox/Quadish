@@ -41,8 +41,11 @@ if not AUDIO_ENABLED:
 # 60 по умолчанию — вдвое меньше работы на слабом железе, чем прежние 120.
 FPS = config.GameSettings.max_fps
 print("INIT GAME VARS")
-last_versions = ["0.9.1", "0.1.3-alpha", "0.1.5-alpha", "0.1.6-alpha"]
-GAME_VERSION = "0.1.7-alpha"
+last_versions = ["0.9.1", "0.1.3-alpha", "0.1.5-alpha", "0.1.6-alpha", "0.1.7-alpha"]
+# Версия игры. Отставала от тегов релизов (0.1.7 против v0.2.x) — из-за
+# этого проверка обновлений (units/Updater.py) считала бы новым любой
+# опубликованный релиз. Держим синхронной с тегом.
+GAME_VERSION = "0.2.16-alpha"
 
 FULLSCREEN = config.Window.fullscreen
 
@@ -275,6 +278,16 @@ TRANSMITTER_RANGE = CHUNK_SIZE * 4
 LAVA_DEPTH_MARGIN = 40
 LAVA_THRESHOLD = -0.35
 
+# Астероиды в космосе. До этого выше START_ATMO_Y мир был абсолютно пуст:
+# встать не на что, копать нечего, существам негде спавниться — космос
+# существовал только как координата. Отступ от границы космоса нужен,
+# чтобы астероиды не начинались вплотную к атмосфере.
+ASTEROID_MARGIN = 60
+ASTEROID_THRESHOLD = -0.42
+# Доля жил внутри астероида (шум отдельным сидом, поэтому жилы связные)
+ASTEROID_DUST_THRESHOLD = -0.72
+ASTEROID_CRYSTAL_THRESHOLD = -0.88
+
 CNT_BUILDS_OF_STRUCTURE_BLOCK = 400
 
 START_SPACE_Y = -1000
@@ -282,6 +295,44 @@ START_ATMO_Y = START_SPACE_Y + 200
 TOP_MIDDLE_WORLD = START_ATMO_Y + 150
 BOTTOM_MIDDLE_WORLD = 1000
 START_HELL_Y = BOTTOM_MIDDLE_WORLD + 350
+
+# Кривая сложности =========================================================
+# Раньше сила существ была одинаковой везде: у спавна на первой минуте мог
+# появиться слайм-босс (250 HP, 35 урона), а в аду бегали те же волки, что и
+# на лугу. Ни начала, ни развития — просто ровная линия. Теперь сила зависит
+# от того, куда игрок забрался: горизонтально от спавна, вниз к аду и вверх
+# к космосу. Множитель применяется к HP и урону при спавне
+# (см. GameMap.spawn_creature).
+DIFFICULTY_SAFE_RADIUS = 300     # тайлов от спавна: тут заведомо легче
+DIFFICULTY_FULL_RADIUS = 5000    # где горизонтальная надбавка выходит в максимум
+DIFFICULTY_MIN = 0.7
+DIFFICULTY_MAX = 2.0
+
+
+def _clamp01(v):
+    return 0.0 if v < 0 else (1.0 if v > 1 else v)
+
+
+def difficulty_scale(tile_x, tile_y):
+    """Во сколько раз существо в этой точке сильнее базового.
+
+    Берём МАКСИМУМ из трёх составляющих, а не сумму: спуск в ад не должен
+    складываться с уходом на восток — иначе край карты давал бы неберущихся
+    мобов просто за счёт координаты.
+    """
+    if tile_x is None or tile_y is None:
+        return 1.0
+    start_x = config.GameSettings.start_pos[0] // 32
+    horizontal = _clamp01((abs(tile_x - start_x) - DIFFICULTY_SAFE_RADIUS) /
+                          max(1, DIFFICULTY_FULL_RADIUS - DIFFICULTY_SAFE_RADIUS))
+    # Глубина считается от уровня поверхности (y ≈ 0), а не от верхней
+    # границы среднего мира: иначе точка спавна сама по себе оказывалась бы
+    # на трети шкалы, и «легко» не было бы нигде.
+    depth = _clamp01(tile_y / max(1, START_HELL_Y))
+    height = _clamp01((TOP_MIDDLE_WORLD - tile_y) /
+                      max(1, TOP_MIDDLE_WORLD - (START_SPACE_Y - 500)))
+    part = max(horizontal, depth, height)
+    return DIFFICULTY_MIN + (DIFFICULTY_MAX - DIFFICULTY_MIN) * part
 # Player ===========================================================
 
 NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9, pg.K_0]

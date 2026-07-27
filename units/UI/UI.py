@@ -13,6 +13,7 @@ from units.Tiles import live_imgs, bg_live_img, goldlive_imgs, bg_livecreative_i
 
 from units.Graphics.outline import add_outline_to_image
 from units.sound import set_category_volume
+from units.Updater import UpdateChecker
 
 ru_bool_lst = ["On", "Off"]
 eng_bool_lst = [True, False]
@@ -305,6 +306,17 @@ class TitleUI(UI):
                                     font=_font_dev_btn)
         self.objects.add(lang_but)
 
+        # Проверка обновлений. Релизы публикуются автоматически по тегу, но
+        # игрок об этом не узнавал: скачал сборку один раз — и остался на
+        # ней. Сеть трогается только в фоновом потоке (units/Updater.py),
+        # поэтому без интернета экран ведёт себя ровно как раньше.
+        self.updater = UpdateChecker(GAME_VERSION)
+        self._updater_state = None
+        self.update_but = TextButton(lambda _: self.on_update_button(),
+                                     (self.rect.w - 200, self.rect.h - 105, 175, 35),
+                                     "Обновление", font=_font_dev_btn)
+        self.objects.add(self.update_but)
+
         self.tts = title_text_surf = SurfaceUI(((0, 0), self.game_title_text.get_size()))
         title_text_surf.blit(self.game_title_text, (0, 0))
         title_text_surf.set_colorkey(self.color_sky)
@@ -352,8 +364,33 @@ class TitleUI(UI):
             self.tts.set_colorkey(self.color_sky)
         # self.tts.rect.x = self.tts_x
 
-    def draw(self):
+    def on_update_button(self):
+        """Одна кнопка на весь сценарий: сначала «проверить», потом
+        «скачать». Отдельная кнопка загрузки простаивала бы почти всегда."""
+        if self.updater.state == self.updater.AVAILABLE and self.updater.asset:
+            self.updater.download_async()
+        elif not self.updater.busy():
+            self.updater.check_async()
 
+    def poll_updater(self):
+        """Показать смену состояния фоновой проверки. Сообщение шлём только
+        при переходе, иначе оно висело бы вечно, обновляясь каждый кадр."""
+        u = self.updater
+        if u.state == u.DOWNLOADING:
+            self.update_but.set_text(f"Скачивание {int(u.progress * 100)}%")
+            return
+        if u.state == self._updater_state:
+            return
+        self._updater_state = u.state
+        labels = {u.CHECKING: "Проверка…", u.AVAILABLE: "Скачать",
+                  u.DOWNLOADED: "Скачано", u.UPTODATE: "Обновление",
+                  u.ERROR: "Обновление", u.IDLE: "Обновление"}
+        self.update_but.set_text(labels.get(u.state, "Обновление"))
+        if u.message and u.state != u.CHECKING:
+            self.sys_message.new(u.message, count_tact=FPS * 6)
+
+    def draw(self):
+        self.poll_updater()
         self.draw_background()
         self.objects.draw(self.screen)
         pg.display.flip()

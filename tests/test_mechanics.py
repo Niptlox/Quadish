@@ -139,11 +139,47 @@ def test_generation_reproducible_after_unload():
     assert a == b, "регенерация чанка должна быть идентичной (детерминизм по сиду)"
 
 
-def test_space_chunks_empty():
+def test_space_has_asteroids_in_vacuum():
+    """До v0.2.16 космос был абсолютно пуст: ни встать, ни копать, ни
+    спавниться существам. Теперь там астероиды — но именно вкраплениями,
+    а не сплошной породой, иначе это уже не космос."""
     gm = fresh_world(5).game_map
-    chunk = gm.generate_chunk(0, -100)  # глубокий космос
-    types = chunk[0][0::gm.tile_data_size]
-    assert all(t == 0 for t in types), "в космосе не должно быть блоков"
+    found_rock = 0
+    total = 0
+    for cx in range(-4, 5):
+        chunk = gm.generate_chunk(cx, -100)   # глубокий космос
+        types = chunk[0][0::gm.tile_data_size]
+        total += len(types)
+        found_rock += sum(1 for t in types if t != 0)
+        assert all(t in (0, 26, 27, 28) for t in types), \
+            "в космосе может быть только вакуум и астероидная порода"
+    assert found_rock > 0, "астероиды должны генерироваться"
+    assert found_rock < total * 0.6, "космос не должен зарастать породой"
+
+
+def test_space_asteroid_veins_give_dust_and_rubies():
+    """Астероид должен окупать поход: жила даёт пыль (топливо космических
+    механизмов), кристалл — рубины."""
+    get_app()
+    from units.Tiles import tile_drops
+    assert any(i == 408 for i, _c, _ch in tile_drops[27]), "жила должна давать пыль"
+    assert any(i == 66 for i, _c, _ch in tile_drops[28]), "кристалл должен давать рубины"
+
+
+def test_space_creature_pool_has_new_creatures():
+    """В космосе был один вид существ на всю зону. Рой — то, что можно
+    фармить ради пыли, страж — верхний край сложности."""
+    get_app()
+    from units.Map.GameMap import random_creature_selection
+    from units.Objects.Creatures import DustSwarm, VoidSentinel
+    from units.common import START_SPACE_Y
+    seen = set()
+    for _ in range(4000):
+        cls = random_creature_selection(START_SPACE_Y - 500, None)
+        if cls is not None:
+            seen.add(cls)
+    assert DustSwarm in seen and VoidSentinel in seen, seen
+    assert any(i == 408 for _c, (i, _n) in DustSwarm.drop_items), "рой должен ронять пыль"
 
 
 def test_ground_has_tiles():
@@ -465,13 +501,13 @@ def test_chunk_loader_protects_area_when_active():
     game.player.update_chunk_pos()
 
     loader_chunk = (300, 300)
-    near_chunk = (301, 300)  # в радиусе 2 от прогрузчика
+    near_chunk = (301, 300)  # в базовом радиусе прогрузчика
     far_chunk = (310, 300)  # далеко за радиусом
 
     loader_tx, loader_ty = loader_chunk[0] * CHUNK_SIZE, loader_chunk[1] * CHUNK_SIZE
     gm.set_static_tile(loader_tx, loader_ty, 219)
     loader = gm.get_tile_obj(*loader_chunk, gm.get_static_tile(loader_tx, loader_ty)[3])
-    assert loader is not None and loader.radius == 2
+    assert loader is not None and loader.radius == loader.BASE_RADIUS
 
     # без сигнала: прогрузчик ничего не защищает сверх обычных правил
     gm.create_pass_chunk(near_chunk)
@@ -2401,3 +2437,271 @@ def test_block_with_inventory_drops_itself_once():
     drops = item_of_break_tile(gm.get_static_tile(x, y), gm, (x, y))
     assert sum(cnt for i, cnt in drops if i == 224) == 1, f"воронка должна выпасть один раз: {drops}"
     assert any(i == 11 for i, _ in drops), "содержимое тоже должно выпасть"
+
+
+# ===================== космос: пылеуловитель и топливо прогрузчика =====================
+
+def _clear_vacuum(gm, x, y):
+    """Расчистить вакуум вокруг тайла: в космосе рядом может оказаться
+    астероид, и тест зависел бы от сида."""
+    for dx in range(-1, 2):
+        for dy in range(-1, 2):
+            gm.set_static_tile(x + dx, y + dy, 0)
+
+
+def test_dust_collector_needs_vacuum_and_space():
+    """Пылеуловитель — ферма пыли, но только в открытом вакууме: закладка
+    парусов блоками должна её глушить, иначе ферма была бы «поставил в
+    ящик и забыл»."""
+    from units.common import START_SPACE_Y
+    game = fresh_world(80)
+    gm = game.game_map
+    x, y = 10, START_SPACE_Y - 200
+    _clear_vacuum(gm, x, y)                 # рядом может оказаться астероид
+    collector = _place_block(gm, x, y, 235)
+
+    def run(ticks):
+        for _ in range(ticks):
+            game.tact += 1
+            collector.activated_tact = game.tact
+            collector.update(16)
+
+    run(collector.PERIOD + 2)
+    assert any(c and c.index == 408 for c in collector.inventory), \
+        "в вакууме уловитель должен собирать пыль"
+
+    # закладываем соседей — парусу нечего ловить
+    for dx in range(-1, 2):
+        for dy in range(-1, 2):
+            if dx or dy:
+                gm.set_static_tile(x + dx, y + dy, 26)
+    assert not collector.works(), "заложенный блоками уловитель не работает"
+
+    # и на поверхности он тоже бесполезен
+    ground = _place_block(gm, 60, 5, 235)
+    assert not ground.works(), "на поверхности пыль не ловится"
+
+
+def test_dust_collector_needs_signal():
+    """Ферма пыли должна что-то стоить: без сигнала уловитель стоит."""
+    from units.common import START_SPACE_Y
+    game = fresh_world(81)
+    gm = game.game_map
+    _clear_vacuum(gm, 30, START_SPACE_Y - 300)
+    collector = _place_block(gm, 30, START_SPACE_Y - 300, 235)
+    assert collector.works(), "место подходящее"
+    for _ in range(collector.PERIOD * 2):
+        game.tact += 1
+        collector.update(16)          # сигнала не даём
+    assert not any(c for c in collector.inventory), "без сигнала пыль не копится"
+
+
+def test_chunk_loader_burns_dust_for_big_radius():
+    """Прогрузчик — самая сильная способность в игре (мир тикает без
+    игрока), поэтому большой радиус теперь стоит космической пыли. Малый
+    радиус остаётся бесплатным, иначе ранние фермы стали бы невозможны."""
+    game = fresh_world(82)
+    gm = game.game_map
+    loader = _place_block(gm, 20, 6, 219)
+    from units.Objects.Items import ItemsTile
+    assert loader.radius == loader.BASE_RADIUS
+
+    loader.inventory.put_to_inventory(ItemsTile(game, 408, count=1))
+    game.tact += 1
+    loader.activated_tact = game.tact
+    loader.update(16)
+    assert loader.radius == loader.FUELED_RADIUS, "пыль должна расширить радиус"
+    assert not any(c for c in loader.inventory), "пыль должна сгореть"
+
+    # топливо кончилось — радиус возвращается к базовому
+    for _ in range(loader.FUEL_PERIOD + 2):
+        game.tact += 1
+        loader.activated_tact = game.tact
+        loader.update(16)
+    assert loader.radius == loader.BASE_RADIUS, "без пыли радиус базовый"
+
+
+def test_chunk_loader_loads_old_saves_without_fuel_slot():
+    """Миры, созданные до появления топлива, не содержат ключа inventory:
+    загрузка не должна падать на каждом старом прогрузчике."""
+    game = fresh_world(83)
+    gm = game.game_map
+    loader = _place_block(gm, 24, 6, 219)
+    old_vars = {"tile_pos": (24, 6), "activated_tact": 0}
+    loader.set_vars(dict(old_vars))    # не должно бросить KeyError
+    assert loader.radius == loader.BASE_RADIUS
+
+
+# ===================== проверка обновлений =====================
+
+def test_update_version_compare():
+    """Сравнение версий должно переживать «v» и суффикс -alpha: теги
+    релизов выглядят именно так, а GAME_VERSION — без «v»."""
+    from units.Updater import parse_version, is_newer
+    assert parse_version("v0.2.16-alpha") == (0, 2, 16)
+    assert parse_version("0.3") == (0, 3, 0)
+    assert parse_version("мусор") is None
+
+    assert is_newer("v0.2.17-alpha", "0.2.16-alpha")
+    assert is_newer("v0.3.0-alpha", "0.2.16-alpha")
+    assert not is_newer("v0.2.16-alpha", "0.2.16-alpha"), "та же версия — не обновление"
+    assert not is_newer("v0.2.15-alpha", "0.2.16-alpha"), "старая версия — не обновление"
+    assert not is_newer(None, "0.2.16-alpha"), "нет ответа — нет обновления"
+
+
+def test_game_version_matches_changelog():
+    """GAME_VERSION отставал от тегов релизов (0.1.7 против v0.2.x), из-за
+    чего проверка обновлений считала бы новым любой релиз."""
+    from units.common import GAME_VERSION
+    from units.Updater import parse_version
+    with open("CHANGELOG.md", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("## [v"):
+                latest = line.split("[", 1)[1].split("]", 1)[0]
+                break
+        else:
+            raise AssertionError("в CHANGELOG нет ни одной версии")
+    assert parse_version(GAME_VERSION) == parse_version(latest), \
+        f"GAME_VERSION {GAME_VERSION} != {latest} из CHANGELOG"
+
+
+def test_update_asset_picked_for_platform():
+    """Скачивать надо архив своей ОС, а не первый попавшийся."""
+    from units import Updater
+    assets = {
+        "Quadish-v0.2.16-alpha-linux-x64.tar.gz": "http://example/linux",
+        "Quadish-v0.2.16-alpha-windows-x64.zip": "http://example/windows",
+    }
+    suffix = Updater.platform_asset_suffix()
+    picked = Updater.asset_for_platform(assets)
+    if suffix is None:                      # macOS — сборок нет
+        assert picked is None
+    else:
+        assert picked is not None and picked[0].endswith(suffix)
+    assert Updater.asset_for_platform({}) is None, "без файлов качать нечего"
+
+
+def test_update_checker_states_without_network():
+    """Проверка обновлений не должна ни падать, ни блокировать игру, когда
+    сети нет: это обычное состояние, а не ошибка."""
+    from units import Updater
+    checker = Updater.UpdateChecker("0.2.16-alpha")
+    assert checker.state == checker.IDLE and not checker.busy()
+
+    real_fetch = Updater.fetch_latest
+    try:
+        Updater.fetch_latest = lambda: None          # «сети нет»
+        checker._check()
+        assert checker.state == checker.ERROR
+        assert checker.message
+
+        Updater.fetch_latest = lambda: {"tag": "v0.2.16-alpha", "url": "u", "assets": {}}
+        checker._check()
+        assert checker.state == checker.UPTODATE
+
+        Updater.fetch_latest = lambda: {
+            "tag": "v9.9.9-alpha", "url": "u",
+            "assets": {"Quadish-v9.9.9-alpha-linux-x64.tar.gz": "l",
+                       "Quadish-v9.9.9-alpha-windows-x64.zip": "w"}}
+        checker._check()
+        assert checker.state == checker.AVAILABLE
+        assert checker.latest_tag == "v9.9.9-alpha"
+    finally:
+        Updater.fetch_latest = real_fetch
+
+    # загрузка не должна стартовать из неподходящего состояния
+    checker.state = checker.IDLE
+    checker.download_async()
+    assert checker.state == checker.IDLE, "качать нечего, пока не проверили"
+
+
+# ===================== кривая сложности и старт =====================
+
+def test_difficulty_curve_grows_with_distance_and_depth():
+    """Сила существ была одинаковой везде — ни начала, ни развития. Теперь
+    у спавна легче всего, а к аду и глубокому космосу выходит на максимум."""
+    from units.common import (difficulty_scale, DIFFICULTY_MIN, DIFFICULTY_MAX,
+                              START_HELL_Y, START_SPACE_Y)
+    spawn = difficulty_scale(0, 0)
+    assert spawn == DIFFICULTY_MIN, "у спавна должно быть проще всего"
+    assert difficulty_scale(0, 400) > spawn, "глубже — сложнее"
+    assert difficulty_scale(3000, 0) > spawn, "дальше от спавна — сложнее"
+    assert difficulty_scale(0, START_HELL_Y) == DIFFICULTY_MAX, "ад — потолок"
+    assert difficulty_scale(0, START_SPACE_Y - 600) == DIFFICULTY_MAX, "глубокий космос — потолок"
+    # шкала берёт максимум из составляющих, а не сумму: иначе край карты в
+    # аду давал бы неберущихся мобов просто за счёт координаты
+    assert difficulty_scale(9000, START_HELL_Y + 500) == DIFFICULTY_MAX
+    assert difficulty_scale(None, None) == 1.0, "без координат — без поправки"
+
+
+def test_spawned_creature_scales_with_place():
+    """Множитель должен садиться на экземпляр, а не на класс: одна и та же
+    змея у спавна и в аду обязана отличаться, а класс общий на весь мир."""
+    from units.Map.GameMap import spawn_creature
+    from units.Objects.Creatures import Wolf
+    from units.common import START_HELL_Y
+    game = fresh_world(90)
+    easy = spawn_creature(Wolf, game, 0, 0)
+    hard = spawn_creature(Wolf, game, 0, START_HELL_Y)
+    assert hard.max_lives > easy.max_lives
+    assert hard.punch_damage > easy.punch_damage
+    assert hard.lives == hard.max_lives, "существо должно появляться полным"
+    base = Wolf.__dict__["max_lives"]
+    spawn_creature(Wolf, game, 0, START_HELL_Y)
+    assert Wolf.__dict__["max_lives"] == base, "класс не должен меняться при спавне"
+
+
+def test_no_boss_spawns_near_spawn_point():
+    """Слайм-босс (250 HP, 35 урона) мог появиться у спавна на первой
+    минуте — это не сложность, а стена."""
+    from units.Map.GameMap import random_creature_selection
+    from units.Objects.Creatures import SlimeBigBoss
+    from units.common import DIFFICULTY_SAFE_RADIUS
+    get_app()
+    near = {random_creature_selection(5, None, 0) for _ in range(4000)}
+    assert SlimeBigBoss not in near, "у спавна боссов быть не должно"
+    far = {random_creature_selection(5, None, DIFFICULTY_SAFE_RADIUS * 4) for _ in range(4000)}
+    assert SlimeBigBoss in far, "вдали босс должен остаться — иначе он просто исчез из игры"
+
+
+def test_starter_grove_gives_wood_near_spawn():
+    """Рядом со спавном могло не оказаться ни одного дерева, а дерево — это
+    доски, стол, кирка и топливо, то есть вся первая цепочка. Игра
+    начиналась с долгой ходьбы наугад."""
+    from units.common import TSIZE
+    for seed in (11, 12, 13, 14):
+        game = fresh_world(seed)
+        gm = game.game_map
+        px = game.player.rect.centerx // TSIZE
+        py = game.player.rect.centery // TSIZE
+        wood = berries = 0
+        for sx in range(px - gm.GROVE_RADIUS, px + gm.GROVE_RADIUS + 1):
+            top = gm.surface_top_at(sx, py)
+            if top is None:
+                continue
+            for dy in range(-9, 2):
+                t = gm.get_static_tile_type(sx, top + dy, default=0, create_chunk=True)
+                wood += t == 110
+                berries += t == 101
+        assert wood >= 8, f"сид {seed}: у спавна должно быть дерево, найдено стволов {wood}"
+        assert berries >= 1, f"сид {seed}: у спавна должны быть ягоды"
+
+
+def test_surface_top_finds_top_of_mountain():
+    """surface_y_at ищет только вниз: если старт пришёлся внутрь горы, он
+    возвращал ту же точку, и «поверхностью» оказывалась середина скалы."""
+    game = fresh_world(15)
+    gm = game.game_map
+    from units.Map.GameMap import terrain_is_solid
+    base = gm.base_generation
+    buried = None
+    for tx in range(-200, 200):
+        if terrain_is_solid(tx, 0, base):
+            buried = tx
+            break
+    if buried is None:
+        return                      # на этом сиде спавн и так на открытом месте
+    top = gm.surface_top_at(buried, 0)
+    assert top is not None and top <= 0
+    assert terrain_is_solid(buried, top, base), "найденная точка — порода"
+    assert not terrain_is_solid(buried, top - 1, base), "а над ней воздух"
