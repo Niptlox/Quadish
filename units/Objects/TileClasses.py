@@ -58,12 +58,35 @@ class SignalTile(Tile):
     # такта свежего мира (tact == 0 или 1) — сигнальный тайл читался бы как
     # включённый, ни разу не будучи затронут bfs_activate.
     activated_tact = float("-inf")
+    # Кто зажёг тайл в этот такт. Нужно, чтобы вентиль не считал ВХОДОМ то,
+    # что сам же и запитал: сеть связна по восьми соседям и не имеет
+    # направления, поэтому вентиль питал собственные входные провода и
+    # залипал навсегда — включившись один раз, И и ИЛИ больше не гасли.
+    activated_sources = ()
+    # id объектов живут только в текущем запуске — в сейв их класть нельзя
+    not_save_vars = Tile.not_save_vars | {"activated_sources"}
 
     def is_active(self):
         return self.activated_tact >= self.game.tact - 1
 
     def refresh_activating(self):
         self.activating = self.is_active()
+
+    def note_activation(self, tact, source_id):
+        if self.activated_tact != tact or not isinstance(self.activated_sources, set):
+            self.activated_sources = set()
+        self.activated_tact = tact
+        self.activating = True
+        self.activated_sources.add(source_id)
+
+    def powered_by_other_than(self, tact, owner_id):
+        """Активен ли тайл усилиями кого-то, кроме owner_id."""
+        if self.activated_tact < tact - 1:
+            return False
+        sources = self.activated_sources
+        if not sources:
+            return True          # зажёгся до появления учёта источников
+        return any(src != owner_id for src in sources)
 
 
 def bfs_activate(game_map, origin):
@@ -78,8 +101,7 @@ def bfs_activate(game_map, origin):
     queue = [origin]
     while queue:
         current = queue.pop()
-        current.activating = True
-        current.activated_tact = tact
+        current.note_activation(tact, origin.id)
         for i in range(-1, 2):
             for j in range(-1, 2):
                 if i == 0 and j == 0:
@@ -108,7 +130,8 @@ def count_active_neighbors(game_map, tile_obj):
                 continue
             x, y = tile_obj.tx + i, tile_obj.ty + j
             tile, neighbor = game_map.get_tile_and_obj(x, y)
-            if tile[0] in SIGNAL_TILES and neighbor is not None and neighbor.activated_tact >= tact - 1:
+            if tile[0] in SIGNAL_TILES and neighbor is not None and \
+                    neighbor.powered_by_other_than(tact, tile_obj.id):
                 n += 1
     return n
 
@@ -230,10 +253,13 @@ class LogicGate(SignalTile):
 
 
 class NotGate(LogicGate):
-    """НЕ: включён, когда нет ни одного активного соседа. Замкнутый сам на
-    себя через провод превращается в автогенератор (мигает раз в 2 такта,
-    как и положено вентилю НЕ с обратной связью) — это следствие модели
-    с допуском в 1 такт, а не отдельная фича."""
+    """НЕ: включён, когда нет ни одного активного соседа.
+
+    Собственный выход входом не считается (см. activated_sources в
+    SignalTile), поэтому НЕ без внешнего входа просто горит, а не мигает.
+    Раньше он в такой схеме работал автогенератором — но это была та же
+    самая ошибка самозапитки, из-за которой И и ИЛИ залипали навсегда.
+    Ровный клокер даёт таймер (211), для этого он и есть."""
     index = 216
 
     def evaluate(self, active_neighbors):

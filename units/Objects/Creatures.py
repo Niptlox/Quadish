@@ -363,6 +363,7 @@ class Imp(Wolf):
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "imp"
     bio_subspecies = "hell imp"
+    immune_tiles = frozenset({140})    # лава — его дом, а не опасность
     width, height = int(TSIZE * 0.9), int(TSIZE * 0.9)
     color = "#DC2626"
     max_lives = 45

@@ -123,6 +123,21 @@ class GameMap(SavedObject):
             self.update_chunk(res)
         return res
 
+    def spawn_is_visible(self, tile_x, tile_y):
+        """Виден ли тайл игроку прямо сейчас (с запасом).
+
+        Существо, возникшее в кадре из ничего, читается как баг, а не как
+        «пришло». Запас нужен, потому что появиться у самой кромки экрана
+        почти так же заметно: игрок видит рождение боковым зрением.
+        """
+        player = getattr(self.game, "player", None)
+        if player is None:
+            return False
+        half_w = WSIZE[0] // 2 // TSIZE + self.SPAWN_VIEW_MARGIN
+        half_h = WSIZE[1] // 2 // TSIZE + self.SPAWN_VIEW_MARGIN
+        px, py = player.rect.centerx // TSIZE, player.rect.centery // TSIZE
+        return abs(tile_x - px) <= half_w and abs(tile_y - py) <= half_h
+
     def update_chunk(self, chunk):
         if config.GameSettings.creatures:
             crt_cash = chunk[3]
@@ -133,8 +148,8 @@ class GameMap(SavedObject):
                     crt_cnt = min(len(crt_cash[0]), random.randint(0, CHUNK_CREATURE_LIMIT - crt_cash[1]))
                     tiles_xy = random.choices(tuple(crt_cash[0]), k=crt_cnt)
                     for tile_xy in tiles_xy:
-                        # if random.random() < 0.005:
-                        x, y = tile_xy[0] * TSIZE, tile_xy[1] * TSIZE
+                        if self.spawn_is_visible(*tile_xy):
+                            continue        # не рождаем существо на глазах
                         biome = biome_of_pos(tile_xy[0], tile_xy[1])[0]
                         Crt = random_creature_selection(tile_xy[1], biome, tile_xy[0])
                         if Crt is not None:
@@ -365,6 +380,9 @@ class GameMap(SavedObject):
     # там сканируется весь чанк (1024 тайла), а таймеры растений идут
     # десятками секунд — раз в полсекунды более чем достаточно.
     FORCED_TICK_PERIOD = FPS // 2
+    # Запас вокруг экрана (в тайлах), внутри которого существо не спавнится:
+    # рождение у самой кромки видно почти так же хорошо, как в центре.
+    SPAWN_VIEW_MARGIN = 6
 
     def grow_plant_tile(self, chunk, index, tile, tile_x, tile_y, tact):
         """Отработать такт роста растения (куст 101 / саженец 102).

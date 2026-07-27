@@ -2719,3 +2719,434 @@ def test_surface_top_finds_top_of_mountain():
     assert top is not None and top <= 0
     assert terrain_is_solid(buried, top, base), "найденная точка — порода"
     assert not terrain_is_solid(buried, top - 1, base), "а над ней воздух"
+
+
+# ===================== логистика в настоящем игровом цикле =====================
+#
+# Прежние тесты логистики дёргали block.update() напрямую и раскладывали
+# предметы руками. Из-за этого они не заметили, что конвейер был
+# полу-физическим: предмет проваливался сквозь ленту, переставал попадать в
+# тайл над ней и никуда не ехал. Здесь мир крутится настоящими кадрами
+# (game.update()), с физикой предметов — как у игрока.
+
+def _run_frames(game, n):
+    game.elapsed_time = 16
+    for _ in range(n):
+        game.update()
+
+
+def _any_item(gm, tx, ty, radius_chunks=2):
+    """Первый живой предмет в округе (предметы живут в чанках, не в тайлах)."""
+    from units.common import OBJ_ITEM
+    cx0, cy0 = gm.to_chunk_xy(tx, ty)
+    for cx in range(cx0 - radius_chunks, cx0 + radius_chunks + 1):
+        for cy in range(cy0 - radius_chunks, cy0 + radius_chunks + 1):
+            chunk = gm.chunk((cx, cy))
+            if not chunk:
+                continue
+            for o in chunk[1]:
+                if o.class_obj & OBJ_ITEM and o.alive:
+                    return o
+    return None
+
+
+def _build_bench(game, length=12, floor=3):
+    """Ровная площадка у поверхности: пол + место под механизмы."""
+    from units.common import TSIZE
+    gm = game.game_map
+    px = game.player.rect.centerx // TSIZE
+    py = game.player.rect.centery // TSIZE
+    top = gm.surface_top_at(px, py) or py
+    x, y = px + 3, top - 1
+    for dx in range(-3, length + 3):
+        gm.set_static_tile(x + dx, y + 1, floor)
+        gm.set_static_tile(x + dx, y, 0)
+        gm.set_static_tile(x + dx, y - 1, 0)
+        gm.set_static_tile(x + dx, y - 2, 0)
+    # Игрок подбирает лежащие предметы вокруг себя (Player.get_item_rect),
+    # поэтому стоять на стенде нельзя — он соберёт всё раньше воронки.
+    # Но и уходить с экрана нельзя: тайлы обновляются только видимые.
+    game.player.tp_to(((x - 12) * TSIZE, (y - 3) * TSIZE))
+    game.screen_map.teleport_to_player()
+    return x, y
+
+
+def test_conveyor_carries_item_in_real_frames():
+    """Предмет должен ЕХАТЬ по ленте настоящими кадрами.
+
+    Баг, который это ловит: конвейер был полу-физическим, предмет
+    проваливался сквозь него и переставал находиться в тайле над лентой —
+    в игре конвейер выглядел полностью сломанным, хотя старый тест (с
+    ручной раскладкой предметов) проходил.
+    """
+    from units.common import TSIZE
+    game = fresh_world(200)
+    gm = game.game_map
+    x, y = _build_bench(game)
+    for dx in range(0, 10):
+        gm.set_static_tile(x + dx, y, 225)          # лента
+    gm.add_item_of_index(11, 1, x, y - 1)
+
+    item = _any_item(gm, x, y)
+    assert item is not None, "предмет должен существовать"
+    start_tile = item.rect.centerx // TSIZE
+
+    _run_frames(game, 120)
+    item = _any_item(gm, x, y)
+    assert item is not None, "предмет не должен пропадать"
+    assert item.rect.centerx // TSIZE > start_tile, "предмет должен уехать вправо"
+    assert item.rect.centery // TSIZE == y - 1, \
+        "предмет должен ЛЕЖАТЬ на ленте, а не провалиться сквозь неё"
+
+
+def test_conveyor_direction_flips_on_right_click():
+    """Правым кликом лента разворачивается — и предмет едет обратно."""
+    from units.common import TSIZE
+    game = fresh_world(201)
+    gm = game.game_map
+    x, y = _build_bench(game)
+    for dx in range(-2, 10):
+        gm.set_static_tile(x + dx, y, 225)
+    conv = gm.get_tile_obj(*gm.to_chunk_xy(x, y), gm.get_static_tile(x, y)[3])
+    gm.add_item_of_index(11, 1, x, y - 1)
+
+    _run_frames(game, 60)
+    right_x = _any_item(gm, x, y).rect.centerx
+
+    for dx in range(-2, 10):                        # развернуть всю ленту
+        tile = gm.get_static_tile(x + dx, y)
+        gm.set_static_tile_state_img(x + dx, y, 0 if tile[2] else 1)
+    assert conv.direction() == -1
+    _run_frames(game, 60)
+    assert _any_item(gm, x, y).rect.centerx < right_x, "после разворота — влево"
+
+
+def test_conveyor_feeds_hopper_and_chest():
+    """Полная цепочка фермы: лента везёт предмет в воронку, воронка кладёт
+    его в сундук. Это то, ради чего логистика и существует."""
+    game = fresh_world(202)
+    gm = game.game_map
+    x, y = _build_bench(game, length=14)
+    for dx in range(0, 6):
+        gm.set_static_tile(x + dx, y, 225)
+    gm.set_static_tile(x + 6, y, 224)               # воронка в конце ленты
+    gm.set_static_tile(x + 6, y + 1, 129)           # сундук под воронкой
+    chest = gm.get_tile_obj(*gm.to_chunk_xy(x + 6, y + 1),
+                            gm.get_static_tile(x + 6, y + 1)[3])
+    gm.add_item_of_index(11, 3, x, y - 1)
+
+    _run_frames(game, 400)
+    in_chest = sum(c.count for c in chest.inventory if c)
+    assert in_chest > 0, "предмет должен доехать до сундука"
+
+
+def test_items_do_not_fall_through_conveyor_line():
+    """Лента — сплошной блок: по ней можно и ходить, и возить. Если она
+    снова станет проходимой, предметы посыплются сквозь ферму."""
+    get_app()
+    from units.Tiles import PHYSBODY_TILES, SEMIPHYSBODY_TILES
+    assert 225 in PHYSBODY_TILES, "конвейер должен быть сплошным"
+    assert 225 not in SEMIPHYSBODY_TILES
+
+
+def test_imp_does_not_burn_in_lava():
+    """Бес живёт в аду: если лава его жжёт, адские мобы вымирают сами, в
+    собственном биоме, ещё до встречи с игроком."""
+    from units.common import TSIZE, START_HELL_Y
+    from units.Objects.Creatures import Imp, Wolf
+    game = fresh_world(203)
+    gm = game.game_map
+    x, y = 40, START_HELL_Y + 100
+    for dx in range(-4, 5):
+        gm.set_static_tile(x + dx, y + 1, 3)        # дно
+        gm.set_static_tile(x + dx, y, 140)          # лужа лавы
+        for dy in range(1, 7):                      # выкопать полость над ней:
+            gm.set_static_tile(x + dx, y - dy, 0)   # иначе существо стоит в породе
+    game.player.tp_to((x * TSIZE, (y - 5) * TSIZE))
+    game.screen_map.teleport_to_player()
+    game.elapsed_time = 16
+    game.update()
+
+    imp = Imp(game, (x * TSIZE, (y - 1) * TSIZE))
+    wolf = Wolf(game, ((x + 1) * TSIZE, (y - 1) * TSIZE))
+    for creature in (imp, wolf):
+        gm.add_dinamic_obj(*gm.to_chunk_xy(creature.rect.centerx // TSIZE,
+                                           creature.rect.centery // TSIZE), creature)
+    _run_frames(game, 90)
+    assert imp.lives == imp.max_lives, f"бес не должен гореть в лаве ({imp.lives}/{imp.max_lives})"
+    assert wolf.lives < wolf.max_lives, "а обычный зверь — должен, иначе тест ничего не проверяет"
+
+
+def test_creatures_do_not_spawn_on_screen():
+    """Существо, возникшее в кадре из ничего, читается как баг, а не как
+    «пришло»."""
+    from units.common import TSIZE
+    game = fresh_world(204)
+    gm = game.game_map
+    px = game.player.rect.centerx // TSIZE
+    py = game.player.rect.centery // TSIZE
+    assert gm.spawn_is_visible(px, py), "под игроком — заведомо видно"
+    assert gm.spawn_is_visible(px + 2, py), "рядом — тоже"
+    from units.common import WSIZE
+    far = px + gm.SPAWN_VIEW_MARGIN + WSIZE[0] // TSIZE
+    assert not gm.spawn_is_visible(far, py), "далеко за экраном — можно"
+    # и запас за кромкой экрана тоже закрыт
+    edge = px + WSIZE[0] // 2 // TSIZE + gm.SPAWN_VIEW_MARGIN - 1
+    assert gm.spawn_is_visible(edge, py), "у самой кромки рождать нельзя"
+
+
+# ===================== электричество: сеть, вентили, циклы =====================
+#
+# Сигнальная сеть — самая «программируемая» часть игры, и до сих пор она была
+# покрыта одним тестом на провод и лампу. Здесь схемы собираются целиком и
+# гоняются тактами, как в игре: важна не отдельная функция, а поведение
+# схемы во времени (фронты, задержки, обратные связи).
+
+def _net(game, blocks):
+    """Поставить схему: {(dx, dy): tile_id} вокруг базовой точки.
+
+    Возвращает {(dx, dy): tile_obj} — только для блоков со своим классом.
+    """
+    from units.common import TSIZE
+    gm = game.game_map
+    bx, by = 60, 8
+    for dy in range(-4, 5):                       # расчистить место под схему
+        for dx in range(-4, 12):
+            gm.set_static_tile(bx + dx, by + dy, 0)
+    objs = {}
+    for (dx, dy), tid in blocks.items():
+        gm.set_static_tile(bx + dx, by + dy, tid)
+        tile = gm.get_static_tile(bx + dx, by + dy)
+        obj = gm.get_tile_obj(*gm.to_chunk_xy(bx + dx, by + dy), tile[3])
+        if obj is not None:
+            objs[(dx, dy)] = obj
+    game.player.tp_to((bx * TSIZE, (by - 8) * TSIZE))
+    game.screen_map.teleport_to_player()
+    return objs
+
+
+def _tick(game, objs, n=1):
+    """Такт схемы: как в игре — сначала растёт tact, потом обновляются блоки.
+
+    Порядок обновления внутри такта не фиксирован (в игре он растровый),
+    поэтому схемы и не должны от него зависеть — на этом стоит вся
+    конструкция с activated_tact.
+    """
+    for _ in range(n):
+        game.tact += 1
+        for obj in objs.values():
+            obj.update(16)
+
+
+def test_lever_powers_wire_chain_and_lamp():
+    """Базовая цепь: рычаг → провода → лампа. Пока рычаг включён, лампа
+    горит; выключили — гаснет (с допуском в один такт)."""
+    game = fresh_world(300)
+    objs = _net(game, {(0, 0): 214, (1, 0): 213, (2, 0): 213, (3, 0): 213, (4, 0): 215})
+    lever, lamp = objs[(0, 0)], objs[(4, 0)]
+
+    _tick(game, objs, 3)
+    assert not lamp.is_active(), "без рычага лампа не горит"
+
+    lever.on = True
+    _tick(game, objs, 3)
+    assert lamp.is_active(), "включённый рычаг должен зажечь лампу через провода"
+
+    lever.on = False
+    _tick(game, objs, 4)
+    assert not lamp.is_active(), "выключенный рычаг должен погасить лампу"
+
+
+def test_wire_gap_breaks_the_chain():
+    """Разрыв в проводе должен рвать цепь: иначе сигнал «телепортируется»
+    и схемы теряют смысл."""
+    game = fresh_world(301)
+    objs = _net(game, {(0, 0): 214, (1, 0): 213, (3, 0): 213, (4, 0): 215})
+    objs[(0, 0)].on = True
+    _tick(game, objs, 4)
+    assert not objs[(4, 0)].is_active(), "через разрыв сигнал идти не должен"
+
+
+def test_not_gate_inverts():
+    """НЕ: горит, пока на входе пусто, и гаснет под сигналом."""
+    game = fresh_world(302)
+    objs = _net(game, {(0, 0): 214, (1, 0): 213, (2, 0): 216, (3, 0): 213, (4, 0): 215})
+    lever, gate, lamp = objs[(0, 0)], objs[(2, 0)], objs[(4, 0)]
+
+    _tick(game, objs, 4)
+    assert gate.is_active(), "без входа вентиль НЕ должен быть включён"
+    assert lamp.is_active(), "и должен питать лампу за собой"
+
+    lever.on = True
+    _tick(game, objs, 4)
+    assert not gate.is_active(), "под сигналом вентиль НЕ должен погаснуть"
+
+
+def test_and_gate_needs_both_inputs():
+    """И: включается только когда есть оба входа.
+
+    Входы разведены по РАЗНЫЕ стороны вентиля не для красоты: сеть связна
+    по восьми соседям, включая диагональ, поэтому два провода, лежащие
+    рядом, — это один провод, и один рычаг зажёг бы оба «входа».
+    """
+    game = fresh_world(303)
+    objs = _net(game, {(0, 0): 214, (1, 0): 213,
+                       (2, 0): 217,
+                       (3, 0): 213, (4, 0): 214})
+    a, b, gate = objs[(0, 0)], objs[(4, 0)], objs[(2, 0)]
+
+    a.on = True
+    _tick(game, objs, 4)
+    assert not gate.is_active(), "одного входа для И мало"
+
+    b.on = True
+    _tick(game, objs, 4)
+    assert gate.is_active(), "два входа должны включить И"
+
+    a.on = False
+    _tick(game, objs, 4)
+    assert not gate.is_active(), "убрали вход — И выключается"
+
+
+def test_or_gate_needs_any_input():
+    """ИЛИ: хватает одного входа."""
+    game = fresh_world(304)
+    objs = _net(game, {(0, 0): 214, (1, 0): 213,
+                       (2, 0): 218,
+                       (3, 0): 213, (4, 0): 214})
+    a, b, gate = objs[(0, 0)], objs[(4, 0)], objs[(2, 0)]
+
+    _tick(game, objs, 4)
+    assert not gate.is_active(), "без входов ИЛИ выключен"
+
+    a.on = True
+    _tick(game, objs, 4)
+    assert gate.is_active(), "одного входа для ИЛИ достаточно"
+
+    b.on = True
+    _tick(game, objs, 4)
+    assert gate.is_active(), "два входа тоже включают ИЛИ"
+
+
+def test_delay_block_one_front_one_pulse():
+    """Задержка стреляет ОДИН раз на фронт сигнала, а не каждый такт, пока
+    рычаг включён: иначе за секунду удержания она выдала бы 60 импульсов и
+    перестала быть задержкой."""
+    game = fresh_world(305)
+    objs = _net(game, {(0, 0): 214, (1, 0): 213, (2, 0): 220, (3, 0): 215})
+    lever, delay, lamp = objs[(0, 0)], objs[(2, 0)], objs[(3, 0)]
+
+    lever.on = True
+    pulses = 0
+    was = False
+    for _ in range(delay.delay * 3):
+        _tick(game, objs)
+        now = lamp.is_active()
+        pulses += now and not was          # считаем фронты на выходе
+        was = now
+    assert pulses >= 1, "задержка должна сработать хотя бы раз"
+    assert pulses <= 4, f"на одно удержание рычага — не поток импульсов, получено {pulses}"
+
+
+def test_timer_pulses_the_network_periodically():
+    """Таймер — авто-клокер: сам, без игрока, зажигает подключённую сеть."""
+    game = fresh_world(306)
+    objs = _net(game, {(0, 0): 211, (1, 0): 213, (2, 0): 215})
+    timer, lamp = objs[(0, 0)], objs[(2, 0)]
+
+    lit = 0
+    for _ in range(timer.interval * 2 + 4):
+        _tick(game, objs)
+        lit += lamp.is_active()
+    assert lit > 0, "таймер должен хотя бы раз зажечь лампу"
+    assert lit < timer.interval * 2, "и не должен держать её постоянно — это клокер"
+
+
+def test_not_gate_ring_does_not_hang():
+    """Кольцо из НЕ — классическая обратная связь: схема не имеет права
+    зациклить игру, для этого bfs_activate и обходит сеть очередью с
+    visited, а не рекурсией."""
+    game = fresh_world(307)
+    objs = _net(game, {(0, 0): 216, (1, 0): 213, (2, 0): 216, (3, 0): 213,
+                       (4, 0): 216, (5, 0): 213})
+    states = set()
+    for _ in range(60):                    # если схема повесит игру — тест не закончится
+        _tick(game, objs)
+        states.add(tuple(o.is_active() for o in objs.values()))
+    assert states, "схема должна отработать без зависания"
+
+
+def test_dense_wire_grid_does_not_recurse():
+    """Плотная сетка проводов: обход сети — очередь, а не рекурсия. На
+    рекурсии такая сетка ловила RecursionError."""
+    game = fresh_world(308)
+    blocks = {(0, 0): 214}
+    for dx in range(1, 10):
+        for dy in range(-3, 4):
+            blocks[(dx, dy)] = 213
+    objs = _net(game, blocks)
+    objs[(0, 0)].on = True
+    _tick(game, objs, 3)
+    powered = sum(1 for (dx, dy), o in objs.items() if dx > 0 and o.is_active())
+    assert powered > 50, f"сигнал должен залить всю сетку, залил {powered}"
+
+
+def test_pressure_plate_follows_player_presence():
+    """Плита — датчик присутствия: держит сеть, пока игрок стоит, и
+    отпускает, когда он сошёл."""
+    from units.common import TSIZE
+    game = fresh_world(309)
+    objs = _net(game, {(0, 0): 212, (1, 0): 213, (2, 0): 215})
+    plate, lamp = objs[(0, 0)], objs[(2, 0)]
+
+    game.player.rect.center = plate.rect.center
+    _tick(game, objs, 3)
+    assert plate.pressed and lamp.is_active(), "под игроком плита должна питать сеть"
+
+    game.player.rect.center = (plate.rect.centerx + TSIZE * 20, plate.rect.centery)
+    _tick(game, objs, 4)
+    assert not plate.pressed, "игрок ушёл — плита отпущена"
+    assert not lamp.is_active(), "и лампа гаснет"
+
+
+def test_engine_drives_chopper_through_wire():
+    """Схема целиком: двигатель на дереве гонит лесоруба через провод.
+    Именно так собирается ферма дерева, и именно это должно работать."""
+    game = fresh_world(310)
+    gm = game.game_map
+    objs = _net(game, {(0, 0): 228, (1, 0): 213, (2, 0): 227})
+    engine, chopper = objs[(0, 0)], objs[(2, 0)]
+    from units.Objects.Items import ItemsTile
+    engine.inventory.put_to_inventory(ItemsTile(game, 11, count=1))
+
+    bx, by = chopper.tx, chopper.ty
+    for dy in range(1, 4):
+        gm.set_static_tile(bx, by - dy, 110)        # ствол над лесорубом
+    assert gm.get_static_tile_type(bx, by - 1) == 110
+
+    _tick(game, objs, engine.period + 4)
+    assert gm.get_static_tile_type(bx, by - 1, default=0) == 0, \
+        "двигатель должен был запустить лесоруба через провод"
+
+
+def test_gate_does_not_latch_itself_on():
+    """Вентиль не должен считать входом то, что сам же и запитал.
+
+    Сеть связна по восьми соседям и не имеет направления, поэтому вентиль
+    питал собственные входные провода: включившись один раз, И и ИЛИ
+    больше никогда не гасли, и любая схема с ними была одноразовой.
+    """
+    game = fresh_world(311)
+    objs = _net(game, {(0, 0): 214, (1, 0): 213,
+                       (2, 0): 218,
+                       (3, 0): 213, (4, 0): 215})
+    lever, gate, lamp = objs[(0, 0)], objs[(2, 0)], objs[(4, 0)]
+
+    lever.on = True
+    _tick(game, objs, 4)
+    assert gate.is_active() and lamp.is_active(), "схема должна включиться"
+
+    lever.on = False
+    _tick(game, objs, 6)
+    assert not gate.is_active(), "вентиль обязан погаснуть вслед за рычагом"
+    assert not lamp.is_active(), "и отпустить сеть за собой"

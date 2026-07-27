@@ -59,6 +59,10 @@ class PhysicalObject(SavedObject):
     max_lives = -1
     index = 0
     count = 0
+    # Тайлы, урон от которых этому существу нипочём: бес живёт в аду и не
+    # может гореть в лаве — иначе адские мобы вымирали бы сами, в собственном
+    # биоме, ещё до встречи с игроком.
+    immune_tiles = frozenset()
 
     def __init__(self, game, x=0, y=0, width=0, height=0, use_physics=False, sprite=None,
                  use_collisions=False, use_gravity=False) -> None:
@@ -149,8 +153,9 @@ class PhysicalObject(SavedObject):
         # тайлов. Раньше он начислялся на каждую касающуюся вершину, из-за
         # чего кактус бил вчетверо, а лава (8 x 4 вершины) убивала бы
         # игрока с 30 HP мгновенно.
-        if touched_damage:
-            self.damage(max(DAMAGE_TILES[t] for t in touched_damage))
+        dangerous = touched_damage - self.immune_tiles
+        if dangerous:
+            self.damage(max(DAMAGE_TILES[t] for t in dangerous))
         return collision_types
 
     def not_collisions_move(self, movement):
