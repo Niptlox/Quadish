@@ -356,6 +356,61 @@ def create_lava_img(phase=0):
 lava_imgs = [create_lava_img(p) for p in range(4)]
 lava_img = lava_imgs[0]
 
+
+def create_hopper_img():
+    """Воронка: сужающийся книзу жёлоб."""
+    img = create_tile_image("#57534E")
+    w, h = img.get_size()
+    pygame.draw.polygon(img, "#3F3A36", [(3, 5), (w - 4, 5), (w - 9, h - 10), (8, h - 10)])
+    pygame.draw.polygon(img, "#1C1917", [(3, 5), (w - 4, 5), (w - 9, h - 10), (8, h - 10)], width=1)
+    pygame.draw.rect(img, "#292524", (w // 2 - 3, h - 10, 6, 7))
+    pygame.draw.rect(img, "#1C1917", (w // 2 - 3, h - 10, 6, 7), width=1)
+    return img
+
+
+def create_conveyor_img(to_right=True):
+    """Конвейер: лента со стрелками направления."""
+    img = create_tile_image("#44403C")
+    w, h = img.get_size()
+    pygame.draw.rect(img, "#292524", (0, 6, w, h - 12))
+    for x in range(2, w - 4, 8):
+        pts = [(x, 11), (x + 5, h // 2), (x, h - 12)] if to_right else \
+              [(x + 5, 11), (x, h // 2), (x + 5, h - 12)]
+        pygame.draw.polygon(img, "#FDE047", pts)
+    pygame.draw.line(img, "#78716C", (0, 6), (w, 6))
+    pygame.draw.line(img, "#78716C", (0, h - 6), (w, h - 6))
+    return img
+
+
+def create_dropper_img():
+    """Дропер: короб с раструбом вниз."""
+    img = create_tile_image("#57534E")
+    w, h = img.get_size()
+    pygame.draw.rect(img, "#3F3A36", (4, 4, w - 8, h - 12), border_radius=2)
+    pygame.draw.rect(img, "#1C1917", (4, 4, w - 8, h - 12), width=1, border_radius=2)
+    pygame.draw.polygon(img, "#292524", [(w // 2 - 6, h - 8), (w // 2 + 6, h - 8),
+                                         (w // 2 + 2, h - 2), (w // 2 - 2, h - 2)])
+    pygame.draw.circle(img, "#FDE047", (w // 2, h // 2 - 2), 3)
+    return img
+
+
+def create_chopper_img():
+    """Лесоруб: топор на станине."""
+    img = create_tile_image("#57534E")
+    w, h = img.get_size()
+    pygame.draw.rect(img, "#3F3A36", (2, h - 9, w - 4, 7), border_radius=2)
+    pygame.draw.line(img, "#A16207", (w // 2 - 6, h - 10), (w // 2 + 4, 6), 3)
+    pygame.draw.polygon(img, "#D6D3D1", [(w // 2 + 2, 4), (w - 4, 9), (w // 2 + 6, 14)])
+    pygame.draw.polygon(img, "#1C1917", [(w // 2 + 2, 4), (w - 4, 9), (w // 2 + 6, 14)], width=1)
+    return img
+
+
+hopper_img = create_hopper_img()
+conveyor_imgs = [create_conveyor_img(True), create_conveyor_img(False)]
+conveyor_img = conveyor_imgs[0]
+dropper_img = create_dropper_img()
+chopper_img = create_chopper_img()
+
 def create_dynamite_img(lit=False, spark_bright=False):
     """Динамит: пучок из 3 шашек с бандажами и фитилём (раньше был просто
     закрашенный красный квадрат). lit — фитиль подожжён (анимация мигания
@@ -580,6 +635,10 @@ tile_imgs = {None: none_img,
              223: transmitter_img,
              300: lore_tablet_img,
              140: lava_img,
+             224: hopper_img,
+             225: conveyor_img,
+             226: dropper_img,
+             227: chopper_img,
              501: sword_1_img,
              502: sword_77_img,
              503: sword_2_img,
@@ -596,7 +655,8 @@ tile_imgs = {None: none_img,
              }
 count_tiles = len(tile_imgs)
 print("Count_tiles imgs", count_tiles)
-tile_many_imgs = {101: bush_imgs,
+tile_many_imgs = {225: conveyor_imgs,
+                  101: bush_imgs,
                   104: grass_i_imgs,
                   131: furnace_imgs,
                   181: cloud_imgs,
@@ -624,7 +684,7 @@ ON_EARTHEN_PLANTS = {101, 102, 103, 104}
 # блоки через которые нельзя пройти
 PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 21, 22, 23, 24, 25, 31, 32, 33, 103, 124, 128, 251}
 # полуфизические блоки например мебель листва вода
-SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 129, 131, 122, 104, 300, 140}
+SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 129, 131, 122, 104, 300, 140, 224, 225, 226, 227}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
 # STANDING_TILES = {0, 101, 102, 103, 104, 110, 120, 121, 122, 123, 125, 126, 130, 129, 251}
 STANDING_TILES = {0, 110, 120, 121, 122, 123, 125, 126, 130, 129, 131} | ON_EARTHEN_PLANTS
@@ -639,9 +699,10 @@ WOOD_TILES = {12, 110, 11, 121, 122, 123, 124, 126, 127, 128, 129, 131, 251}
 
 # блоки у которых есть прграммный класс
 CLASS_TILE = {131, 129, 200, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223,
-              300}
+              300, 224, 225, 226, 227}
 # которые надо обновлять (213 провод не входит — у него нет своей логики)
-CLASS_UPDATING_TILES = {131, 200, 210, 211, 212, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223}
+CLASS_UPDATING_TILES = {131, 200, 210, 211, 212, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223,
+                        224, 225, 226, 227}
 # CLASS_UPDATING_TILES_IN_UI = {131}
 # которые надо обновлять не зависимо от загрузки чанка те всегда
 CLASS_ALLWAYS_UPDATING_TILES = {200, }
@@ -652,7 +713,7 @@ CLASS_ALLWAYS_UPDATING_TILES = {200, }
 # намеренно НЕ входят сюда — иначе чужой bfs_activate "затапливал" бы их
 # напрямую, как ещё один провод; вместо этого они сами читают соседей и
 # решают, включаться ли (см. LogicGate в units/Objects/TileClasses.py).
-ACTIVATE_TILES = {200, 210, 9, 211, 212, 213, 214, 215, 219, 221, 222, 223}
+ACTIVATE_TILES = {200, 210, 9, 211, 212, 213, 214, 215, 219, 221, 222, 223, 226, 227}
 # то же самое + вентили/задержка — только для того, чтобы они могли
 # читать состояние соседей (включая друг друга), не участвуя в самом обходе
 SIGNAL_TILES = ACTIVATE_TILES | {216, 217, 218, 220}
@@ -679,7 +740,7 @@ Eats = {52: 10, 53: 2, 56: 8, 55: 100, 401: 7, 251: 7, 351: 1,
 iron_capability = {1, 2, 3, 4, 9, 11, 12, 21, 22, 23, 24, 25, 31, 32, 33, 101, 102, 103, 104, 105, 106, 110, 121, 122,
                    123, 124, 125, 126, 131,
                    127, 251,
-                   128, 130, 300}
+                   128, 130, 300, 224, 225, 226, 227}
 spatula_iron_capability = {1003}
 Pickaxes_capability = {
     530: iron_capability,
@@ -807,6 +868,10 @@ original_tile_words = {None: "None",
                        223: "Передатчик",
                        300: "Плита с надписью",
                        140: "Лава",
+                       224: "Воронка",
+                       225: "Конвейер",
+                       226: "Дропер",
+                       227: "Лесоруб",
                        501: "Железный меч",
                        502: "Золотой меч",
                        503: "Ядовитый меч",
@@ -827,6 +892,7 @@ all_tiles = set(tile_words)
 
 # Прочность блоков
 TILES_SOLIDITY = {
+    224: 55, 225: 45, 226: 55, 227: 60,
     140: 100,  # лава — как вода, руками не убрать
     300: 90,  # плита с надписью — крепче кирпича, но выкопать можно
     1: 15,

@@ -206,6 +206,18 @@ class GameMap(SavedObject):
             return True
         return False
 
+    def set_static_tile_state_img(self, x, y, state_img):
+        """Сменить кадр тайла (например направление конвейера), не трогая
+        сам тайл и его объект."""
+        cxy = (x // CHUNK_SIZE, y // CHUNK_SIZE)
+        chunk = self.chunk(cxy)
+        if not chunk:
+            return False
+        i = self.convert_pos_to_i(x, y)
+        chunk[0][i + 2] = state_img
+        self.modified_chunks.add(cxy)
+        return True
+
     def set_obj_static_tile(self, x, y, group_id):
         cxy = (x // CHUNK_SIZE, y // CHUNK_SIZE)
         chunk = self.chunk(cxy)

@@ -423,8 +423,33 @@ class LoreTabletUI(BlockUI):
         surface.blit(self, self.rect)
 
 
+class LogisticBlockUI(InventoryUI, BlockUI):
+    """Инвентарь блока логистики (воронка/дропер): три ячейки в ряд."""
+    def __init__(self):
+        super().__init__(None, [3, 1])
+
+    def set_block(self, block_obj):
+        self.inventory = block_obj.inventory
+        self.redraw_table_inventory()
+
+
+class InventoryPlayerHopperUI(InventoryPlayerWithBlockUI):
+    index = 224
+
+    def __init__(self, player):
+        super().__init__(player, LogisticBlockUI())
+
+
+class InventoryPlayerDropperUI(InventoryPlayerWithBlockUI):
+    index = 226
+
+    def __init__(self, player):
+        super().__init__(player, LogisticBlockUI())
+
+
 BLOCKS_UI = {cls.index: cls for cls in
              [InventoryPlayerChestUI, InventoryPlayerFurnaceUI, CommandBlockUI, InventoryPlayerMusicBlockUI,
-              InventoryPlayerReceiverUI, InventoryPlayerTransmitterUI, LoreTabletUI]
+              InventoryPlayerReceiverUI, InventoryPlayerTransmitterUI, LoreTabletUI,
+              InventoryPlayerHopperUI, InventoryPlayerDropperUI]
              }
 BLOCKS_UI_SET = set(BLOCKS_UI)

@@ -8,7 +8,8 @@ from units.Tiles import (WOOD_TILES, furnace_imgs, ACTIVATE_TILES, SIGNAL_TILES,
                          lever_on_img, lever_off_img, lamp_on_img, lamp_off_img,
                          chunk_loader_on_img, chunk_loader_off_img,
                          music_block_img, music_block_flash_img,
-                         receiver_img, transmitter_img)
+                         receiver_img, transmitter_img, conveyor_imgs,
+                         item_of_break_tile)
 from units.sound import note_sound_for_item
 from units.common import *
 
@@ -536,7 +537,199 @@ class LoreTablet(Tile):
         super().right_click(mouse_local_pos)
 
 
+class ItemMover(Tile):
+    """Общая часть блоков логистики: поиск лежащих предметов и передача в
+    соседние контейнеры.
+
+    Предметы в мире — динамические объекты в чанке (chunk[1]), поэтому
+    искать их приходится по чанку, а не по тайлам.
+    """
+    # тайлы, в которые можно класть предметы
+    CONTAINER_TILES = {129, 131, 224, 226}
+
+    def items_in_tile(self, tx, ty):
+        """Лежащие предметы, попадающие в тайл (tx, ty)."""
+        chunk = self.game_map.chunk(self.game_map.to_chunk_xy(tx, ty))
+        if not chunk:
+            return []
+        rect = pg.Rect(tx * TSIZE, ty * TSIZE, TSIZE, TSIZE)
+        return [o for o in chunk[1]
+                if o.class_obj & OBJ_ITEM and o.alive and rect.colliderect(o.rect)]
+
+    def container_at(self, tx, ty):
+        """Инвентарь соседнего контейнера или None."""
+        tile = self.game_map.get_static_tile(tx, ty)
+        if not tile or tile[0] not in self.CONTAINER_TILES:
+            return None
+        obj = self.game_map.get_tile_obj(*self.game_map.to_chunk_xy(tx, ty), tile[3])
+        return getattr(obj, "inventory", None)
+
+    def take_item_from_world(self, item):
+        """Убрать подобранный предмет из мира."""
+        self.game_map.del_dinamic_obj(*self.game_map.to_chunk_xy(item.rect.x // TSIZE,
+                                                                 item.rect.y // TSIZE), item)
+        item.kill()
+
+
+class Hopper(ItemMover):
+    """Воронка: подбирает лежащие сверху предметы и отдаёт их в контейнер
+    снизу. Пассивна — сигнал не нужен, иначе простейшая ферма требовала бы
+    электросети ещё до того, как игрок её изучит."""
+    not_save_vars = {"inventory"} | Tile.not_save_vars
+    index = 224
+    view_interface_on_click = True
+    size_table = [3, 1]
+    PERIOD = FPS // 2      # как часто подбирать/передавать
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.inventory = Inventory(self.game_map, self, self.size_table)
+
+    def get_vars(self):
+        d = super().get_vars()
+        d.update(self.inventory.get_vars())
+        return d
+
+    def set_vars(self, d):
+        self.inventory.set_vars(d)
+
+    def items_of_break(self):
+        return [(self.index, 1)] + self.inventory.items_of_break()
+
+    def update(self, elapsed_time):
+        if self.game.tact % self.PERIOD:
+            return
+        # 1) подобрать всё, что лежит в самой воронке и на тайле над ней
+        for ty in (self.ty, self.ty - 1):
+            for item in self.items_in_tile(self.tx, ty):
+                ok, _left = self.inventory.put_to_inventory(item)
+                if ok:
+                    self.take_item_from_world(item)
+        # 2) отдать один предмет вниз
+        target = self.container_at(self.tx, self.ty + 1)
+        if target is not None:
+            for i, cell in enumerate(self.inventory):
+                if cell is not None:
+                    one = cell.copy()
+                    one.count = 1
+                    ok, _left = target.put_to_inventory(one)
+                    if ok:
+                        cell.count -= 1
+                        if cell.count <= 0:
+                            self.inventory.set_cell(i, None)
+                    break
+
+
+class Conveyor(ItemMover):
+    """Конвейер: толкает лежащие на нём предметы вбок. Направление
+    переключается правым кликом (кадр тайла), чтобы не плодить два блока."""
+    index = 225
+    PERIOD = max(1, FPS // 10)
+    PUSH = max(2, TSIZE // 8)
+
+    def direction(self):
+        tile = self.game_map.get_static_tile(self.tx, self.ty)
+        return -1 if (tile and tile[2]) else 1
+
+    def right_click(self, mouse_local_pos):
+        tile = self.game_map.get_static_tile(self.tx, self.ty)
+        if tile:
+            self.game_map.set_static_tile_state_img(self.tx, self.ty, 0 if tile[2] else 1)
+
+    def update(self, elapsed_time):
+        if self.game.tact % self.PERIOD:
+            return
+        dx = self.direction() * self.PUSH
+        # предметы едут по ВЕРХУ конвейера, поэтому смотрим тайл над собой
+        for item in self.items_in_tile(self.tx, self.ty - 1):
+            item.rect.x += dx
+        return conveyor_imgs[0 if self.direction() > 0 else 1]
+
+
+class Dropper(SignalTile, ItemMover):
+    """Дропер: по сигналу выбрасывает один предмет из себя в мир.
+
+    В отличие от воронки — активный: нужен именно как исполнительный
+    механизм в схеме (выдать корм, семена, камень в гнездо)."""
+    not_save_vars = {"inventory"} | Tile.not_save_vars
+    index = 226
+    view_interface_on_click = True
+    size_table = [3, 1]
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.inventory = Inventory(self.game_map, self, self.size_table)
+        self._was_active = False
+
+    def get_vars(self):
+        d = super().get_vars()
+        d.update(self.inventory.get_vars())
+        return d
+
+    def set_vars(self, d):
+        self.inventory.set_vars(d)
+
+    def items_of_break(self):
+        return [(self.index, 1)] + self.inventory.items_of_break()
+
+    def drop_one(self):
+        for i, cell in enumerate(self.inventory):
+            if cell is None:
+                continue
+            self.game_map.add_item_of_index(cell.index, 1, self.tx, self.ty - 1)
+            cell.count -= 1
+            if cell.count <= 0:
+                self.inventory.set_cell(i, None)
+            return True
+        return False
+
+    def update(self, elapsed_time):
+        self.refresh_activating()
+        # только по фронту сигнала: иначе дропер вывалил бы весь запас за
+        # секунду, пока рычаг включён
+        if self.activating and not self._was_active:
+            self.drop_one()
+        self._was_active = self.activating
+
+
+class Chopper(SignalTile):
+    """Лесоруб: по сигналу срубает дерево над собой.
+
+    Главный блок фермы дерева (docs/FARMS_CONCEPT.md): таймер + лесоруб +
+    воронка = дрова без участия игрока."""
+    index = 227
+    REACH = 6      # насколько высоко достаёт по стволу
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self._was_active = False
+
+    def chop(self):
+        """Срубить ствол над собой; возвращает, сколько блоков срублено."""
+        cut = 0
+        for dy in range(1, self.REACH + 1):
+            ty = self.ty - dy
+            ttile = self.game_map.get_static_tile_type(self.tx, ty, default=0)
+            if ttile in WOOD_TILES or ttile == 105:   # ствол/листва
+                items = item_of_break_tile(self.game_map.get_static_tile(self.tx, ty),
+                                           self.game_map, (self.tx, ty))
+                self.game_map.set_static_tile(self.tx, ty, 0)
+                for idx, cnt in items:
+                    self.game_map.add_item_of_index(idx, cnt, self.tx, ty)
+                cut += 1
+            elif ttile != 0:
+                break
+        return cut
+
+    def update(self, elapsed_time):
+        self.refresh_activating()
+        if self.activating and not self._was_active:
+            self.chop()
+        self._was_active = self.activating
+
+
 classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate,
           Wire, Lever, Lamp, NotGate, AndGate, OrGate, DelayBlock, ChunkLoader, MusicBlock,
-          Receiver, Transmitter, LoreTablet}
+          Receiver, Transmitter, LoreTablet,
+          Hopper, Conveyor, Dropper, Chopper}
 tiles_class = {cls.index: cls for cls in classes}

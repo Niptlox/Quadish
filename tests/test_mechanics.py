@@ -2067,3 +2067,116 @@ def test_plant_growth_logic_shared_with_screenmap():
     src = inspect.getsource(ScreenMap.update_tile)
     assert "grow_plant_tile" in src, "ScreenMap должен звать общий GameMap.grow_plant_tile"
     assert "TILE_TIMER" not in src, "своей копии логики роста в ScreenMap быть не должно"
+
+
+# ===================== логистика: воронка, конвейер, дропер, лесоруб =====================
+
+def _place_block(gm, x, y, index):
+    gm.set_static_tile(x, y, index)
+    tile = gm.get_static_tile(x, y)
+    return gm.get_tile_obj(*gm.to_chunk_xy(x, y), tile[3])
+
+
+def test_hopper_picks_up_and_pushes_into_chest():
+    """Воронка подбирает лежащие предметы и отдаёт их в сундук снизу —
+    без этого ни одна ферма не автоматическая."""
+    game = fresh_world(61)
+    gm = game.game_map
+    x, y = 12, 4
+    hopper = _place_block(gm, x, y, 224)
+    chest = _place_block(gm, x, y + 1, 129)
+    assert hopper is not None and chest is not None
+
+    gm.add_item_of_index(11, 5, x, y)         # доски прямо в воронку
+
+    # такт двигаем ПО ОДНОМУ, как в игре: блок срабатывает на кратных
+    # PERIOD тактах, и прибавление сразу PERIOD от произвольного старта
+    # могло не попасть в них ни разу
+    def run(ticks):
+        for _ in range(ticks):
+            game.tact += 1
+            hopper.update(16)
+
+    run(hopper.PERIOD * 3)
+    picked = sum(c.count for c in hopper.inventory if c) + \
+             sum(c.count for c in chest.inventory if c)
+    assert picked > 0, "воронка должна была подобрать предмет"
+    # и передать вниз
+    run(hopper.PERIOD * 8)
+    assert any(c and c.index == 11 for c in chest.inventory), "предмет должен уйти в сундук"
+
+
+def test_conveyor_moves_items_and_flips_direction():
+    """Конвейер толкает предметы вбок; направление переключается правым
+    кликом (кадром тайла), а не вторым блоком."""
+    game = fresh_world(62)
+    gm = game.game_map
+    x, y = 20, 6
+    conv = _place_block(gm, x, y, 225)
+    gm.add_item_of_index(11, 1, x, y - 1)
+    items = conv.items_in_tile(x, y - 1)
+    assert items, "предмет должен лежать на конвейере"
+    item = items[0]
+
+    def run(ticks):
+        for _ in range(ticks):
+            game.tact += 1
+            conv.update(16)
+
+    start = item.rect.x
+    run(conv.PERIOD * 4)
+    assert item.rect.x > start, "вправо по умолчанию"
+
+    conv.right_click((0, 0))
+    assert conv.direction() == -1, "правый клик разворачивает"
+    mid = item.rect.x
+    run(conv.PERIOD * 4)
+    assert item.rect.x < mid, "после разворота — влево"
+
+
+def test_dropper_drops_one_item_per_signal_edge():
+    """Дропер выбрасывает предмет по ФРОНТУ сигнала: иначе он вывалил бы
+    весь запас за секунду, пока включён рычаг."""
+    game = fresh_world(63)
+    gm = game.game_map
+    x, y = 26, 5
+    dropper = _place_block(gm, x, y, 226)
+    from units.Objects.Items import ItemsTile
+    dropper.inventory.put_to_inventory(ItemsTile(game, 11, count=3))
+    before = sum(c.count for c in dropper.inventory if c)
+
+    # держим сигнал включённым несколько тактов — должен выпасть ОДИН
+    for _ in range(5):
+        dropper.activated_tact = game.tact
+        dropper.update(16)
+        game.tact += 1
+    assert sum(c.count for c in dropper.inventory if c) == before - 1, \
+        "за один фронт сигнала — ровно один предмет"
+
+    # отпустили и снова включили — ещё один
+    dropper.activated_tact = float("-inf")
+    dropper.update(16)
+    game.tact += 1
+    dropper.activated_tact = game.tact
+    dropper.update(16)
+    assert sum(c.count for c in dropper.inventory if c) == before - 2
+
+
+def test_chopper_cuts_tree_above_on_signal():
+    """Лесоруб срубает ствол над собой по сигналу и роняет брёвна —
+    основа фермы дерева."""
+    game = fresh_world(64)
+    gm = game.game_map
+    x, y = 33, 8
+    chopper = _place_block(gm, x, y, 227)
+    for dy in range(1, 4):
+        gm.set_static_tile(x, y - dy, 110)      # ствол дерева
+    assert gm.get_static_tile_type(x, y - 1) == 110
+
+    chopper.activated_tact = game.tact
+    chopper.update(16)
+    assert gm.get_static_tile_type(x, y - 1, default=0) == 0, "ствол должен быть срублен"
+    dropped = chopper.items_in_tile(x, y - 1) if hasattr(chopper, "items_in_tile") else []
+    chunk = gm.chunk(gm.to_chunk_xy(x, y - 1))
+    from units.common import OBJ_ITEM
+    assert any(o.class_obj & OBJ_ITEM for o in chunk[1]), "должны выпасть брёвна"
