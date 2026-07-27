@@ -5,6 +5,14 @@ from units.Graphics.Animation import get_death_animation
 from units.Objects.Entity import PhysicalObject
 from units.Objects.Items import ItemsTile
 from units.Graphics.Particle import DamageParticle
+# Спрайты животных — пиксель-арт (сетки нарисованы вручную). Раньше они
+# рисовались здесь же примитивами с дробными координатами, из-за чего на
+# 16-35 пикселях лапы разъезжались, а сочленения висели в воздухе.
+from units.Objects.CreatureSprites import (
+    create_cow_sprite, create_wolf_sprite, create_snake_sprite, create_imp_sprite,
+    create_scorpion_sprite, create_rabbit_sprite, create_deer_sprite, create_fox_sprite,
+    create_camel_sprite, create_penguin_sprite, create_boar_sprite, create_crab_sprite,
+    create_bat_sprite, create_golem_sprite, create_space_drifter_sprite)
 from units.common import *
 
 
@@ -239,35 +247,6 @@ class Slime(MovingCreature):
         return True
 
 
-def create_cow_sprite(color, size, outline="#1C1917"):
-    """Корова примитивами (мордой вправо): туловище, пятна, голова с мордой и ушами, ноги."""
-    w, h = max(size[0], 4), max(size[1], 4)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    leg_w = max(2, w // 7)
-    leg_h = max(2, int(h * 0.28))
-    leg_y = h - leg_h
-    for lx in (int(w * 0.08), int(w * 0.32), int(w * 0.58), int(w * 0.82)):
-        pg.draw.rect(s, "#44403C", (lx, leg_y, leg_w, leg_h))
-    body_h = h - leg_h + 2
-    pg.draw.ellipse(s, color, (0, 0, w, body_h))
-    spot = "#3F3A36"
-    pg.draw.ellipse(s, spot, (int(w * 0.08), int(body_h * 0.15), int(w * 0.22), int(body_h * 0.35)))
-    pg.draw.ellipse(s, spot, (int(w * 0.5), int(body_h * 0.4), int(w * 0.28), int(body_h * 0.3)))
-    head_w, head_h = int(w * 0.3), int(body_h * 0.7)
-    hx, hy = w - head_w - 1, int(body_h * 0.05)
-    pg.draw.ellipse(s, color, (hx, hy, head_w, head_h))
-    ear_r = max(2, head_h // 5)
-    pg.draw.circle(s, color, (hx + 2, hy), ear_r)
-    pg.draw.circle(s, color, (hx + head_w - 2, hy), ear_r)
-    snout_w = int(head_w * 0.55)
-    pg.draw.ellipse(s, "#F5E6D3", (hx + head_w - snout_w, hy + int(head_h * 0.5), snout_w, int(head_h * 0.45)))
-    pg.draw.circle(s, outline, (hx + head_w - 4, hy + int(head_h * 0.35)), max(1, w // 40 + 1))
-    pg.draw.ellipse(s, outline, (0, 0, w, body_h), width=1)
-    pg.draw.ellipse(s, outline, (hx, hy, head_w, head_h), width=1)
-    return s
-
-
 class Cow(MovingCreature):
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "cow"
@@ -296,59 +275,6 @@ class Cow(MovingCreature):
             self.move_tact = random.randint(30, 205)
             self.move_direction = random.randint(-1, 1)
         return True
-
-
-def create_wolf_sprite(color, size, outline="#1C1917"):
-    """Волк/собака примитивами (мордой вправо): туловище, треугольные уши, морда, хвост, ноги."""
-    w, h = max(size[0], 4), max(size[1], 4)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    leg_w = max(2, w // 8)
-    leg_h = max(2, int(h * 0.3))
-    leg_y = h - leg_h
-    for lx in (int(w * 0.05), int(w * 0.28), int(w * 0.6), int(w * 0.83)):
-        pg.draw.rect(s, "#3F3A36", (lx, leg_y, leg_w, leg_h))
-    body_w = int(w * 0.78)
-    body_h = h - leg_h + 2
-    pg.draw.rect(s, color, (0, 0, body_w, body_h), border_radius=max(1, int(body_h * 0.3)))
-    tail = [(int(w * 0.1), int(body_h * 0.2)), (0, int(body_h * 0.02)), (int(w * 0.1), int(body_h * 0.45))]
-    pg.draw.polygon(s, color, tail)
-    head_w, head_h = int(w * 0.34), int(body_h * 0.75)
-    hx, hy = w - head_w, 0
-    pg.draw.rect(s, color, (hx, hy, head_w, head_h), border_radius=max(1, int(head_h * 0.25)))
-    ear_h = max(2, head_h // 3)
-    pg.draw.polygon(s, color, [(hx + 2, hy), (hx + 2 + ear_h // 2, hy - ear_h), (hx + 2 + ear_h, hy)])
-    pg.draw.polygon(s, color, [(hx + head_w - 2 - ear_h, hy), (hx + head_w - 2 - ear_h // 2, hy - ear_h),
-                               (hx + head_w - 2, hy)])
-    snout_w = max(1, int(head_w * 0.4))
-    pg.draw.rect(s, color, (hx + head_w - 2, hy + int(head_h * 0.45), snout_w, int(head_h * 0.35)),
-                border_top_right_radius=3, border_bottom_right_radius=3)
-    pg.draw.circle(s, outline, (hx + head_w - 4, hy + int(head_h * 0.3)), max(1, w // 40 + 1))
-    pg.draw.rect(s, outline, (0, 0, body_w, body_h), width=1, border_radius=max(1, int(body_h * 0.3)))
-    pg.draw.rect(s, outline, (hx, hy, head_w, head_h), width=1, border_radius=max(1, int(head_h * 0.25)))
-    return s
-
-
-def create_snake_sprite(color, size, outline="#1C1917"):
-    """Змея примитивами: волнистое тело из кружков, голова с языком."""
-    w, h = max(size[0], 4), max(size[1], 3)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    body_r = max(1, h // 2)
-    segs = max(3, w // max(2, body_r * 3))
-    seg_w = w / segs
-    for i in range(segs):
-        offset = body_r // 2 if i % 2 else -(body_r // 2)
-        cy = max(body_r, min(h - body_r, h // 2 + offset))
-        cx = int(seg_w * (i + 0.5))
-        pg.draw.circle(s, color, (cx, cy), body_r)
-    head_r = max(2, body_r + 1)
-    hx, hy = w - head_r, h // 2
-    pg.draw.circle(s, color, (hx, hy), head_r)
-    pg.draw.circle(s, outline, (min(w - 1, hx + head_r // 2), max(0, hy - head_r // 3)), 1)
-    if w > 1:
-        pg.draw.line(s, "#B91C1C", (w - 2, hy), (w - 1, hy), 1)
-    return s
 
 
 class Wolf(MovingCreature):
@@ -430,32 +356,6 @@ class Snake(Wolf):
         self.sprite = create_snake_sprite(self.color, self.rect.size)
 
 
-def create_imp_sprite(color, size, outline="#1C1917"):
-    """Бес примитивами: приземистое тело, рожки, светящийся глаз."""
-    w, h = max(size[0], 4), max(size[1], 4)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    leg_w = max(2, w // 6)
-    leg_h = max(2, int(h * 0.3))
-    leg_y = h - leg_h
-    for lx in (int(w * 0.1), int(w * 0.35), int(w * 0.6), int(w * 0.82)):
-        pg.draw.rect(s, "#292524", (lx, leg_y, leg_w, leg_h))
-    body_w = int(w * 0.8)
-    body_h = h - leg_h + 2
-    pg.draw.rect(s, color, (0, 0, body_w, body_h), border_radius=max(1, int(body_h * 0.35)))
-    head_w, head_h = int(w * 0.4), int(body_h * 0.7)
-    hx, hy = w - head_w, 0
-    pg.draw.rect(s, color, (hx, hy, head_w, head_h), border_radius=max(1, int(head_h * 0.3)))
-    horn_h = max(2, head_h // 3)
-    pg.draw.polygon(s, "#78716C", [(hx + 2, hy + 2), (hx, hy - horn_h), (hx + 4, hy)])
-    pg.draw.polygon(s, "#78716C", [(hx + head_w - 2, hy + 2), (hx + head_w, hy - horn_h), (hx + head_w - 4, hy)])
-    eye_r = max(1, w // 30 + 1)
-    pg.draw.circle(s, "#FDE047", (hx + head_w - 4, hy + int(head_h * 0.4)), eye_r)
-    pg.draw.rect(s, outline, (0, 0, body_w, body_h), width=1, border_radius=max(1, int(body_h * 0.35)))
-    pg.draw.rect(s, outline, (hx, hy, head_w, head_h), width=1, border_radius=max(1, int(head_h * 0.3)))
-    return s
-
-
 class Imp(Wolf):
     """Бес — враждебный житель Ада (спавнится глубоко под START_HELL_Y)."""
     not_save_vars = Wolf.not_save_vars
@@ -478,34 +378,6 @@ class Imp(Wolf):
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
         self.sprite = create_imp_sprite(self.color, self.rect.size)
-
-
-def create_scorpion_sprite(color, size, outline="#1C1917"):
-    """Скорпион примитивами: приземистое тело, клешни спереди, хвост со
-    жалом, изогнутый над спиной назад."""
-    w, h = max(size[0], 8), max(size[1], 6)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    body_h = int(h * 0.45)
-    body_y = h - body_h - 1
-    leg_len = max(1, int(h * 0.22))
-    for lx in (int(w * 0.28), int(w * 0.42), int(w * 0.56)):
-        pg.draw.line(s, outline, (lx, body_y + body_h - 1), (lx - 2, h - 1), 1)
-        pg.draw.line(s, outline, (lx + leg_len, body_y + body_h - 1), (lx + leg_len + 2, h - 1), 1)
-    pg.draw.ellipse(s, color, (int(w * 0.22), body_y, int(w * 0.55), body_h))
-    claw_w, claw_h = max(2, int(w * 0.2)), max(2, int(body_h * 0.9))
-    pg.draw.ellipse(s, color, (int(w * 0.66), body_y - claw_h // 4, claw_w, claw_h))
-    pg.draw.ellipse(s, color, (int(w * 0.02), body_y - claw_h // 4, claw_w, claw_h))
-    # хвост из сегментов, загибается вверх-назад над телом
-    seg_r = max(1, body_h // 4)
-    tx, ty = int(w * 0.22), body_y
-    for _ in range(4):
-        tx = max(seg_r, tx - int(w * 0.06))
-        ty = max(seg_r, ty - int(h * 0.16))
-        pg.draw.circle(s, color, (tx, ty), seg_r)
-    pg.draw.polygon(s, "#7C2D12", [(tx - seg_r, ty), (tx, max(0, ty - seg_r * 2)), (tx + seg_r, ty)])
-    pg.draw.ellipse(s, outline, (int(w * 0.22), body_y, int(w * 0.55), body_h), width=1)
-    return s
 
 
 class Scorpion(Wolf):
@@ -554,25 +426,6 @@ class PassiveWanderer(MovingCreature):
         return True
 
 
-def create_rabbit_sprite(color, size, outline="#1C1917"):
-    w, h = max(size[0], 6), max(size[1], 5)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    leg_h = max(1, int(h * 0.25))
-    pg.draw.rect(s, "#57534E", (int(w * 0.15), h - leg_h, int(w * 0.18), leg_h))
-    pg.draw.rect(s, "#57534E", (int(w * 0.62), h - leg_h, int(w * 0.22), leg_h))
-    pg.draw.ellipse(s, color, (int(w * 0.05), int(h * 0.2), int(w * 0.75), h - leg_h - int(h * 0.15)))
-    head_r = max(1, int(h * 0.32))
-    hx, hy = int(w * 0.78), int(h * 0.28)
-    pg.draw.circle(s, color, (hx, hy), head_r)
-    ear_w, ear_h = max(1, head_r // 2), int(h * 0.5)
-    pg.draw.ellipse(s, color, (hx - ear_w, max(0, hy - ear_h - head_r // 2), ear_w, ear_h))
-    pg.draw.ellipse(s, color, (hx + ear_w // 3, max(0, hy - ear_h - head_r // 2), ear_w, ear_h))
-    pg.draw.circle(s, "#F5F5F4", (int(w * 0.08), int(h * 0.5)), max(1, int(h * 0.12)))
-    pg.draw.circle(s, outline, (hx + head_r // 2, max(0, hy - head_r // 4)), 1)
-    return s
-
-
 class Rabbit(PassiveWanderer):
     """Заяц — мелкое мирное животное, водится почти везде."""
     bio_kingdom = KINGDOM_ANIMALIA
@@ -588,28 +441,6 @@ class Rabbit(PassiveWanderer):
         super().__init__(game, pos)
         self.color = random.choice(self.colors)
         self.sprite = create_rabbit_sprite(self.color, self.rect.size)
-
-
-def create_deer_sprite(color, size, outline="#1C1917"):
-    w, h = max(size[0], 10), max(size[1], 10)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    leg_w = max(1, w // 12)
-    leg_h = max(2, int(h * 0.4))
-    leg_y = h - leg_h
-    for lx in (int(w * 0.1), int(w * 0.3), int(w * 0.55), int(w * 0.78)):
-        pg.draw.rect(s, "#57534E", (lx, leg_y, leg_w, leg_h))
-    body_top = int(h * 0.08)
-    body_h = leg_y + 2 - body_top  # +2 - тело слегка перекрывает ноги, без разрыва
-    pg.draw.ellipse(s, color, (0, body_top, int(w * 0.75), body_h))
-    head_w, head_h = int(w * 0.28), int(body_h * 0.6)
-    hx, hy = w - head_w, 0
-    pg.draw.rect(s, color, (hx, hy, head_w, head_h), border_radius=max(1, head_h // 3))
-    pg.draw.line(s, "#78716C", (hx + head_w // 3, hy), (hx + head_w // 3 - 3, max(0, hy - int(h * 0.2))), 2)
-    pg.draw.line(s, "#78716C", (hx + head_w * 2 // 3, hy), (hx + head_w * 2 // 3 + 3, max(0, hy - int(h * 0.2))), 2)
-    pg.draw.circle(s, outline, (hx + head_w - 3, hy + int(head_h * 0.4)), 1)
-    pg.draw.ellipse(s, outline, (0, body_top, int(w * 0.75), body_h), width=1)
-    return s
 
 
 class Deer(PassiveWanderer):
@@ -629,25 +460,6 @@ class Deer(PassiveWanderer):
         self.sprite = create_deer_sprite(self.color, self.rect.size)
 
 
-def create_fox_sprite(color, size, outline="#1C1917"):
-    w, h = max(size[0], 8), max(size[1], 6)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    leg_h = max(1, int(h * 0.25))
-    for lx in (int(w * 0.1), int(w * 0.55)):
-        pg.draw.rect(s, "#44403C", (lx, h - leg_h, max(1, w // 10), leg_h))
-    body_h = h - leg_h
-    pg.draw.ellipse(s, color, (int(w * 0.15), 0, int(w * 0.55), body_h))
-    pg.draw.polygon(s, color, [(int(w * 0.15), int(body_h * 0.3)), (0, int(body_h * 0.6)), (int(w * 0.2), body_h)])
-    pg.draw.circle(s, "#F5F5F4", (int(w * 0.05), int(body_h * 0.75)), max(1, int(body_h * 0.18)))
-    head_w = int(w * 0.3)
-    hx = w - head_w
-    pg.draw.polygon(s, color, [(hx, int(body_h * 0.15)), (w - 1, int(body_h * 0.45)), (hx, body_h)])
-    pg.draw.polygon(s, color, [(hx + 2, 0), (hx + head_w // 2, int(body_h * 0.15)), (hx - 2, int(body_h * 0.35))])
-    pg.draw.circle(s, outline, (w - 4, int(body_h * 0.42)), 1)
-    return s
-
-
 class Fox(PassiveWanderer):
     """Лиса — мелкое мирное животное лесов, быстрая."""
     bio_kingdom = KINGDOM_ANIMALIA
@@ -663,26 +475,6 @@ class Fox(PassiveWanderer):
         super().__init__(game, pos)
         self.color = random.choice(self.colors)
         self.sprite = create_fox_sprite(self.color, self.rect.size)
-
-
-def create_camel_sprite(color, size, outline="#1C1917"):
-    w, h = max(size[0], 10), max(size[1], 10)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    leg_w = max(1, w // 14)
-    leg_h = max(2, int(h * 0.45))
-    leg_y = h - leg_h
-    for lx in (int(w * 0.1), int(w * 0.3), int(w * 0.55), int(w * 0.75)):
-        pg.draw.rect(s, "#8B6D4C", (lx, leg_y, leg_w, leg_h))
-    body_top = int(h * 0.3)
-    body_h = leg_y + 2 - body_top  # +2 - тело слегка перекрывает ноги, без разрыва
-    pg.draw.ellipse(s, color, (0, body_top, int(w * 0.65), body_h))
-    pg.draw.circle(s, color, (int(w * 0.35), body_top), max(1, int(body_h * 0.35)))
-    neck = [(int(w * 0.6), body_top + int(body_h * 0.3)), (int(w * 0.85), 0), (w - 1, int(h * 0.12)),
-           (int(w * 0.7), body_top + int(body_h * 0.55))]
-    pg.draw.polygon(s, color, neck)
-    pg.draw.circle(s, outline, (w - 4, int(h * 0.1)), 1)
-    return s
 
 
 class Camel(PassiveWanderer):
@@ -702,19 +494,6 @@ class Camel(PassiveWanderer):
         self.sprite = create_camel_sprite(self.color, self.rect.size)
 
 
-def create_penguin_sprite(color, size, outline="#1C1917"):
-    w, h = max(size[0], 6), max(size[1], 8)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    pg.draw.ellipse(s, color, (0, 0, w, h))
-    pg.draw.ellipse(s, "#F5F5F4", (int(w * 0.2), int(h * 0.3), int(w * 0.6), int(h * 0.65)))
-    beak = [(w - 2, int(h * 0.35)), (w + 2, int(h * 0.42)), (w - 2, int(h * 0.5))]
-    pg.draw.polygon(s, "#F59E0B", beak)
-    pg.draw.circle(s, outline, (int(w * 0.75), int(h * 0.28)), 1)
-    pg.draw.ellipse(s, outline, (0, 0, w, h), width=1)
-    return s
-
-
 class Penguin(PassiveWanderer):
     """Пингвин — мирное животное тундры/тайги."""
     bio_kingdom = KINGDOM_ANIMALIA
@@ -729,24 +508,6 @@ class Penguin(PassiveWanderer):
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
         self.sprite = create_penguin_sprite(self.color, self.rect.size)
-
-
-def create_boar_sprite(color, size, outline="#1C1917"):
-    w, h = max(size[0], 8), max(size[1], 8)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    leg_h = max(1, int(h * 0.3))
-    for lx in (int(w * 0.1), int(w * 0.3), int(w * 0.55), int(w * 0.78)):
-        pg.draw.rect(s, "#292524", (lx, h - leg_h, max(1, w // 12), leg_h))
-    body_h = h - leg_h
-    pg.draw.ellipse(s, color, (0, int(body_h * 0.05), int(w * 0.8), int(body_h * 0.85)))
-    head_w, head_h = int(w * 0.3), int(body_h * 0.65)
-    hx, hy = w - head_w, int(body_h * 0.15)
-    pg.draw.rect(s, color, (hx, hy, head_w, head_h), border_radius=max(1, head_h // 4))
-    pg.draw.polygon(s, "#F5F5F4", [(w - 3, hy + head_h), (w + 2, hy + head_h - 4), (w - 1, hy + head_h - 2)])
-    pg.draw.circle(s, outline, (hx + head_w - 3, hy + int(head_h * 0.3)), 1)
-    pg.draw.ellipse(s, outline, (0, int(body_h * 0.05), int(w * 0.8), int(body_h * 0.85)), width=1)
-    return s
 
 
 class Boar(Wolf):
@@ -771,22 +532,6 @@ class Boar(Wolf):
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
         self.sprite = create_boar_sprite(self.color, self.rect.size)
-
-
-def create_crab_sprite(color, size, outline="#1C1917"):
-    w, h = max(size[0], 8), max(size[1], 5)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    leg_y = int(h * 0.6)
-    for lx in (int(w * 0.15), int(w * 0.3), int(w * 0.6), int(w * 0.75)):
-        pg.draw.line(s, outline, (lx, leg_y), (max(0, lx - 3), h - 1), 1)
-    pg.draw.ellipse(s, color, (int(w * 0.15), 0, int(w * 0.7), leg_y))
-    claw_r = max(2, int(h * 0.3))
-    pg.draw.circle(s, color, (int(w * 0.08), int(leg_y * 0.4)), claw_r)
-    pg.draw.circle(s, color, (int(w * 0.92), int(leg_y * 0.4)), claw_r)
-    pg.draw.circle(s, outline, (int(w * 0.35), int(leg_y * 0.4)), 1)
-    pg.draw.circle(s, outline, (int(w * 0.65), int(leg_y * 0.4)), 1)
-    return s
 
 
 class Crab(Wolf):
@@ -815,22 +560,6 @@ class Crab(Wolf):
         self.sprite = create_crab_sprite(self.color, self.rect.size)
 
 
-def create_bat_sprite(color, size, outline="#1C1917"):
-    w, h = max(size[0], 8), max(size[1], 5)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    body_r = max(1, int(h * 0.35))
-    cx, cy = w // 2, int(h * 0.5)
-    wing_l = [(cx, cy), (0, int(h * 0.1)), (int(w * 0.3), cy), (0, h - 1)]
-    wing_r = [(cx, cy), (w - 1, int(h * 0.1)), (int(w * 0.7), cy), (w - 1, h - 1)]
-    pg.draw.polygon(s, color, wing_l)
-    pg.draw.polygon(s, color, wing_r)
-    pg.draw.circle(s, color, (cx, cy), body_r)
-    pg.draw.circle(s, "#DC2626", (cx - 1, cy - 1), 1)
-    pg.draw.circle(s, "#DC2626", (cx + 1, cy - 1), 1)
-    return s
-
-
 class Bat(Wolf):
     """Летучая мышь — мелкий шустрый враг пещер."""
     not_save_vars = Wolf.not_save_vars
@@ -855,25 +584,6 @@ class Bat(Wolf):
         self.sprite = create_bat_sprite(self.color, self.rect.size)
 
 
-def create_golem_sprite(color, size, outline="#1C1917"):
-    w, h = max(size[0], 12), max(size[1], 14)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    leg_w = max(2, w // 4)
-    leg_h = max(2, int(h * 0.25))
-    pg.draw.rect(s, color, (int(w * 0.08), h - leg_h, leg_w, leg_h))
-    pg.draw.rect(s, color, (w - leg_w - int(w * 0.08), h - leg_h, leg_w, leg_h))
-    body_h = h - leg_h
-    pg.draw.rect(s, color, (0, int(body_h * 0.2), w, int(body_h * 0.8)), border_radius=max(1, w // 10))
-    head_s = int(w * 0.45)
-    pg.draw.rect(s, color, ((w - head_s) // 2, 0, head_s, int(body_h * 0.3)), border_radius=3)
-    for cx, cy in ((w // 2 - head_s // 4, int(body_h * 0.15)), (w // 2 + head_s // 4, int(body_h * 0.15))):
-        pg.draw.circle(s, "#F59E0B", (cx, cy), 1)
-    pg.draw.rect(s, outline, (0, int(body_h * 0.2), w, int(body_h * 0.8)), width=1, border_radius=max(1, w // 10))
-    pg.draw.line(s, outline, (int(w * 0.3), int(body_h * 0.4)), (int(w * 0.25), int(body_h * 0.7)), 1)
-    return s
-
-
 class StoneGolem(Wolf):
     """Каменный голем — тяжёлый неповоротливый враг глубоких пещер."""
     not_save_vars = Wolf.not_save_vars
@@ -896,21 +606,6 @@ class StoneGolem(Wolf):
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
         self.sprite = create_golem_sprite(self.color, self.rect.size)
-
-
-def create_space_drifter_sprite(color, size, outline="#1C1917"):
-    w, h = max(size[0], 8), max(size[1], 8)
-    s = pg.Surface((w, h)).convert_alpha()
-    s.fill((0, 0, 0, 0))
-    pg.draw.ellipse(s, color, (int(w * 0.1), int(h * 0.3), int(w * 0.8), int(h * 0.6)))
-    pg.draw.ellipse(s, (165, 243, 252, 170), (int(w * 0.2), 0, int(w * 0.6), int(h * 0.5)))
-    for i in range(3):
-        ty = int(h * 0.85) + (i % 2)
-        pg.draw.line(s, color, (int(w * (0.2 + i * 0.25)), int(h * 0.75)), (int(w * (0.15 + i * 0.25)), ty), 1)
-    pg.draw.circle(s, outline, (int(w * 0.4), int(h * 0.55)), 1)
-    pg.draw.circle(s, outline, (int(w * 0.6), int(h * 0.55)), 1)
-    pg.draw.ellipse(s, outline, (int(w * 0.1), int(h * 0.3), int(w * 0.8), int(h * 0.6)), width=1)
-    return s
 
 
 class SpaceDrifter(Wolf):

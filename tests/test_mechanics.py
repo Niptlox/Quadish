@@ -1661,3 +1661,87 @@ def test_altar_tablet_placed_in_every_new_world():
     assert gm.get_static_tile_type(pos[0], pos[1] + 1) != 0, "плита должна стоять на блоке"
     obj = gm.get_tile_obj(*gm.to_chunk_xy(*pos), tile[3])
     assert obj.inscription_id() == "altar"
+
+
+# ===================== пиксель-арт существ =====================
+
+def test_pixel_art_builder():
+    """Сетка собирается 1:1, палитра привязана к базовому цвету, а
+    неровная сетка отвергается (опечатку в строке легко не заметить)."""
+    get_app()
+    from units.Graphics.PixelArt import build_sprite, palette, shade, PixelArtError
+    s = build_sprite(["BK", ".e"], base="#204080")
+    assert s.get_size() == (2, 2)
+    assert s.get_at((0, 0))[:3] == (0x20, 0x40, 0x80), "B — базовый цвет"
+    assert s.get_at((1, 0))[:3] == (28, 25, 23), "K — обводка"
+    assert s.get_at((0, 1))[3] == 0, "'.' — прозрачный пиксель"
+
+    # оттенки должны идти по яркости: тень < средний < базовый < блик
+    pal = palette("#808080")
+
+    def brightness(c):
+        return sum(tuple(c)[:3])
+
+    assert brightness(pal['D']) < brightness(pal['M']) < brightness(pal['B']) < brightness(pal['L'])
+    assert shade("#808080", 0.5)[0] == 64, "затемнение"
+    assert shade("#808080", 2)[0] == 255, "осветление должно ограничиваться 255"
+
+    # масштабирование даёт запрошенный размер и не мылит (nearest)
+    big = build_sprite(["BK"], base="#204080", size=(4, 2))
+    assert big.get_size() == (4, 2)
+    assert big.get_at((0, 0))[:3] == big.get_at((1, 0))[:3]
+
+    for bad in (["BB", "B"], [], ["B?B"]):
+        try:
+            build_sprite(bad)
+        except PixelArtError:
+            pass
+        else:
+            raise AssertionError(f"должно падать: {bad}")
+
+
+def test_creature_sprites_are_pixel_art_grids():
+    """Каждое животное должно иметь корректную сетку (все строки одной
+    длины, только известные символы) и рисоваться в свой размер."""
+    get_app()
+    from units.Objects import CreatureSprites as CS
+    from units.Objects import Creatures as C
+
+    pairs = [
+        ("Cow", CS.create_cow_sprite), ("Wolf", CS.create_wolf_sprite),
+        ("Fox", CS.create_fox_sprite), ("Rabbit", CS.create_rabbit_sprite),
+        ("Deer", CS.create_deer_sprite), ("Camel", CS.create_camel_sprite),
+        ("Boar", CS.create_boar_sprite), ("Snake", CS.create_snake_sprite),
+        ("Imp", CS.create_imp_sprite), ("Scorpion", CS.create_scorpion_sprite),
+        ("Crab", CS.create_crab_sprite), ("Penguin", CS.create_penguin_sprite),
+        ("Bat", CS.create_bat_sprite), ("StoneGolem", CS.create_golem_sprite),
+        ("SpaceDrifter", CS.create_space_drifter_sprite),
+    ]
+    assert len(pairs) == 15
+    for name, fn in pairs:
+        cls = getattr(C, name)
+        size = (int(cls.width), int(cls.height))
+        colors = getattr(cls, "colors", None)
+        base = colors[0] if isinstance(colors, list) else getattr(cls, "color", None)
+        spr = fn(base, size)
+        assert spr.get_size() == size, f"{name}: спрайт не в размер существа"
+        # спрайт не должен быть полностью пустым
+        assert any(spr.get_at((x, y))[3] for x in range(size[0]) for y in range(size[1])), \
+            f"{name}: спрайт пустой"
+
+
+def test_creature_sprite_grids_have_ground_contact():
+    """Животное должно опираться на нижнюю часть спрайта, а не висеть в
+    воздухе: у процедурных спрайтов лапы часто не доходили до низа."""
+    get_app()
+    from units.Objects import CreatureSprites as CS
+    # у этих сеток последняя строка — лапы/основание
+    for name in ("COW", "WOLF", "FOX", "RABBIT", "DEER", "CAMEL", "BOAR",
+                 "IMP", "SCORPION", "CRAB", "PENGUIN", "GOLEM"):
+        rows = getattr(CS, name)
+        assert rows, name
+        # ищем самую нижнюю непрозрачную строку и требуем, чтобы она была
+        # в двух последних строках сетки
+        last_filled = max(i for i, r in enumerate(rows) if set(r) != {'.'})
+        assert last_filled >= len(rows) - 2, \
+            f"{name}: низ сетки пустой — существо будет висеть над землёй"
