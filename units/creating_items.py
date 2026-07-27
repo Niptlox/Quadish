@@ -45,3 +45,10 @@ RECIPES = [
     [(222, 1), ((11, 2), (61, 2), (66, 1), (121, -1))],  # приёмник рации
     [(223, 1), ((11, 2), (61, 2), (63, 1), (66, 1), (121, -1))],  # передатчик рации
 ]
+
+# Рецепты из модов — добавляются в тот же список, поэтому попадают в
+# обычное меню крафта без правок в UI (см. units/mods.py, поле "recipe").
+from units import mods as _mods  # noqa: E402
+
+RECIPES += [[(_spec["id"], _spec["recipe_count"]), tuple(_spec["recipe"])]
+            for _spec in _mods.mod_blocks() if _spec["recipe"]]

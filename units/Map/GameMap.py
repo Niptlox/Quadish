@@ -5,7 +5,8 @@ from typing import Union
 from units.noise_compat import snoise2 as noise2
 
 from units.Objects.Creatures import (Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion,
-                                     Rabbit, Deer, Fox, Camel, Penguin, Boar, Crab, Bat, StoneGolem, SpaceDrifter)
+                                     Rabbit, Deer, Fox, Camel, Penguin, Boar, Crab, Bat, StoneGolem, SpaceDrifter,
+                                     MOD_CREATURES)
 from units.Objects.Entities import PortalMainGate
 from units.Objects.Entity import PhysicalObject
 from units.Objects.Items import ItemsTile
@@ -713,6 +714,19 @@ class GameMap(SavedObject):
         self.game.ui.new_sys_message(
             get_translated_text("Мир сохранён: ") + self.world_meta["name"], draw_now=True)
 
+    @staticmethod
+    def _load_error_message(exc):
+        """Понятная причина вместо технической ошибки pickle.
+
+        Мир с контентом мода не откроется, если мод выключили или удалили:
+        сохранение ссылается на класс существа по имени модуля. Без этой
+        подсказки игрок видел бы только «Не удалось загрузить мир» и не
+        понял бы, что виноват мод."""
+        if isinstance(exc, AttributeError) or "attribute" in str(exc).lower():
+            return get_translated_text("Не удалось загрузить мир: включите мод, "
+                                       "с которым он создан")
+        return get_translated_text("Не удалось загрузить мир")
+
     def open_game_map(self, game, world_id):
         meta = WorldStorage.load_meta(world_id)
         name = meta["name"] if meta else str(world_id)
@@ -725,7 +739,7 @@ class GameMap(SavedObject):
                 data = pickle.load(f)
         except Exception as exc:
             print("Ошибка загрузки:", exc)
-            self.game.ui.new_sys_message(get_translated_text("Не удалось загрузить мир"), draw_now=True)
+            self.game.ui.new_sys_message(self._load_error_message(exc), draw_now=True)
             return None
         version = data.get("game_version", "0.4")
         if version != GAME_VERSION:
@@ -737,7 +751,7 @@ class GameMap(SavedObject):
             game.player.set_vars(data["player_vars"])
         except Exception as exc:
             print("Ошибка загрузки:", exc)
-            self.game.ui.new_sys_message(get_translated_text("Не удалось загрузить мир"), draw_now=True)
+            self.game.ui.new_sys_message(self._load_error_message(exc), draw_now=True)
             return None
         self.world_id = world_id
         self.world_meta = meta
@@ -878,7 +892,10 @@ def random_creature_selection(tile_y=None, biome=None):
     - тундра/тайга (3, 8) — волки, олени, пингвины
     - тропики/джунгли (2, 5) — змеи, крабы
     - леса (4, 6, 7) — олени, лисы, кабаны
-    - остальное — исходный набор + зайцы"""
+    - остальное — исходный набор + зайцы
+
+    Существа из модов добавляются в жеребьёвку своей зоны/биома с
+    собственным весом (см. units/mods.py, поле "spawn")."""
     if not config.GameSettings.creatures:
         return None
     r = random.random()
@@ -886,25 +903,37 @@ def random_creature_selection(tile_y=None, biome=None):
         return None
 
     if tile_y is not None and tile_y < START_SPACE_Y:
-        crt = random.choices([SpaceDrifter], [1], k=1)
+        zone, pool, weights = "space", [SpaceDrifter], [1]
     elif tile_y is not None and tile_y > START_HELL_Y:
-        crt = random.choices([Slime, Wolf, Imp], [10, 3, 4], k=1)
+        zone, pool, weights = "hell", [Slime, Wolf, Imp], [10, 3, 4]
     elif tile_y is not None and tile_y > BOTTOM_MIDDLE_WORLD:
-        crt = random.choices([Slime, Bat, StoneGolem], [10, 6, 2], k=1)
+        zone, pool, weights = "caves", [Slime, Bat, StoneGolem], [10, 6, 2]
     elif biome == 0:  # desert
-        crt = random.choices([Slime, Scorpion, Snake, Camel], [10, 6, 2, 3], k=1)
+        zone, pool, weights = "surface", [Slime, Scorpion, Snake, Camel], [10, 6, 2, 3]
     elif biome == 1:  # savanna
-        crt = random.choices([Slime, Cow, Wolf, Rabbit], [15, 10, 1, 6], k=1)
+        zone, pool, weights = "surface", [Slime, Cow, Wolf, Rabbit], [15, 10, 1, 6]
     elif biome in (3, 8):  # tundra, boreal_forest
-        crt = random.choices([Slime, Wolf, Cow, Deer, Penguin], [12, 5, 1, 4, 3], k=1)
+        zone, pool, weights = "surface", [Slime, Wolf, Cow, Deer, Penguin], [12, 5, 1, 4, 3]
     elif biome in (2, 5):  # tropical_woodland, rainforest
-        crt = random.choices([Slime, Snake, Cow, Wolf, Crab], [15, 4, 3, 1, 3], k=1)
+        zone, pool, weights = "surface", [Slime, Snake, Cow, Wolf, Crab], [15, 4, 3, 1, 3]
     elif biome in (4, 6, 7):  # seasonal/temperate/temperate_rainforest
-        crt = random.choices([Slime, Deer, Fox, Boar, Rabbit], [15, 5, 4, 2, 5], k=1)
+        zone, pool, weights = "surface", [Slime, Deer, Fox, Boar, Rabbit], [15, 5, 4, 2, 5]
     else:
-        crt = random.choices([Slime, Cow, Snake, Wolf, SlimeBigBoss, Rabbit], [20, 5, 1, 0.7, 0.25, 6], k=1)
-    # print("random_creature_selection", crt)
-    return crt[0]
+        zone = "surface"
+        pool = [Slime, Cow, Snake, Wolf, SlimeBigBoss, Rabbit]
+        weights = [20, 5, 1, 0.7, 0.25, 6]
+
+    # мод-существа ДОБАВЛЯЮТСЯ к ванильному пулу, а не заменяют его —
+    # иначе один мод выключил бы всех обычных мобов в своём биоме
+    for cls, spec in MOD_CREATURES:
+        if spec["zone"] != zone:
+            continue
+        if spec["biomes"] is not None and biome not in spec["biomes"]:
+            continue
+        pool.append(cls)
+        weights.append(spec["weight"])
+
+    return random.choices(pool, weights, k=1)[0]
 
 
 

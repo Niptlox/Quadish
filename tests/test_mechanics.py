@@ -1339,3 +1339,146 @@ def test_config_values():
     assert isinstance(cfg.GameSettings.max_fps, int)
     assert FPS == cfg.GameSettings.max_fps
     assert cfg.GameSettings.language in cfg.GameSettings.all_languages
+
+
+# ===================== моды =====================
+
+def _write_mod(tmpdir, name, manifest):
+    """Создать папку мода с mod.json и вернуть корень для load_mods()."""
+    import json
+    import os
+    mod_dir = os.path.join(tmpdir, name)
+    os.makedirs(mod_dir, exist_ok=True)
+    with open(os.path.join(mod_dir, "mod.json"), "w", encoding="utf-8") as f:
+        json.dump(manifest, f)
+    return tmpdir
+
+
+def test_mods_example_mod_registered():
+    """Мод из data/modifications должен зарегистрироваться в тех же
+    структурах, что и ванильные блоки: спрайт, имя, прочность, копаемость,
+    крафт и выпадение предметов."""
+    get_app()
+    from units import mods, Tiles
+    from units.creating_items import RECIPES
+    assert mods.MODS, "пример мода должен загружаться"
+    assert not mods.MOD_ERRORS, f"пример мода не должен давать ошибок: {mods.MOD_ERRORS}"
+
+    for spec in mods.mod_blocks():
+        idx = spec["id"]
+        assert idx in Tiles.tile_imgs
+        assert idx in Tiles.tile_words and Tiles.tile_words[idx]
+        # ScreenMap индексирует TILES_SOLIDITY напрямую — обязателен
+        assert idx in Tiles.TILES_SOLIDITY
+        assert idx in Tiles.iron_capability, "мод-блок должен быть копаемым"
+        assert idx in Tiles.tile_hand_imgs, "нужна иконка для инвентаря"
+        assert idx in Tiles.all_tiles
+
+    recipe_ids = {r[0][0] for r in RECIPES}
+    assert any(s["id"] in recipe_ids for s in mods.mod_blocks() if s["recipe"]), \
+        "рецепты мода должны попадать в общий список крафта"
+
+
+def test_mods_creature_registered_and_picklable():
+    """Существо мода строится на базе ванильного класса и должно
+    пиклиться: сохранение мира пиклит сам класс существа."""
+    import pickle
+    get_app()
+    from units.Objects.Creatures import MOD_CREATURES, CREATURES, CREATURES_D
+    assert MOD_CREATURES, "пример мода добавляет существо"
+    for cls, spec in MOD_CREATURES:
+        assert cls in CREATURES and CREATURES_D[cls.__name__] is cls
+        assert cls.max_lives == spec["lives"]
+        # динамический класс должен быть доступен как атрибут модуля,
+        # иначе pickle не восстановит его при загрузке мира
+        assert pickle.loads(pickle.dumps(cls)) is cls
+
+
+def test_mods_creature_spawns_alongside_vanilla():
+    """Существа мода ДОБАВЛЯЮТСЯ к ванильному пулу спавна, а не заменяют
+    его — иначе мод выключил бы обычных мобов в своём биоме."""
+    get_app()
+    from units.Map.GameMap import random_creature_selection
+    from units.Objects.Creatures import MOD_CREATURES, Slime
+    cls, spec = MOD_CREATURES[0]
+    biome = spec["biomes"][0] if spec["biomes"] else 1
+    picks = {random_creature_selection(0, biome) for _ in range(2000)}
+    assert cls in picks, "существо мода должно попадать в жеребьёвку своего биома"
+    assert Slime in picks, "ванильные мобы должны остаться в том же биоме"
+
+
+def test_mods_animated_tile_frames_advance():
+    """Анимированный блок мода подменяет кадр прямо в tile_imgs (ScreenMap
+    читает его заново каждый кадр и не кэширует поверхности чанков)."""
+    get_app()
+    from units import mods, Tiles
+    assert mods.ANIMATED_TILES, "пример мода содержит анимированный блок"
+    tile_id, anim = next(iter(mods.ANIMATED_TILES.items()))
+    seen = set()
+    for tact in range(anim["fps"] * 2):
+        mods.update_tile_animations(Tiles.tile_imgs, tact)
+        seen.add(id(Tiles.tile_imgs[tile_id]))
+    assert len(seen) == len(anim["frames"]), \
+        f"должны прокрутиться все {len(anim['frames'])} кадров, а прокрутилось {len(seen)}"
+
+
+def test_mods_broken_mod_does_not_crash_game():
+    """Сломанный мод обязан быть пропущен с понятной ошибкой, а не
+    уронить игру: иначе один плохой мод делает игру незапускаемой."""
+    import tempfile
+    get_app()
+    from units import mods
+    saved_mods, saved_errors = list(mods.MODS), list(mods.MOD_ERRORS)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_mod(tmp, "no_json", {})            # перезапишем ниже
+            import os
+            os.remove(os.path.join(tmp, "no_json", "mod.json"))
+            _write_mod(tmp, "bad_id", {"name": "плохой id",
+                                       "blocks": [{"id": 3, "name": "Камень?", "color": "#fff"}]})
+            _write_mod(tmp, "bad_color", {"name": "плохой цвет",
+                                          "blocks": [{"id": 9001, "name": "X", "color": "не цвет"}]})
+            _write_mod(tmp, "empty", {"name": "пустой"})
+            _write_mod(tmp, "ok", {"name": "рабочий",
+                                   "blocks": [{"id": 9100, "name": "Хороший", "color": "#123456"}]})
+            loaded, errors = mods.load_mods(tmp)
+            names = {m["name"] for m in loaded}
+            assert names == {"рабочий"}, f"должен загрузиться только рабочий мод, а не {names}"
+            broken = {folder for folder, _msg in errors}
+            assert broken == {"no_json", "bad_id", "bad_color", "empty"}, broken
+            # у базовой игры id 3 — камень; мод не должен его переопределить
+            assert all("id 3" in msg or "id" in msg for folder, msg in errors if folder == "bad_id")
+    finally:
+        mods.MODS[:], mods.MOD_ERRORS[:] = saved_mods, saved_errors
+
+
+def test_mods_sprite_path_cannot_escape_mod_dir():
+    """Путь к спрайту не должен выводить за папку мода (../../ и т.п.)."""
+    import tempfile
+    get_app()
+    from units import mods
+    saved_mods, saved_errors = list(mods.MODS), list(mods.MOD_ERRORS)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_mod(tmp, "escape", {"name": "побег", "blocks": [
+                {"id": 9200, "name": "Побег", "sprite": "../../../settings.ini"}]})
+            loaded, errors = mods.load_mods(tmp)
+            assert not loaded
+            assert any("выходит за пределы" in msg for _f, msg in errors), errors
+    finally:
+        mods.MODS[:], mods.MOD_ERRORS[:] = saved_mods, saved_errors
+
+
+def test_mods_disabled_by_setting():
+    """Выключение модов в настройках должно полностью пропускать загрузку."""
+    get_app()
+    from units import mods, config as cfg
+    saved_mods, saved_errors = list(mods.MODS), list(mods.MOD_ERRORS)
+    was_enabled = cfg.ModSettings.enabled
+    try:
+        cfg.ModSettings.enabled = False
+        loaded, errors = mods.load_mods()
+        assert loaded == [] and errors == []
+    finally:
+        cfg.ModSettings.enabled = was_enabled
+        mods.MODS[:], mods.MOD_ERRORS[:] = saved_mods, saved_errors

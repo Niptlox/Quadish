@@ -74,9 +74,14 @@ class Window(__Settings):
         cls.set('menu_size', str(value))
 
 
-class UISettings(__Settings):
-    section = 'UI'
-    show_title_menu = config.getboolean(section, 'show_title_menu')
+class ModSettings(__Settings):
+    section = 'mods'
+    # Загружать ли моды из data/modifications (см. units/mods.py).
+    enabled = config.getboolean(section, 'enabled', fallback=True)
+
+    @classmethod
+    def set_enabled(cls, value):
+        cls.set('enabled', bool(value))
 
 
 class GameSettings(__Settings):

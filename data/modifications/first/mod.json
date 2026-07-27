@@ -1,0 +1,55 @@
+{
+  "name": "Арбузный мод",
+  "version": "1.0",
+  "author": "Niptlox",
+  "blocks": [
+    {
+      "id": 2001,
+      "name": "Арбуз",
+      "color": "#15803D",
+      "solidity": 45,
+      "physical": true,
+      "recipe": [[2101, 4], [121, -1]],
+      "drops": [[2101, [3, 4], 1], [2102, [1, 2], 0.1]]
+    },
+    {
+      "id": 2002,
+      "name": "Арбузный светильник",
+      "solidity": 30,
+      "physical": true,
+      "animation": {
+        "colors": ["#15803D", "#22C55E", "#4ADE80", "#22C55E"],
+        "speed": 4
+      },
+      "recipe": [[2001, 1], [64, 2], [121, -1]]
+    }
+  ],
+  "items": [
+    {
+      "id": 2101,
+      "name": "Кусок арбуза",
+      "color": "#F87171",
+      "eat": 8
+    },
+    {
+      "id": 2102,
+      "name": "Семена арбуза",
+      "color": "#FDE68A"
+    }
+  ],
+  "creatures": [
+    {
+      "id_name": "WatermelonSlime",
+      "name": "Арбузный слайм",
+      "base": "Slime",
+      "color": "#15803D",
+      "lives": 30,
+      "damage": 6,
+      "enemy": true,
+      "size": [26, 20],
+      "speed": 2,
+      "drops": [[2101, [1, 3], 1], [2102, 1, 0.25]],
+      "spawn": {"zone": "surface", "biomes": [1, 2, 4, 5, 6], "weight": 4}
+    }
+  ]
+}

@@ -986,3 +986,49 @@ class SlimeBigBoss(Slime):
 CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion,
             Rabbit, Deer, Fox, Camel, Penguin, Boar, Crab, Bat, StoneGolem, SpaceDrifter]
 CREATURES_D = {cls.__name__: cls for cls in CREATURES}
+
+
+# MODS ==================================================================
+def _build_mod_creatures():
+    """Собрать классы существ из модов на базе ванильных.
+
+    Классы кладутся и в globals() модуля: сохранение мира пиклит сам класс
+    существа (`type(obj)`), а pickle сериализует классы по ссылке
+    «модуль + имя» — динамический класс, которого нет в атрибутах модуля,
+    просто не восстановился бы при загрузке.
+    """
+    from units import mods
+
+    built = []
+    for spec in mods.mod_creatures():
+        base = globals().get(spec["base"])
+        if base is None:      # список баз закрыт в mods.py, но подстрахуемся
+            continue
+        w, h = spec["size"]
+        attrs = {
+            "__doc__": f"Существо из мода: {spec['name']}",
+            "bio_species": spec["id_name"].lower(),
+            "bio_subspecies": spec["name"],
+            "width": w, "height": h,
+            # Wolf-подобные берут строку self.color, Slime-подобные тянут
+            # random.choice(self.colors) — задаём оба варианта
+            "color": spec["color"],
+            "colors": [spec["color"]],
+            "max_lives": spec["lives"],
+            "enemy": spec["enemy"],
+            "punch_damage": spec["damage"],
+            "move_speed": spec["speed"],
+            "drop_items": [(ItemsTile, (idx, cnt)) for idx, cnt, _ch in spec["drops"]],
+            "mod_creature": True,
+        }
+        cls = type(spec["id_name"], (base,), attrs)
+        globals()[spec["id_name"]] = cls
+        CREATURES.append(cls)
+        CREATURES_D[cls.__name__] = cls
+        built.append((cls, spec))
+    return built
+
+
+# [(класс, описание)] — GameMap.random_creature_selection берёт отсюда
+# кандидатов на спавн вместе с их зоной/биомами/весом
+MOD_CREATURES = _build_mod_creatures()

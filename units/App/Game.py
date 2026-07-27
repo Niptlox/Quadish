@@ -1,4 +1,5 @@
-from units import Tiles
+from units import Tiles, mods
+from units.Tiles import tile_imgs
 from units.App.App import *
 from units.Graphics.Cursor import set_cursor, CURSOR_NORMAL
 from units.Objects.Player import Player
@@ -129,6 +130,10 @@ class GameScene(Scene):
         self.elapsed_time = min(self.elapsed_time, 120)
         self.total_time += self.elapsed_time
         self.screen_map.draw_sky()
+
+        if mods.ANIMATED_TILES:
+            # подменить кадр анимированных блоков мода перед отрисовкой мира
+            mods.update_tile_animations(tile_imgs, self.tact)
 
         self.screen_map.update(self.tact, self.elapsed_time)
         self.player.update(self.tact, self.elapsed_time)

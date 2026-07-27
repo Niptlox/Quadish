@@ -440,6 +440,19 @@ view_tiles_lst = [30, 40, 50, 60, 70]
 menu_size_labels = ["Авто", "Крошечный", "Малый", "Средний", "Большой", "Огромный"]
 
 
+def mods_label():
+    """Подпись пункта модов: сразу показывает, сколько загрузилось и были
+    ли ошибки — иначе о сломанном моде можно узнать только из консоли."""
+    from units import mods
+    if not config.ModSettings.enabled:
+        return "Модификации: {}"
+    if mods.MOD_ERRORS:
+        return f"Модификации ({len(mods.MODS)}, ошибок: {len(mods.MOD_ERRORS)})" + ": {}"
+    if mods.MODS:
+        return f"Модификации ({len(mods.MODS)})" + ": {}"
+    return "Модификации (нет): {}"
+
+
 class MainSettingsUI(TitleUI):
     # меню с основными настройками
     header_title = "Настройки"
@@ -522,6 +535,12 @@ class MainSettingsUI(TitleUI):
             except Exception:
                 pass
 
+        def set_mods(value, i):
+            config.ModSettings.set_enabled(bool_dict[value])
+            # блоки/существа модов регистрируются один раз при импорте
+            # units.Tiles — включение/выключение требует перезапуска
+            self.sys_message.send_reload_game_for_change()
+
         fps_idx = fps_values_lst.index(gs.max_fps) if gs.max_fps in fps_values_lst else 1
         view_tiles_idx = view_tiles_lst.index(win.view_tiles_width) if win.view_tiles_width in view_tiles_lst else 2
         menu_size_idx = MENU_SIZES.index(win.menu_size) if win.menu_size in MENU_SIZES else 0
@@ -542,6 +561,7 @@ class MainSettingsUI(TitleUI):
              lambda v, i: gs.set_stars_state(bool_dict[v]), None),
             ("dd", "ID предмета: {}", ru_bool_lst, 0 if gs.view_item_index else 1,
              lambda v, i: gs.set_item_index_state(bool_dict[v]), None),
+            ("dd", mods_label(), ru_bool_lst, 0 if config.ModSettings.enabled else 1, set_mods, None),
             ("btn", "Звуки и музыка...", lambda _: self.scene.set_ui(self.scene.sound_settings_ui)),
             ("btn", "Создать мир обучения", lambda _: self.scene.create_tutorial_world()),
             ("btn", "В главное меню", lambda _: self.scene.set_ui(self.scene.title_ui)),

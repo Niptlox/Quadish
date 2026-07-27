@@ -873,3 +873,44 @@ def item_of_right_click_tile(tile, res=True):
     return items
 
 
+
+# MODS ==================================================================
+# Регистрация контента модов в те же структуры, что и у ванильных блоков:
+# так мод получает копание, крафт, выпадение предметов и отрисовку без
+# единой правки в игровом цикле. Делается в конце файла — к этому моменту
+# все словари/множества выше уже собраны, а модули, которые импортируют
+# units.Tiles (инвентарь, ScreenMap), увидят уже полный набор блоков.
+from units import mods as _mods  # noqa: E402 — нужен собранный tile_imgs выше
+
+_mods.load_mods()
+
+for _spec in _mods.mod_blocks():
+    _idx, _frames = _spec["id"], _spec["frames"]
+    tile_imgs[_idx] = _frames[0]
+    original_tile_words[_idx] = _spec["name"]
+    # ScreenMap индексирует TILES_SOLIDITY[tile_type] напрямую при отрисовке
+    # трещин — без записи здесь мод-блок ронял бы отрисовку KeyError.
+    TILES_SOLIDITY[_idx] = _spec["solidity"]
+
+    if _spec["is_item"]:
+        ITEM_TILES.add(_idx)
+    elif _spec["physical"]:
+        PHYSBODY_TILES.add(_idx)
+    # без этого мод-блок нельзя выкопать ни рукой, ни киркой:
+    # Pickaxes_capability ссылается на этот же объект-множество
+    iron_capability.add(_idx)
+
+    if _spec["eat"] is not None:
+        Eats[_idx] = _spec["eat"]
+    if _spec["drops"]:
+        tile_drops[_idx] = tuple(_spec["drops"])
+    if len(_frames) > 1:
+        _mods.ANIMATED_TILES[_idx] = {"frames": _frames, "speed": _spec["speed"], "fps": FPS}
+
+if _mods.MODS:
+    # пересобрать производные структуры с учётом мод-блоков
+    tile_words = get_translated_tiles(original_tile_words)
+    all_tiles = set(tile_words)
+    tile_hand_imgs.update({_spec["id"]: (tile_imgs[_spec["id"]] if _spec["is_item"]
+                                         else transform_hand(tile_imgs[_spec["id"]]))
+                           for _spec in _mods.mod_blocks()})
