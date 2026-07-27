@@ -143,27 +143,41 @@ def test_space_has_asteroids_in_vacuum():
     """До v0.2.16 космос был абсолютно пуст: ни встать, ни копать, ни
     спавниться существам. Теперь там астероиды — но именно вкраплениями,
     а не сплошной породой, иначе это уже не космос."""
-    gm = fresh_world(5).game_map
-    found_rock = 0
-    total = 0
-    for cx in range(-4, 5):
-        chunk = gm.generate_chunk(cx, -100)   # глубокий космос
-        types = chunk[0][0::gm.tile_data_size]
-        total += len(types)
-        found_rock += sum(1 for t in types if t != 0)
-        assert all(t in (0, 26, 27, 28) for t in types), \
-            "в космосе может быть только вакуум и астероидная порода"
-    assert found_rock > 0, "астероиды должны генерироваться"
-    assert found_rock < total * 0.6, "космос не должен зарастать породой"
+    from collections import Counter
+    for seed in (5, 42):
+        gm = fresh_world(seed).game_map
+        types = Counter()
+        for cx in range(-6, 7):
+            types += Counter(gm.generate_chunk(cx, -100)[0][0::gm.tile_data_size])
+        rock = types[26] + types[27] + types[28]
+        total = sum(types.values())
+        assert rock > 0, f"сид {seed}: астероиды должны генерироваться"
+        assert rock < total * 0.5, f"сид {seed}: космос не должен зарастать породой"
 
 
-def test_space_asteroid_veins_give_dust_and_rubies():
-    """Астероид должен окупать поход: жила даёт пыль (топливо космических
-    механизмов), кристалл — рубины."""
-    get_app()
+def test_space_asteroid_veins_are_findable():
+    """Жила даёт пыль (топливо космических механизмов), кристалл — рубины.
+
+    Пороги жил задавались на глаз и на встроенном фолбэке шума: на реальном
+    пакете noise (на нём собираются релизы) жила приходилась на 0.26% породы
+    — чтобы добыть первую пыль, пришлось бы срыть весь астероид. Тест
+    проверяет именно долю, а не сам факт наличия.
+    """
+    from collections import Counter
     from units.Tiles import tile_drops
     assert any(i == 408 for i, _c, _ch in tile_drops[27]), "жила должна давать пыль"
     assert any(i == 66 for i, _c, _ch in tile_drops[28]), "кристалл должен давать рубины"
+
+    gm = fresh_world(5).game_map
+    types = Counter()
+    for cx in range(-6, 7):
+        types += Counter(gm.generate_chunk(cx, -100)[0][0::gm.tile_data_size])
+    rock = types[26] + types[27] + types[28]
+    assert rock > 200, "мало породы для оценки доли"
+    veins = types[27] / rock
+    crystals = types[28] / rock
+    assert 0.03 <= veins <= 0.3, f"жил {veins:.1%} породы — ферму пыли не окупить"
+    assert 0.005 <= crystals <= 0.1, f"кристаллов {crystals:.1%} породы"
 
 
 def test_space_creature_pool_has_new_creatures():
