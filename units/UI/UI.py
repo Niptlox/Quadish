@@ -803,7 +803,7 @@ class EndUI(UI):
                                  *createImagesButton(rect_btn.size, "Возродиться", font=textfont_btn))
 
     def draw(self):
-        self.screen.blit(self.display, (0, 0))
+        self.draw_world_background()
         self.screen.blit(self.surface, self.rect_surface)
         self.btn_relive.draw(self.screen)
         pg.display.flip()
@@ -855,7 +855,7 @@ class PauseUI(UI):
         self.keynav = KeyboardNav(self.btns)
 
     def draw(self):
-        self.screen.blit(self.display, (0, 0))
+        self.draw_world_background()
         surface = self.surface.copy()
         for btn in self.btns:
             btn.draw(surface)
@@ -933,7 +933,7 @@ class AchievementsUI(UI):
 
     def draw(self):
         self.redraw_achievements()
-        self.screen.blit(self.display, (0, 0))
+        self.draw_world_background()
         self.surface.fill(self.bg)
         title = textfont_btn.render(get_translated_text("Достижения"), True, "#FFFFFF")
         self.surface.blit(title, (10, 10))

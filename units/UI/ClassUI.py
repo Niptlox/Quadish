@@ -36,8 +36,18 @@ class UI:
         кнопок/виджетов (см. TitleUI/MainSettingsUI/PauseUI/EndUI/...)."""
         self.rect = pg.Rect((0, 0), self.screen.get_size())
 
+    def draw_world_background(self):
+        """Отрисовать self.display (мир, WSIZE) на self.screen (SCREEN_SIZE).
+        Как GameUI.blit_world() — растягивает, только если размеры разошлись
+        (обычно совпадают, но не всегда: см. настройку "Обзор" на большом
+        окне) — иначе прямой blit(0,0) без просадки на прямом совпадении."""
+        if self.display.get_size() == self.screen.get_size():
+            self.screen.blit(self.display, (0, 0))
+        else:
+            pg.transform.scale(self.display, self.screen.get_size(), self.screen)
+
     def draw(self):
-        self.screen.blit(self.display, (0, 0))
+        self.draw_world_background()
         pg.display.flip()
 
     def pg_event(self, event: pg.event.Event):
