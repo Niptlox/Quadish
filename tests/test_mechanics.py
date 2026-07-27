@@ -1482,3 +1482,182 @@ def test_mods_disabled_by_setting():
     finally:
         cfg.ModSettings.enabled = was_enabled
         mods.MODS[:], mods.MOD_ERRORS[:] = saved_mods, saved_errors
+
+
+# ===================== сюжет и структуры =====================
+
+def test_structure_builder_ascii():
+    """Схема собирается в тот же формат, что у старых структур, прочность
+    берётся из TILES_SOLIDITY, а не задаётся руками."""
+    get_app()
+    from units.Map.structure_builder import build_ascii, StructureError
+    from units.Tiles import TILES_SOLIDITY
+    size, array = build_ascii([
+        "..#..",
+        "..C..",
+    ])
+    assert size == (5, 2)
+    assert len(array) == 10
+    assert array[0] == [150, TILES_SOLIDITY.get(150, -1), 0, 0]   # '.' — пустота
+    assert array[2] == [31, TILES_SOLIDITY[31], 0, 0]             # '#' — кирпич
+    assert array[7] == [129, TILES_SOLIDITY.get(129, -1), 0, 0]   # 'C' — сундук
+
+    # цифра ставит плиту нужного варианта (кадр тайла)
+    _size, arr = build_ascii(["3"])
+    assert arr[0][0] == 300 and arr[0][2] == 3
+
+    for bad, why in ((["##", "#"], "разная длина строк"),
+                     ([], "пустая схема"),
+                     (["#?#"], "неизвестный символ")):
+        try:
+            build_ascii(bad)
+        except StructureError:
+            pass
+        else:
+            raise AssertionError(f"должно падать: {why}")
+
+
+def test_biome_structures_registered():
+    """10 новых структур попали в жеребьёвку своей зоны (веса считались до
+    слияния — легко забыть пересчитать) и имеют корректные биомы."""
+    get_app()
+    from units.Map.Structures import Structures_chance, Structures_all
+    from units.Map.StructuresBiome import Structures_biome_middleworld
+    assert len(Structures_biome_middleworld) == 10
+    ids, weights = Structures_chance["middleworld"]
+    for build_id, build in Structures_biome_middleworld.items():
+        assert build_id in ids, f"{build[0]} не попал в жеребьёвку"
+        assert build_id in Structures_all
+        biomes = build[3]
+        assert biomes is None or (biomes and all(0 <= b <= 9 for b in biomes)), build[0]
+        (w, h), array = build[2][0], build[2][1]
+        assert len(array) == w * h, f"{build[0]}: размер не совпадает с числом ячеек"
+    assert len(ids) == len(weights)
+
+
+def test_structure_points_use_height_not_width():
+    """У левого-нижнего угла структуры должна прибавляться высота, а не
+    ширина: иначе у невысоких широких построек регистрируется не тот
+    чанк-триггер и постройка не появляется при подходе с той стороны."""
+    get_app()
+    game = fresh_world(31)
+    gm = game.game_map
+    gm.structures.clear()
+    gm.structures_lst.clear()
+    structure = gm.get_structure_dict(0, 0)
+    assert gm.structures_lst, "в блоке структур должна появиться хотя бы одна постройка"
+    from units.Map.Structures import Structures_all
+    for _idx, build_id, points in gm.structures_lst:
+        size = Structures_all[build_id][2][0]
+        lt, rt, lb, rb = points
+        assert rt[0] - lt[0] == size[0], "правый-верхний смещён на ширину"
+        assert lb[1] - lt[1] == size[1], "левый-нижний должен быть смещён на ВЫСОТУ"
+        assert rb == (lt[0] + size[0], lt[1] + size[1])
+    assert structure is gm.structures[(0, 0)]
+
+
+def test_biome_structure_only_in_its_biome():
+    """Структура с указанными биомами не должна выпадать в чужом биоме."""
+    get_app()
+    game = fresh_world(32)
+    gm = game.game_map
+    from units.Map.Structures import Structures
+
+    zone = Structures["middleworld"]
+    # найдём структуру, привязанную к единственному биому
+    target_id, target = next((i, b) for i, b in zone.items()
+                             if len(b) > 3 and b[3] is not None and len(b[3]) == 1)
+    allowed = target[3][0]
+    import units.Map.GameMap as gmod
+    wrong = next(b for b in range(9) if b != allowed)
+    saved = gmod.biome_of_pos
+    try:
+        gmod.biome_of_pos = lambda x, y, _c=None: (wrong, 0, 0)
+        picks = {gm._pick_structure("middleworld", (0, 0)) for _ in range(400)}
+        assert target_id not in picks, f"{target[0]} выпала в биоме {wrong}, а разрешён {allowed}"
+        gmod.biome_of_pos = lambda x, y, _c=None: (allowed, 0, 0)
+        picks = {gm._pick_structure("middleworld", (0, 0)) for _ in range(400)}
+        assert target_id in picks, f"{target[0]} не выпала в своём биоме {allowed}"
+    finally:
+        gmod.biome_of_pos = saved
+
+
+def test_lore_tablet_reads_inscription_and_fills_journal():
+    """Плита отдаёт надпись по своему варианту и пополняет журнал мира;
+    журнал сохраняется вместе с миром."""
+    game = fresh_world(33)
+    gm = game.game_map
+    from units.Lore import TABLET_VARIANTS, get_inscription
+    gm.set_static_tile(6, 6, [300, 90, 2, 0])
+    tile = gm.get_static_tile(6, 6)
+    obj = gm.get_tile_obj(*gm.to_chunk_xy(6, 6), tile[3])
+    assert obj is not None and obj.index == 300
+    assert obj.variant == 2
+    assert obj.inscription_id() == TABLET_VARIANTS[2]
+    title, lines = obj.inscription()
+    assert title and lines
+    assert (title, lines) == get_inscription(TABLET_VARIANTS[2])
+
+    assert gm.read_inscriptions == []
+    obj.right_click((0, 0))
+    assert gm.read_inscriptions == [TABLET_VARIANTS[2]]
+    # повторное чтение не должно дублировать запись в журнале
+    assert gm.mark_inscription_read(TABLET_VARIANTS[2]) is False
+    assert gm.read_inscriptions == [TABLET_VARIANTS[2]]
+    # интерфейс чтения открылся и рисуется без падений
+    ui = game.blocks_ui_manager.blocks_ui[300]
+    assert ui.opened
+    ui.draw(game.screen)
+
+
+def test_lore_unknown_variant_is_not_crash():
+    """Мир мог быть создан версией с другим списком надписей — неизвестный
+    вариант должен дать стёртую плиту, а не уронить игру."""
+    get_app()
+    from units.Lore import inscription_by_variant, get_inscription
+    assert inscription_by_variant(9999) == ""
+    assert inscription_by_variant(-1) == ""
+    title, lines = get_inscription("нет такой надписи")
+    assert title and lines
+
+
+def test_story_state_saved_with_world():
+    """Состояние арки живёт в мире и переживает сохранение/загрузку —
+    тем же приёмом, что состояние обучения."""
+    game = fresh_world(34)
+    gm = game.game_map
+    # в новом мире арка не начата; altar_pos ставится самой генерацией
+    assert gm.story_stage == 0
+    assert "altar_read" not in gm.story_state
+    assert gm.read_inscriptions == []
+    gm.story_stage = 2
+    gm.story_state["altar_read"] = True
+    gm.mark_inscription_read("altar")
+    gm.save_current_game_map()
+    wid = gm.world_id
+
+    gm.new_world(base_generation=1234)
+    assert gm.story_stage == 0
+    assert "altar_read" not in gm.story_state
+    assert gm.read_inscriptions == []
+    game.game_map.open_game_map(game, wid)
+    gm = game.game_map
+    assert gm.story_stage == 2
+    assert gm.story_state.get("altar_read") is True
+    assert "altar" in gm.read_inscriptions
+
+
+def test_altar_tablet_placed_in_every_new_world():
+    """Плита алтаря — точка входа в сюжет, поэтому она должна стоять в
+    каждом новом мире у спавна и на твёрдом блоке, а не зависеть от того,
+    повезёт ли игроку найти структуру."""
+    game = fresh_world(35)
+    gm = game.game_map
+    pos = gm.story_state.get("altar_pos")
+    assert pos, "позиция алтаря должна запоминаться в состоянии сюжета"
+    tile = gm.get_static_tile(*pos)
+    assert tile[0] == 300, "у спавна должна стоять плита с надписью"
+    assert tile[2] == 0, "на алтаре — надпись варианта 0 (altar)"
+    assert gm.get_static_tile_type(pos[0], pos[1] + 1) != 0, "плита должна стоять на блоке"
+    obj = gm.get_tile_obj(*gm.to_chunk_xy(*pos), tile[3])
+    assert obj.inscription_id() == "altar"

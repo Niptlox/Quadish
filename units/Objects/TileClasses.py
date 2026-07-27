@@ -497,7 +497,46 @@ class Furnace(Tile):
         return sum([inv.items_of_break() for inv in inventories], [])
 
 
+class LoreTablet(Tile):
+    """Плита с надписью — основной канал подачи сюжета (docs/STORY.md).
+
+    В мире хранится только номер варианта надписи (кадр тайла), сам текст
+    лежит в units/Lore.py. Поэтому сохранения не распухают от текста, а
+    тексты можно править и переводить, не ломая старые миры.
+    """
+    index = 300
+    view_interface_on_click = True
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        # Кадр читаем лениво, а не здесь: set_static_tile создаёт объект
+        # тайла ДО того, как запишет его данные в чанк, так что в момент
+        # __init__ вариант ещё не виден.
+        self._variant = None
+
+    @property
+    def variant(self):
+        if self._variant is None:
+            tile = self.game_map.get_static_tile(self.tx, self.ty)
+            self._variant = tile[2] if tile else 0
+        return self._variant
+
+    def inscription_id(self):
+        from units.Lore import inscription_by_variant
+        return inscription_by_variant(self.variant)
+
+    def inscription(self):
+        from units.Lore import get_inscription
+        return get_inscription(self.inscription_id())
+
+    def right_click(self, mouse_local_pos):
+        # отметить прочитанным до открытия интерфейса: журнал должен
+        # пополниться даже если игрок сразу закроет окно
+        self.game_map.mark_inscription_read(self.inscription_id())
+        super().right_click(mouse_local_pos)
+
+
 classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate,
           Wire, Lever, Lamp, NotGate, AndGate, OrGate, DelayBlock, ChunkLoader, MusicBlock,
-          Receiver, Transmitter}
+          Receiver, Transmitter, LoreTablet}
 tiles_class = {cls.index: cls for cls in classes}

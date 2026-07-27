@@ -48,6 +48,12 @@ class GameMap(SavedObject):
         self.creative_mode = CREATIVE_MODE
         self.tutorial_step = -1  # -1 = обучение неактивно; >=0 = номер шага
         self.tutorial_state = {}  # запоминаемые состояния обучения (сохраняются с миром)
+        # Сюжетная арка (docs/STORY.md) — тем же приёмом, что и обучение:
+        # состояние живёт в мире и сохраняется вместе с ним, поэтому не
+        # нужен отдельный код миграции сейвов.
+        self.story_stage = 0      # номер акта, 0 = ещё ничего не начато
+        self.story_state = {}     # что найдено/сделано по сюжету
+        self.read_inscriptions = []  # id прочитанных надписей = журнал
         # Динамическая выгрузка карты: дальние немодифицированные чанки
         # удаляются из памяти и детерминированно регенерируются при возврате.
         # modified_chunks — чанки с правками игрока/структурами, их не трогаем.
@@ -336,6 +342,22 @@ class GameMap(SavedObject):
     def del_particle_of_idx(self, idx):
         return self.particles.pop(idx)
 
+    def mark_inscription_read(self, inscription_id):
+        """Запомнить прочитанную надпись (журнал сюжета).
+
+        Список, а не множество: порядок чтения — это порядок, в котором
+        игрок узнавал историю, и он пригодится журналу. Возвращает True,
+        если надпись прочитана впервые."""
+        if not inscription_id:
+            return False
+        # старые миры сохранены без этого поля — не падаем на них
+        if not isinstance(getattr(self, "read_inscriptions", None), list):
+            self.read_inscriptions = []
+        if inscription_id in self.read_inscriptions:
+            return False
+        self.read_inscriptions.append(inscription_id)
+        return True
+
     def register_receiver(self, code, receiver):
         self.signal_receivers.setdefault(code, set()).add(receiver)
 
@@ -399,6 +421,33 @@ class GameMap(SavedObject):
             item = ItemsTile(self.game, index, npos, count_items)
         self.add_dinamic_obj(*self.to_chunk_xy(x, y), item)
 
+    def _pick_structure(self, structures_area, pos):
+        """Выбрать структуру для зоны с учётом биома в этой точке.
+
+        У структуры может быть список биомов (4-й элемент описания). Такие
+        участвуют в жеребьёвке только в своём биоме — до этого расстановка
+        зависела лишь от зоны по Y, и «структура для тундры» была
+        невыразима. Структуры без списка биомов работают как раньше — в
+        любом биоме своей зоны."""
+        ids, weights = Structures_chance[structures_area]
+        zone_structures = Structures[structures_area]
+        # биом считаем один раз на попытку, а не на каждую структуру
+        biome = None
+        allowed_ids, allowed_weights = [], []
+        for build_id, weight in zip(ids, weights):
+            build = zone_structures[build_id]
+            biomes = build[3] if len(build) > 3 else None
+            if biomes is not None:
+                if biome is None:
+                    biome = biome_of_pos(pos[0], pos[1])[0]
+                if biome not in biomes:
+                    continue
+            allowed_ids.append(build_id)
+            allowed_weights.append(weight)
+        if not allowed_ids:
+            return None
+        return random.choices(allowed_ids, allowed_weights, k=1)[0]
+
     def get_structure_dict(self, structure_x, structure_y):
         # print("get structure", structure_x, structure_y)
         structure = self.structures.get((structure_x, structure_y))
@@ -418,14 +467,18 @@ class GameMap(SavedObject):
                 elif pos[1] > START_HELL_Y:
                     structures_area = "hell"
 
-                build_id = random.choices(Structures_chance[structures_area][0],
-                                          Structures_chance[structures_area][1], k=1)[0]
+                build_id = self._pick_structure(structures_area, pos)
+                if build_id is None:
+                    continue
                 build = Structures[structures_area][build_id]
                 size, construction = build[2]
 
                 # left_top, right_top, left_bottom, right_bottom
+                # (у левого-нижнего угла раньше по ошибке прибавлялась ширина
+                # вместо высоты — у невысоких широких структур из-за этого
+                # регистрировался не тот чанк-триггер постройки)
                 points = [(pos[0], pos[1]), (pos[0] + size[0], pos[1]),
-                          (pos[0], pos[1] + size[0]), (pos[0] + size[0], pos[1] + size[1])]
+                          (pos[0], pos[1] + size[1]), (pos[0] + size[0], pos[1] + size[1])]
                 # TODO: сделать смещение здания вместо пропуска итерации
                 if not all([structure_rect.collidepoint(point) for point in points]):
                     continue
@@ -792,6 +845,7 @@ class GameMap(SavedObject):
         self.game.reinit_player()
         self.game.player.tp_to(config.GameSettings.start_pos)
         self.spawn_gate()
+        self._place_altar_tablet()
         if tutorial:
             self._build_tutorial_island()
             self._place_tutorial_chest()
@@ -843,6 +897,26 @@ class GameMap(SavedObject):
             for idx, cnt in ((31, 8), (64, 14), (51, 30), (53, 30), (66, 6), (11, 4)):
                 chest.inventory.put_to_inventory(ItemsTile(self.game, idx, count=cnt))
         self.tutorial_state["chest_pos"] = [x, chest_y]
+
+    def _place_altar_tablet(self):
+        """Плита алтаря у спавна — та самая, на которой герой очнулся
+        (docs/STORY.md, завязка). Ставится в каждом новом мире: это первая
+        точка входа в сюжет, и она не должна зависеть от того, повезёт ли
+        игроку найти структуру.
+
+        Позицию ищем так же, как у сундука обучения: сверху вниз до первого
+        непустого тайла, плиту кладём на него."""
+        x = -2
+        y_ground = None
+        for y in range(-6, 40):
+            if self.get_static_tile_type(x, y, default=0, create_chunk=True) != 0:
+                y_ground = y - 1
+                break
+        if y_ground is None:
+            y_ground = -1
+        # вариант 0 = надпись "altar" (units/Lore.TABLET_VARIANTS)
+        self.set_static_tile(x, y_ground, [300, TILES_SOLIDITY.get(300, -1), 0, 0])
+        self.story_state["altar_pos"] = [x, y_ground]
 
 
 def random_plant_selection(biome=None):

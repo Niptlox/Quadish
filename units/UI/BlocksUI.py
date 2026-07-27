@@ -353,8 +353,55 @@ class InventoryPlayerTransmitterUI(InventoryPlayerWithBlockUI):
         super().__init__(player, RadioBlockUI())
 
 
+class LoreTabletUI(BlockUI):
+    """Чтение плиты с надписью (сюжет, см. docs/STORY.md).
+
+    Текст берётся у самого блока, а не хранится здесь: одна и та же плита
+    в разных структурах несёт разные надписи (units/Lore.py)."""
+    index = 300
+    font_title = pg.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 22)
+    font_line = pg.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 17)
+    font_hint = pg.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 14)
+    panel_bg = (39, 39, 42, 235)
+    accent = "#FDE047"
+    text_color = "#E7E5E4"
+    hint_color = "#A1A1AA"
+
+    def __init__(self, player):
+        w = min(560, SCREEN_SIZE[0] - 40)
+        h = min(320, SCREEN_SIZE[1] - 40)
+        rect = pg.Rect(0, 0, w, h)
+        rect.center = SCREEN_SIZE[0] // 2, SCREEN_SIZE[1] // 2
+        super().__init__(rect)
+        self.convert_alpha()
+        self.player = player
+        self.title, self.lines = "", []
+
+    def set_player(self, player):
+        self.player = player
+
+    def set_block(self, block_obj):
+        super().set_block(block_obj)
+        self.title, self.lines = block_obj.inscription()
+
+    def draw(self, surface):
+        self.fill((0, 0, 0, 0))
+        pg.draw.rect(self, self.panel_bg, ((0, 0), self.rect.size), border_radius=12)
+        pg.draw.rect(self, (82, 82, 91), ((0, 0), self.rect.size), width=1, border_radius=12)
+        t = self.font_title.render(get_translated_text(self.title), True, self.accent)
+        self.blit(t, (20, 16))
+        pg.draw.line(self, self.accent, (20, 46), (self.rect.w - 20, 46))
+        y = 58
+        for line in self.lines:
+            self.blit(self.font_line.render(get_translated_text(line), True, self.text_color), (20, y))
+            y += self.font_line.get_height() + 6
+        hint = self.font_hint.render(get_translated_text("Esc — закрыть"), True, self.hint_color)
+        self.blit(hint, (20, self.rect.h - hint.get_height() - 12))
+        surface.blit(self, self.rect)
+
+
 BLOCKS_UI = {cls.index: cls for cls in
              [InventoryPlayerChestUI, InventoryPlayerFurnaceUI, CommandBlockUI, InventoryPlayerMusicBlockUI,
-              InventoryPlayerReceiverUI, InventoryPlayerTransmitterUI]
+              InventoryPlayerReceiverUI, InventoryPlayerTransmitterUI, LoreTabletUI]
              }
 BLOCKS_UI_SET = set(BLOCKS_UI)

@@ -41,6 +41,17 @@ Structures_hell = {
 
 Structures_chance_hell = (list(Structures_hell.keys()), [el[1] for el in Structures_hell.values()])
 
+# Структуры, привязанные к биомам, живут отдельным файлом и заданы
+# ASCII-схемами (units/Map/StructuresBiome.py): в этом файле каждая
+# постройка — килобайты нечитаемых литералов, добавлять так новые нельзя.
+from units.Map.StructuresBiome import Structures_biome_middleworld  # noqa: E402
+
+Structures_middleworld.update(Structures_biome_middleworld)
+# пересчитываем после слияния — иначе новые структуры не попали бы в
+# жеребьёвку (веса считались до update)
+Structures_chance_middleworld = (list(Structures_middleworld.keys()),
+                                 [el[1] for el in Structures_middleworld.values()])
+
 Structures = {
     "middleworld": Structures_middleworld,
     "space": Structures_space,
