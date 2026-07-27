@@ -22,7 +22,7 @@ DESERT_MARKER = build_ascii([
     "..o..",
     ".o8o.",
     ".ooo.",
-    "..d..",
+    ".._..",
 ])
 
 # Пустыня: занесённый песком склеп с припасами.
@@ -34,6 +34,7 @@ DESERT_CRYPT = build_ascii([
     "o 8   F o",
     "o       o",
     "ooooDoooo",
+    "=..=..=.=",
 ])
 
 # Саванна: дозорный пост — смотрит вверх, а не по сторонам.
@@ -45,6 +46,7 @@ SAVANNA_WATCHPOST = build_ascii([
     "...p p...",
     "...p p...",
     "...ppp...",
+    "...=.=...",
 ])
 
 # Тундра: брошенная стоянка. Холод пришёл после добычи блора.
@@ -55,6 +57,7 @@ TUNDRA_CAMP = build_ascii([
     ".p 9 p.",
     ".pFCKp.",
     ".ppDpp.",
+    ".=...=.",
 ])
 
 # Тропический лес: затопленный храм, заросший лианами.
@@ -65,6 +68,7 @@ TROPICAL_TEMPLE = build_ascii([
     "m  ~~~~~  m",
     "m 2~~~~~C m",
     "mmmmmmmmmmm",
+    "=..=...=..=",
 ])
 
 # Джунгли: оранжерея — семена брали с собой, землю нет.
@@ -75,6 +79,7 @@ RAINFOREST_GREENHOUSE = build_ascii([
     "p ddddd p",
     "p 5   C p",
     "pppDppppp",
+    "=..=...=.",
 ])
 
 # Лес (умеренный/сезонный): обсерватория, где спорили — уйти или позвать.
@@ -88,6 +93,7 @@ FOREST_OBSERVATORY = build_ascii([
     "...#   #...",
     "...#C t#...",
     "...##D##...",
+    "...=...=...",
 ])
 
 # Тайга: лесопилка, брошенная на середине работы.
@@ -98,6 +104,7 @@ BOREAL_SAWMILL = build_ascii([
     "p  t   C p.",
     "p        p.",
     "ppppDppppp.",
+    "=..=...=.=.",
 ])
 
 # --- Пещеры (глубина) --------------------------------------------------
@@ -122,17 +129,22 @@ CAVE_SHRINE = build_ascii([
 ])
 
 
-# Описания: (имя, шанс, схема, биомы)
+# Описания: (имя, шанс, схема, биомы, якорь)
+#
+# Якорь "surface" — структура опускается на землю (GameMap._snap_to_surface),
+# а просвет под ней на склоне добирает фундамент ('=' / '_' в схеме).
+# Якорь None — как раньше: случайная высота внутри блока структур; так и
+# нужно пещерным постройкам, они должны стоять в камне.
 Structures_biome_middleworld = {
-    10020: ("desert marker", 0.20, DESERT_MARKER, (0,)),
-    10021: ("desert crypt", 0.08, DESERT_CRYPT, (0,)),
-    10022: ("savanna watchpost", 0.12, SAVANNA_WATCHPOST, (1,)),
-    10023: ("tundra camp", 0.12, TUNDRA_CAMP, (3,)),
-    10024: ("tropical temple", 0.07, TROPICAL_TEMPLE, (2,)),
-    10025: ("rainforest greenhouse", 0.10, RAINFOREST_GREENHOUSE, (5,)),
-    10026: ("forest observatory", 0.06, FOREST_OBSERVATORY, (4, 6, 7)),
-    10027: ("boreal sawmill", 0.12, BOREAL_SAWMILL, (8,)),
-    # без привязки к биому, но глубоко: пещерные постройки стоят в камне
-    10028: ("deep mine", 0.10, DEEP_MINE, None),
-    10029: ("cave shrine", 0.06, CAVE_SHRINE, None),
+    10020: ("desert marker", 0.20, DESERT_MARKER, (0,), "surface"),
+    10021: ("desert crypt", 0.08, DESERT_CRYPT, (0,), "surface"),
+    10022: ("savanna watchpost", 0.12, SAVANNA_WATCHPOST, (1,), "surface"),
+    10023: ("tundra camp", 0.12, TUNDRA_CAMP, (3,), "surface"),
+    10024: ("tropical temple", 0.07, TROPICAL_TEMPLE, (2,), "surface"),
+    10025: ("rainforest greenhouse", 0.10, RAINFOREST_GREENHOUSE, (5,), "surface"),
+    10026: ("forest observatory", 0.06, FOREST_OBSERVATORY, (4, 6, 7), "surface"),
+    10027: ("boreal sawmill", 0.12, BOREAL_SAWMILL, (8,), "surface"),
+    # пещерные постройки — без привязки к поверхности, они стоят в камне
+    10028: ("deep mine", 0.10, DEEP_MINE, None, None),
+    10029: ("cave shrine", 0.06, CAVE_SHRINE, None, None),
 }

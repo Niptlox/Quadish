@@ -1745,3 +1745,123 @@ def test_creature_sprite_grids_have_ground_contact():
         last_filled = max(i for i, r in enumerate(rows) if set(r) != {'.'})
         assert last_filled >= len(rows) - 2, \
             f"{name}: низ сетки пустой — существо будет висеть над землёй"
+
+
+# ===================== привязка структур к поверхности =====================
+
+def test_terrain_probe_matches_generated_ground():
+    """Зонд поверхности должен совпадать с реально сгенерированным рельефом.
+
+    Формула плотности породы одна и та же у генератора и у зонда (иначе они
+    однажды разойдутся и структуры начнут висеть). Растения стоят НА земле,
+    поэтому сравниваем с первым блоком именно породы."""
+    game = fresh_world(41)
+    gm = game.game_map
+    from units.Map.GameMap import terrain_is_solid
+    GROUND = {1, 2, 3, 4, 5}  # дёрн, земля, камень, блор, гранит
+    checked = 0
+    start_y = -30
+    for tx in range(-60, 60, 11):
+        probe = gm.surface_y_at(tx, start_y)
+        if probe is None:
+            continue
+        assert terrain_is_solid(tx, probe, gm.base_generation)
+        # проверять "выше пусто" можно только внутри просмотренного отрезка:
+        # то, что лежит выше start_y, зонд и не смотрел
+        if probe > start_y:
+            assert not terrain_is_solid(tx, probe - 1, gm.base_generation), \
+                "над найденной поверхностью не должно быть породы"
+        real = gm.get_static_tile_type(tx, probe, default=0, create_chunk=True)
+        assert real in GROUND, f"x={tx}: зонд показал породу, а в мире {real}"
+        checked += 1
+    assert checked >= 3, "проверить нужно хотя бы несколько столбцов"
+
+
+def test_surface_snap_puts_structure_on_ground():
+    """Структура с якорем surface встаёт низом на землю и не оказывается
+    вмурованной в породу; негодные места (пустота, навесы) отклоняются."""
+    game = fresh_world(42)
+    gm = game.game_map
+    from units.Map.GameMap import terrain_is_solid
+    from units.Map.StructuresBiome import TUNDRA_CAMP, FOREST_OBSERVATORY
+    base = gm.base_generation
+    placed = skipped = 0
+    for x in range(-150, 150, 17):
+        for schema in (TUNDRA_CAMP, FOREST_OBSERVATORY):
+            w, h = schema[0]
+            snap = gm._snap_to_surface((x, -40), (w, h))
+            if snap is None:
+                skipped += 1
+                continue
+            bottom_row = snap[1] + h - 1
+            buried = sum(1 for dx in range(w) if terrain_is_solid(snap[0] + dx, bottom_row, base))
+            assert buried * 2 <= w, f"x={x}: структура вмурована в породу"
+            assert any(terrain_is_solid(snap[0] + dx, snap[1] + h, base) for dx in range(w)), \
+                f"x={x}: под структурой нет земли"
+            placed += 1
+    assert placed, "хоть где-то структура должна вставать на землю"
+    assert skipped, "негодные места должны отклоняться, а не застраиваться"
+
+
+def test_foundation_fills_gap_down_to_ground():
+    """На склоне помеченные столбы ('=') сами достраиваются вниз до земли,
+    иначе постройка висела бы над уклоном одним углом."""
+    game = fresh_world(43)
+    gm = game.game_map
+    from units.Map.StructuresBiome import TUNDRA_CAMP
+    size, _array, _backs, foundation = TUNDRA_CAMP
+    w, h = size
+    assert foundation, "у стоянки в схеме есть столбы фундамента"
+
+    # ищем место с заметным уклоном, где фундамент реально нужен
+    for x in range(-300, 300, 3):
+        snap = gm._snap_to_surface((x, -40), size)
+        if not snap:
+            continue
+        tops = [gm.surface_y_at(x + dx, -40) for dx in range(w)]
+        if None in tops or max(tops) - min(tops) < 3:
+            continue
+        gm.set_structure(snap, TUNDRA_CAMP)
+        # у столба над более низкой землёй должен появиться фундамент
+        filled_any = False
+        for dx, dy, tile_type in foundation:
+            col, start = snap[0] + dx, snap[1] + dy + 1
+            ground = gm.surface_y_at(col, -40)
+            if ground is None or ground <= start:
+                continue  # под этим столбом земля сразу — достраивать нечего
+            filled_any = True
+            for y in range(start, min(ground, start + gm.FOUNDATION_MAX_DEPTH)):
+                assert gm.get_static_tile_type(col, y, create_chunk=True) == tile_type, \
+                    f"просвет под структурой не заполнен на y={y}"
+        assert filled_any, "на выбранном склоне фундамент должен был понадобиться"
+        return
+    raise AssertionError("не нашлось склона для проверки фундамента")
+
+
+def test_foundation_depth_is_capped():
+    """Над пропастью фундамент не должен выкладывать столб на всю глубину."""
+    game = fresh_world(44)
+    gm = game.game_map
+    assert gm.FOUNDATION_MAX_DEPTH <= 20
+    # ставим фундамент в заведомую пустоту высоко над миром
+    high_y = -400
+    gm._build_foundation((0, high_y), [(0, 0, 31)])
+    depth = 0
+    for d in range(1, gm.FOUNDATION_MAX_DEPTH + 30):
+        if gm.get_static_tile_type(0, high_y + d, default=0, create_chunk=True) == 31:
+            depth += 1
+        else:
+            break
+    assert depth <= gm.FOUNDATION_MAX_DEPTH, f"фундамент ушёл на {depth} блоков"
+
+
+def test_cave_structures_stay_unanchored():
+    """Пещерные постройки не должны получать привязку к поверхности —
+    им место в камне."""
+    get_app()
+    from units.Map.StructuresBiome import Structures_biome_middleworld as S
+    anchors = {v[0]: (v[4] if len(v) > 4 else None) for v in S.values()}
+    assert anchors["deep mine"] is None
+    assert anchors["cave shrine"] is None
+    surface = [n for n, a in anchors.items() if a == "surface"]
+    assert len(surface) == 8, f"наземных структур должно быть 8, а не {len(surface)}"

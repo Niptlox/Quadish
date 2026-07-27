@@ -421,6 +421,61 @@ class GameMap(SavedObject):
             item = ItemsTile(self.game, index, npos, count_items)
         self.add_dinamic_obj(*self.to_chunk_xy(x, y), item)
 
+    # насколько далеко вниз ищем поверхность от предложенной высоты
+    SURFACE_SCAN = 120
+    # предел, до которого фундамент достраивается вниз: иначе структура над
+    # пропастью выложила бы столб на всю её глубину
+    FOUNDATION_MAX_DEPTH = 14
+
+    def surface_y_at(self, tile_x, from_y, scan=None):
+        """Найти верхний тайл породы в столбце tile_x, начиная с from_y вниз.
+
+        Возвращает y первого сплошного тайла или None, если на всём отрезке
+        порода не встретилась (например, столб пришёлся на пустоту между
+        летающими островами).
+
+        Работает БЕЗ генерации чанков: плотность породы — чистая функция от
+        (тайл, сид), см. terrain_is_solid. Это важно, потому что позиция
+        структуры выбирается до того, как местность вокруг существует."""
+        base = self.base_generation
+        scan = self.SURFACE_SCAN if scan is None else scan
+        for y in range(int(from_y), int(from_y) + scan):
+            if terrain_is_solid(tile_x, y, base):
+                return y
+        return None
+
+    def _snap_to_surface(self, pos, size):
+        """Опустить структуру на поверхность: её низ должен лечь на землю.
+
+        Землю щупаем по всей ширине постройки и встаём на САМЫЙ ВЫСОКИЙ
+        найденный уровень: если встать на самый низкий, столбцы с высокой
+        землёй окажутся закопанными, а это уже ничем не исправить. Просвет
+        под остальными столбцами добирает фундамент ('=' / '_' в схеме).
+
+        Возвращает None, если место не годится: под постройкой нет земли
+        (пустота между летающими островами) или рельеф слишком рваный и
+        нижний ряд всё равно попал бы в породу (навесы, скалы)."""
+        w, h = size
+        base = self.base_generation
+        tops = []
+        for dx in range(0, w, max(1, w // 6)):
+            top = self.surface_y_at(pos[0] + dx, pos[1])
+            if top is not None:
+                tops.append(top)
+        if not tops:
+            return None
+        ground = min(tops)          # самый высокий уровень земли
+        new_y = ground - h          # низ структуры ложится на этот уровень
+
+        # Нижний ряд не должен уходить в породу: на навесах и скалах
+        # постройка иначе окажется вмурованной в камень.
+        bottom_row = new_y + h - 1
+        buried = sum(1 for dx in range(w)
+                     if terrain_is_solid(pos[0] + dx, bottom_row, base))
+        if buried * 2 > w:
+            return None
+        return pos[0], new_y
+
     def _pick_structure(self, structures_area, pos):
         """Выбрать структуру для зоны с учётом биома в этой точке.
 
@@ -471,7 +526,17 @@ class GameMap(SavedObject):
                 if build_id is None:
                     continue
                 build = Structures[structures_area][build_id]
-                size, construction = build[2]
+                # схема — (size, array[, backtiles[, foundation]]), берём только размер
+                size = build[2][0]
+
+                # Структуры с якорем "surface" опускаются на землю: иначе
+                # постройка встаёт на случайной высоте внутри блока 100x100
+                # чанков и может оказаться в толще камня или висеть в воздухе.
+                if len(build) > 4 and build[4] == "surface":
+                    snapped = self._snap_to_surface(pos, size)
+                    if snapped is None:
+                        continue  # под этим столбом земли нет (пустота между островами)
+                    pos = snapped
 
                 # left_top, right_top, left_bottom, right_bottom
                 # (у левого-нижнего угла раньше по ошибке прибавлялась ширина
@@ -517,11 +582,14 @@ class GameMap(SavedObject):
             self.set_state_of_points_build(points, 2)  # builded
 
     def set_structure(self, pos, build):
+        foundation = ()
         if len(build) == 2:
             backtiles = []
             size, array = build
-        else:
+        elif len(build) == 3:
             size, array, backtiles = build
+        else:
+            size, array, backtiles, foundation = build
         backtile = 0
         for i_y in range(size[1]):
             for i_x in range(size[0]):
@@ -532,6 +600,26 @@ class GameMap(SavedObject):
                 if tile[0] != 150:
                     self.set_backtile(pos[0] + i_x, pos[1] + i_y, backtile, create_chunk=True)
                     self.set_static_tile(pos[0] + i_x, pos[1] + i_y, tile, create_chunk=True)
+        if foundation:
+            self._build_foundation(pos, foundation)
+
+    def _build_foundation(self, pos, foundation):
+        """Достроить фундамент вниз до земли.
+
+        Рельеф неровный, поэтому структура, посаженная на поверхность, одним
+        углом висела бы над склоном. Помеченные в схеме столбы ('=' и '_')
+        сами доводятся до породы. Глубина ограничена: над пропастью иначе
+        выкладывался бы столб на всю её глубину."""
+        base = self.base_generation
+        for dx, dy, tile_type in foundation:
+            tx = pos[0] + dx
+            solidity = TILES_SOLIDITY.get(tile_type, -1)
+            for depth in range(1, self.FOUNDATION_MAX_DEPTH + 1):
+                ty = pos[1] + dy + depth
+                # дошли до породы — дальше достраивать нечего
+                if terrain_is_solid(tx, ty, base):
+                    break
+                self.set_static_tile(tx, ty, [tile_type, solidity, 0, 0], create_chunk=True)
 
     def set_state_of_points_build(self, points, state):
         for point in points:
@@ -605,11 +693,7 @@ class GameMap(SavedObject):
         on_ground_tiles, cnt_creatures = creature_cash[0], creature_cash[1]
         tile_index = 0
         backtile_index = 0
-        octaves = 6
         base = self.base_generation
-        threshold = -0.3
-        threshold = -0.2
-        lacunarity = 2.4
         base_x = x * CHUNK_SIZE
         base_y = y * CHUNK_SIZE
         tile_y = base_y  # global tile y (not px)
@@ -620,16 +704,10 @@ class GameMap(SavedObject):
         _climate_cache = {}
 
         def standart_noise2_bool(tx, ty):
+            # кэш по тайлу: одна и та же проверка нужна нескольким соседям
             res = _noise_cache.get((tx, ty))
             if res is None:
-                # дешёвая проверка высоты первой — дорогой 6-октавный шум
-                # считается только когда она прошла
-                h = noise2(tx / freq_x, ty / freq_y) * 20 + ty
-                if h <= START_ATMO_Y or START_HELL_Y <= h <= START_HELL_Y + 50:
-                    res = False
-                else:
-                    res = noise2(tx / freq_x, ty / freq_y, octaves, persistence=0.35, base=base,
-                                 lacunarity=lacunarity) < threshold
+                res = terrain_is_solid(tx, ty, base)
                 _noise_cache[(tx, ty)] = res
             return res
 
@@ -917,6 +995,25 @@ class GameMap(SavedObject):
         # вариант 0 = надпись "altar" (units/Lore.TABLET_VARIANTS)
         self.set_static_tile(x, y_ground, [300, TILES_SOLIDITY.get(300, -1), 0, 0])
         self.story_state["altar_pos"] = [x, y_ground]
+
+
+# Плотность породы — чистая функция от (тайл, сид): никакого состояния
+# чанка. Именно поэтому поверхность можно прощупать до генерации (см.
+# GameMap.surface_y_at) — это и позволяет ставить структуры на землю.
+# Вынесено сюда, чтобы у генератора и у зонда была ОДНА формула: если
+# держать две копии, они однажды разойдутся и структуры начнут висеть.
+_TERRAIN_OCTAVES = 6
+_TERRAIN_THRESHOLD = -0.2
+_TERRAIN_LACUNARITY = 2.4
+
+
+def terrain_is_solid(tx, ty, base):
+    """Есть ли порода в тайле (tx, ty) при сиде base."""
+    h = noise2(tx / freq_x, ty / freq_y) * 20 + ty
+    if h <= START_ATMO_Y or START_HELL_Y <= h <= START_HELL_Y + 50:
+        return False
+    return noise2(tx / freq_x, ty / freq_y, _TERRAIN_OCTAVES, persistence=0.35,
+                  base=base, lacunarity=_TERRAIN_LACUNARITY) < _TERRAIN_THRESHOLD
 
 
 def random_plant_selection(biome=None):

@@ -80,6 +80,15 @@ BACKTILE_LEGEND = {
     's': 1003,  # панелька камня
 }
 
+# Фундамент: блок ставится как обычно, а от него постройка сама
+# достраивается ВНИЗ до земли (GameMap.set_structure). Нужно потому, что
+# рельеф неровный: структура, посаженная на поверхность, иначе висела бы
+# над склоном одним углом. Ставится в нижнюю строку схемы.
+FOUNDATION_LEGEND = {
+    '=': 31,   # кирпичный фундамент (постройки)
+    '_': 3,    # каменный фундамент (естественные/грубые постройки)
+}
+
 
 class StructureError(Exception):
     """Схема структуры описана неверно."""
@@ -103,19 +112,27 @@ def build_ascii(rows, back=None, legend=None):
                 "все строки схемы должны быть одной длины")
 
     array = []
-    for row in rows:
-        for ch in row:
-            if ch not in legend:
+    foundation = []
+    for dy, row in enumerate(rows):
+        for dx, ch in enumerate(row):
+            if ch not in legend and ch not in FOUNDATION_LEGEND:
                 raise StructureError(f"неизвестный символ схемы {ch!r}")
-            value = legend[ch]
-            # значение легенды — либо id тайла, либо (id, кадр): кадр несёт
-            # вариант тайла (например, какую надпись показывает плита)
-            t, state_img = value if isinstance(value, tuple) else (value, 0)
+            if ch in FOUNDATION_LEGEND:
+                # столб фундамента: сам блок ставится как обычно, а вниз от
+                # него постройка достраивается до земли уже при установке
+                t, state_img = FOUNDATION_LEGEND[ch], 0
+                foundation.append((dx, dy, t))
+            else:
+                value = legend[ch]
+                # значение легенды — либо id тайла, либо (id, кадр): кадр несёт
+                # вариант тайла (например, какую надпись показывает плита)
+                t, state_img = value if isinstance(value, tuple) else (value, 0)
             array.append([t, TILES_SOLIDITY.get(t, -1), state_img, 0])
 
     size = (width, len(rows))
     if back is None:
-        return size, array
+        # 2 элемента, если фундамента нет — старый формат не меняется
+        return (size, array, [], foundation) if foundation else (size, array)
 
     if len(back) != len(rows) or any(len(r) != width for r in back):
         raise StructureError("схема задних панелек должна совпадать по размеру с основной")
@@ -125,4 +142,6 @@ def build_ascii(rows, back=None, legend=None):
             if ch not in BACKTILE_LEGEND:
                 raise StructureError(f"неизвестный символ задней панельки {ch!r}")
             backtiles.append(BACKTILE_LEGEND[ch])
+    if foundation:
+        return size, array, backtiles, foundation
     return size, array, backtiles
