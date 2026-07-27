@@ -38,6 +38,18 @@ class InventoryUI(SurfaceUI):
     def set_work_rect(self, value):
         self.work_rect = value
 
+    def relayout(self):
+        """Пересчитать раскладку под новый размер окна.
+
+        Поверхность и центр таблицы считались один раз в __init__ по
+        SCREEN_SIZE, поэтому после растягивания окна инвентарь оставался
+        в прежнем центре — вместе с ним разъезжались и координаты ячеек
+        (в них попадали клики), см. convert_table_mpos_to_i."""
+        self.set_size(tuple(SCREEN_SIZE))
+        self.convert_alpha()
+        self.table_inventory.rect.center = self.rect.center
+        self.work_rect = self.table_inventory.rect
+
     def redraw_table_inventory(self):
         self.table_inventory.fill(bg_color)
         self.table_inventory.fill(bg_color_dark,
@@ -95,9 +107,22 @@ class InventoryUI(SurfaceUI):
         if get_obj_mouse():
             self.blit(get_obj_mouse().sprite, pg.mouse.get_pos())
         elif self.inventory_info_index != -1:
-            mx, my = pg.mouse.get_pos()
-            self.blit(self.inventory_info_index_surface, (mx, my + 26))
+            self.blit(self.inventory_info_index_surface, self.tooltip_pos())
         surface.blit(self, self.rect)
+
+    def tooltip_pos(self):
+        """Позиция подсказки: НАД курсором, нижняя граница на курсор-1.
+
+        Под курсором подсказка перекрывала соседние ячейки — на них как раз
+        и ведёшь мышь. У края экрана прижимаем внутрь, иначе текст уезжает
+        за границу и не читается."""
+        mx, my = pg.mouse.get_pos()
+        w, h = self.inventory_info_index_surface.get_size()
+        x = min(max(0, mx), max(0, self.rect.w - w))
+        y = my - 1 - h
+        if y < 0:                 # у верхней кромки показываем под курсором
+            y = min(my + 26, max(0, self.rect.h - h))
+        return x, y
 
     def convert_table_mpos_to_i(self, pos):
         offset = self.margin
@@ -214,6 +239,20 @@ class InventoryPlayerUI(InventoryUI):
 
         self.opened = False
 
+    def relayout(self):
+        """Пересчитать раскладку инвентаря игрока под новый размер окна:
+        хотбар, таблицу и панель рецептов/всех блоков. Состояние
+        (открыт/закрыт) не трогаем — ресайз не должен закрывать инвентарь."""
+        super().relayout()
+        self.work_inventory.rect.centerx = self.rect.centerx
+        self.table_inventory.rect.center = self.rect.center
+        self.work_rect = self.table_inventory.rect
+        self.recipes.rect.y = self.table_inventory.rect.y
+        self.recipes.rect.left = self.table_inventory.rect.right + 20
+        self.all_tiles.rect.y = self.recipes.rect.y
+        self.all_tiles.rect.left = self.recipes.rect.left
+        self.redraw_top()
+
     def redraw_table_inventory(self):
         self.table_inventory.fill(bg_color)
         self.table_inventory.fill(bg_color_dark,
@@ -300,8 +339,7 @@ class InventoryPlayerUI(InventoryUI):
         if get_obj_mouse():
             self.blit(get_obj_mouse().sprite, pg.mouse.get_pos())
         elif self.inventory_info_index != -1:
-            mx, my = pg.mouse.get_pos()
-            self.blit(self.inventory_info_index_surface, (mx, my + 26))
+            self.blit(self.inventory_info_index_surface, self.tooltip_pos())
 
         surface.blit(self, self.rect)
 

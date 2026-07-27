@@ -151,8 +151,39 @@ def _parse_sprite(spec, mod_dir, where, size=TILE_RECT):
     if spec.get("sprite"):
         return [_load_mod_image(spec["sprite"], mod_dir, where, size, load_img)], speed
 
-    _require("color" in spec, f"{where}: нужен 'color', 'sprite' или 'animation'")
+    # Пиксель-арт: своя сетка ('pixels') или готовая форма по имени ('shape').
+    # Без этого мод мог задать только плоский квадрат цветом.
+    if spec.get("pixels") or spec.get("shape"):
+        return [_build_mod_pixels(spec, where, size)], speed
+
+    _require("color" in spec, f"{where}: нужен 'color', 'sprite', 'pixels', 'shape' или 'animation'")
     return [create_tile_image(_parse_color(spec["color"], where), size=size)], speed
+
+
+def _build_mod_pixels(spec, where, size):
+    """Спрайт из сетки пикселей (как у ванильных предметов и существ).
+
+    'pixels' — свои строки, 'shape' — имя готовой формы (см. ItemSprites.SHAPES),
+    чтобы мод мог взять «кристалл» или «мясо», не рисуя их заново. Базовый
+    цвет берётся из 'color', от него считаются оттенки."""
+    from units.Graphics.PixelArt import build_sprite, PixelArtError
+    from units.ItemSprites import SHAPES
+
+    rows = spec.get("pixels")
+    if rows is None:
+        shape = spec["shape"]
+        _require(isinstance(shape, str) and shape in SHAPES,
+                 f"{where}: 'shape' должен быть одним из {', '.join(sorted(SHAPES))}, а не {shape!r}")
+        rows = SHAPES[shape]
+    else:
+        _require(isinstance(rows, list) and rows and all(isinstance(r, str) for r in rows),
+                 f"{where}: 'pixels' — список строк одинаковой длины")
+
+    base = spec.get("color", "#FFFFFF")
+    try:
+        return build_sprite(rows, base=_parse_color(base, where), size=size)
+    except PixelArtError as exc:
+        raise ModError(f"{where}: {exc}")
 
 
 def _load_mod_image(rel_path, mod_dir, where, size, load_img):
@@ -302,7 +333,10 @@ def load_mods(path=None):
     """Прочитать все моды. Возвращает (моды, ошибки) и заполняет MODS/MOD_ERRORS."""
     MODS.clear()
     MOD_ERRORS.clear()
-    ANIMATED_TILES.clear()
+    # ANIMATED_TILES здесь НЕ чистим: заполняет его регистрация тайлов в
+    # units/Tiles.py, она же и чистит. Иначе повторный вызов load_mods()
+    # оставлял бы реестр анимаций пустым навсегда — анимированные блоки
+    # мода просто перестали бы анимироваться.
 
     if not config.ModSettings.enabled:
         print("Моды: загрузка отключена в настройках")

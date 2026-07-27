@@ -1865,3 +1865,92 @@ def test_cave_structures_stay_unanchored():
     assert anchors["cave shrine"] is None
     surface = [n for n, a in anchors.items() if a == "surface"]
     assert len(surface) == 8, f"наземных структур должно быть 8, а не {len(surface)}"
+
+
+# ===================== пиксель-арт предметов =====================
+
+def test_item_sprites_are_not_flat_placeholders():
+    """У ресурсов должна быть форма, а не плоский квадрат одного цвета:
+    раньше сера от жареного мяса отличалась только оттенком."""
+    get_app()
+    from units.Tiles import tile_imgs, original_tile_words
+
+    def count_colors(surf):
+        w, h = surf.get_size()
+        return len({surf.get_at((x, y))[:3] for x in range(w) for y in range(h)})
+
+    # сера, хитин, шкура, сырое/жареное мясо, космическая пыль, палка
+    for idx in (402, 403, 404, 405, 406, 408, 801):
+        img = tile_imgs[idx]
+        n = count_colors(img)
+        assert n >= 4, f"{idx} ({original_tile_words.get(idx)}): всего {n} цветов — похоже на заглушку"
+        # и в спрайте должна быть прозрачность (форма, а не полный квадрат)
+        w, h = img.get_size()
+        assert any(img.get_at((x, y))[3] == 0 for x in range(w) for y in range(h)), \
+            f"{idx}: спрайт залит целиком, формы не видно"
+
+
+def test_item_sprite_grids_valid():
+    """Все сетки предметов — 16x16 и собираются без ошибок."""
+    get_app()
+    from units.ItemSprites import SHAPES, ITEM_SIZE
+    from units.Graphics.PixelArt import build_sprite
+    assert SHAPES
+    for name, rows in SHAPES.items():
+        assert len(rows) == ITEM_SIZE, f"{name}: {len(rows)} строк вместо {ITEM_SIZE}"
+        assert {len(r) for r in rows} == {ITEM_SIZE}, f"{name}: строки разной длины"
+        spr = build_sprite(rows, base="#808080", size=(32, 32))
+        assert spr.get_size() == (32, 32)
+
+
+def test_mod_can_use_pixel_art():
+    """Мод должен уметь задавать спрайт сеткой ('pixels') и брать готовую
+    форму по имени ('shape') — иначе ему доступен только плоский квадрат."""
+    import tempfile
+    get_app()
+    from units import mods
+    saved_mods, saved_errors = list(mods.MODS), list(mods.MOD_ERRORS)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_mod(tmp, "art", {"name": "арт", "items": [
+                {"id": 9300, "name": "Своя сетка", "color": "#20A0F0",
+                 "pixels": ["..BB..", ".BLLB.", "BLBBLB", "BLBBLB", ".BLLB.", "..BB.."]},
+                {"id": 9301, "name": "Готовая форма", "color": "#F08020", "shape": "meat"},
+            ]})
+            loaded, errors = mods.load_mods(tmp)
+            assert not errors, errors
+            specs = {s["id"]: s for s in mods.mod_blocks()}
+            for idx in (9300, 9301):
+                frames = specs[idx]["frames"]
+                assert len(frames) == 1
+                surf = frames[0]
+                w, h = surf.get_size()
+                ncol = len({surf.get_at((x, y))[:3] for x in range(w) for y in range(h)})
+                assert ncol >= 3, f"{idx}: спрайт вышел плоским"
+    finally:
+        mods.MODS[:], mods.MOD_ERRORS[:] = saved_mods, saved_errors
+        mods.load_mods()
+
+
+def test_mod_pixel_art_errors_are_reported():
+    """Кривая сетка и неизвестная форма должны давать понятную ошибку, а не
+    ронять игру: опечатку в строке легко не заметить."""
+    import tempfile
+    get_app()
+    from units import mods
+    saved_mods, saved_errors = list(mods.MODS), list(mods.MOD_ERRORS)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            _write_mod(tmp, "ragged", {"name": "кривая", "items": [
+                {"id": 9310, "name": "Кривая", "color": "#ffffff", "pixels": ["BB", "B"]}]})
+            _write_mod(tmp, "noshape", {"name": "нет формы", "items": [
+                {"id": 9311, "name": "Нет", "color": "#ffffff", "shape": "такой-формы-нет"}]})
+            loaded, errors = mods.load_mods(tmp)
+            assert not loaded
+            folders = {f for f, _m in errors}
+            assert folders == {"ragged", "noshape"}, folders
+            assert any("одной длины" in m for _f, m in errors), errors
+            assert any("shape" in m for _f, m in errors), errors
+    finally:
+        mods.MODS[:], mods.MOD_ERRORS[:] = saved_mods, saved_errors
+        mods.load_mods()

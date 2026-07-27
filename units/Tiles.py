@@ -2,6 +2,9 @@ import random
 
 from units.Graphics.Image import *
 from units.UI.Translate import get_translated_tiles
+from units.ItemSprites import (create_sulfur_img, create_chitin_img, create_hide_img,
+                               create_raw_meat_img, create_cooked_meat_img,
+                               create_space_dust_img, create_stick_img)
 
 # CREATING TILE IMAGES ========================================
 
@@ -98,13 +101,15 @@ stone_brick_img = (load_img("data/sprites/tiles/blocksstoun0.png"))
 stone_brick_1_img = (load_img("data/sprites/tiles/blocksstoun1.png"))
 stone_brick_2_img = (load_img("data/sprites/tiles/blocksstoun2.png"))
 
-purore_img = create_tile_image("#9333EA")  # purple ore
-sulfur_item_img = create_tile_image("#FDE047")  # сера (добыча бесов)
-chitin_item_img = create_tile_image("#D4A373")  # хитин (добыча скорпионов/крабов)
-hide_item_img = create_tile_image("#A16207")  # шкура (общий ресурс новых зверей)
-raw_meat_item_img = create_tile_image("#FCA5A5")  # сырое мясо (общее)
-cooked_meat_item_img = create_tile_image("#B45309")  # жареное мясо (общее)
-space_dust_item_img = create_tile_image("#818CF8")  # космическая пыль (добыча пришельцев)
+# Ресурсы: пиксель-арт (units/ItemSprites.py). Раньше это были плоские
+# квадраты одного цвета — в инвентаре сера от жареного мяса отличалась
+# только оттенком.
+sulfur_item_img = create_sulfur_img()          # сера (добыча бесов)
+chitin_item_img = create_chitin_img()          # хитин (скорпионы/крабы)
+hide_item_img = create_hide_img()              # шкура (общий ресурс зверей)
+raw_meat_item_img = create_raw_meat_img()      # сырое мясо (общее)
+cooked_meat_item_img = create_cooked_meat_img()  # жареное мясо (общее)
+space_dust_item_img = create_space_dust_img()  # космическая пыль (пришельцы)
 
 
 def create_timer_block_img():
@@ -444,7 +449,7 @@ potion_jump_item_img = load_img("data/sprites/tiles/potion_jump_item.png", None)
 slime_item_img = load_img("data/sprites/tiles/slime_item.png", None)
 pelt_wolf_item_img = load_img("data/sprites/tiles/pelt_wolf_item.png", None)
 
-stick_img = load_img("data/sprites/items/stick.png", None)
+stick_img = create_stick_img()
 blore_ore_img = load_img(r"data\sprites\items\blore_ore.png", None)  # blue ore
 copper_ore_img = load_img(r"data\sprites\items\copper_ore.png", None)
 gold_ore_img = load_img(r"data\sprites\items\gold_ore.png", None)
@@ -914,6 +919,8 @@ def item_of_right_click_tile(tile, res=True):
 from units import mods as _mods  # noqa: E402 — нужен собранный tile_imgs выше
 
 _mods.load_mods()
+# реестр анимаций принадлежит этой регистрации — она же его и чистит
+_mods.ANIMATED_TILES.clear()
 
 for _spec in _mods.mod_blocks():
     _idx, _frames = _spec["id"], _spec["frames"]

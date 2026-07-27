@@ -44,6 +44,11 @@ class BlockUI(SurfaceUI):
         if event.type == pg.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos):
             return True
 
+    def relayout(self):
+        """Перецентрировать окно блока под новый размер экрана: rect
+        считался один раз при создании по SCREEN_SIZE."""
+        self.rect.center = SCREEN_SIZE[0] // 2, SCREEN_SIZE[1] // 2
+
 
 class BlocksUIManger:
     def __init__(self, player):
@@ -252,6 +257,24 @@ class InventoryPlayerWithBlockUI(BlockUI):
 
     def set_player(self, player):
         self.player_inventory_ui.inventory = player.inventory
+
+    def relayout(self):
+        """Пересобрать раскладку «инвентарь + блок» и общую рабочую область.
+
+        work_rect — объединение двух областей; по нему проверяется, выкинут
+        ли предмет мимо интерфейса, поэтому его тоже надо пересчитать,
+        иначе после ресайза предметы будут выпадать из рук."""
+        self.set_size(tuple(SCREEN_SIZE))
+        self.rect.topleft = (0, 0)
+        self.player_inventory_ui.relayout()
+        self.player_inventory_ui.table_inventory.rect.y = 100
+        if hasattr(self.block_ui, "relayout"):
+            self.block_ui.relayout()
+        self.block_ui.get_draw_rect().y = self.player_inventory_ui.table_inventory.rect.bottom + 40
+        self.block_ui.get_draw_rect().centerx = self.player_inventory_ui.table_inventory.rect.centerx
+        self.work_rect = pg.Rect.union(self.block_ui.work_rect, self.player_inventory_ui.work_rect)
+        self.block_ui.set_work_rect(self.work_rect)
+        self.player_inventory_ui.set_work_rect(self.work_rect)
 
     def close(self):
         self.player_inventory_ui.opened = False

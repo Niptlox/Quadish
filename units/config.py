@@ -99,6 +99,9 @@ class GameSettings(__Settings):
     max_fps = config.getint(section, 'max_fps', fallback=60)
     dynamic_dump = config.getboolean(section, 'dynamic_dump', fallback=True)
     vsync = config.getboolean(section, 'vsync', fallback=True)
+    # вид курсора: arrow/cross/cross_dot/corners/circle/system
+    # (см. units/Graphics/Cursor.py CURSOR_KINDS)
+    cursor = config.get(section, 'cursor', fallback='arrow')
     if language not in all_languages:
         language = "en"
 
@@ -129,6 +132,10 @@ class GameSettings(__Settings):
     @classmethod
     def set_vsync(cls, state):
         cls.set("vsync", bool(state))
+
+    @classmethod
+    def set_cursor(cls, value):
+        cls.set("cursor", str(value))
 
 
 class VolumeSettings(__Settings):

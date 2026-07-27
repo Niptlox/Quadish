@@ -120,6 +120,31 @@ class GameUI(UI):
         self._playerui_state = None  # (lives, max_lives, creative) последней отрисовки
         self.new_sys_message("Привет игрок. Нажми [E]")
 
+    def relayout(self):
+        """Пересчитать HUD и вложенные интерфейсы под новый размер окна.
+
+        Сюда же приходят инвентарь игрока и интерфейсы блоков: их раскладка
+        считалась один раз при создании по SCREEN_SIZE, поэтому после
+        растягивания окна они оставались в старом центре, а вместе с ними
+        разъезжались координаты ячеек — клики попадали не туда."""
+        super().relayout()
+        self.sys_message.update_rect()
+        self.achievement_message.bottom_offset = self.sys_message.height + 18
+        self.achievement_message.update_rect()
+        self.playerui.rect.bottom = self.screen.get_height()
+        self._playerui_state = None  # заставить перерисовать полоску жизней
+
+        scene = self.scene
+        inventory_ui = getattr(getattr(scene, "player", None), "inventory", None)
+        inventory_ui = getattr(inventory_ui, "ui", None)
+        if inventory_ui is not None and hasattr(inventory_ui, "relayout"):
+            inventory_ui.relayout()
+        manager = getattr(scene, "blocks_ui_manager", None)
+        if manager is not None:
+            for block_ui in manager.blocks_ui.values():
+                if hasattr(block_ui, "relayout"):
+                    block_ui.relayout()
+
     def blit_world(self):
         """Растянуть отрендеренный мир (self.display, может быть меньше экрана)
         на реальный экран. Единственное место, где мир масштабируется — весь
@@ -535,6 +560,11 @@ class MainSettingsUI(TitleUI):
             except Exception:
                 pass
 
+        def set_cursor_kind(value, i):
+            from units.Graphics.Cursor import CURSOR_KINDS, apply_cursor_kind
+            gs.set_cursor(CURSOR_KINDS[i])
+            apply_cursor_kind()   # применяется сразу, перезапуск не нужен
+
         def set_mods(value, i):
             config.ModSettings.set_enabled(bool_dict[value])
             # блоки/существа модов регистрируются один раз при импорте
@@ -544,6 +574,8 @@ class MainSettingsUI(TitleUI):
         fps_idx = fps_values_lst.index(gs.max_fps) if gs.max_fps in fps_values_lst else 1
         view_tiles_idx = view_tiles_lst.index(win.view_tiles_width) if win.view_tiles_width in view_tiles_lst else 2
         menu_size_idx = MENU_SIZES.index(win.menu_size) if win.menu_size in MENU_SIZES else 0
+        from units.Graphics.Cursor import CURSOR_KINDS, CURSOR_KIND_LABELS as cursor_kind_labels
+        cursor_idx = CURSOR_KINDS.index(gs.cursor) if gs.cursor in CURSOR_KINDS else 0
         items = [
             ("dd", "Монитор: {}", [str(i + 1) for i in range(n_mon)],
              win.monitor if win.monitor < n_mon else 0, set_mon, scr_icon),
@@ -561,6 +593,7 @@ class MainSettingsUI(TitleUI):
              lambda v, i: gs.set_stars_state(bool_dict[v]), None),
             ("dd", "ID предмета: {}", ru_bool_lst, 0 if gs.view_item_index else 1,
              lambda v, i: gs.set_item_index_state(bool_dict[v]), None),
+            ("dd", "Курсор: {}", cursor_kind_labels, cursor_idx, set_cursor_kind, None),
             ("dd", mods_label(), ru_bool_lst, 0 if config.ModSettings.enabled else 1, set_mods, None),
             ("btn", "Звуки и музыка...", lambda _: self.scene.set_ui(self.scene.sound_settings_ui)),
             ("btn", "Создать мир обучения", lambda _: self.scene.create_tutorial_world()),
