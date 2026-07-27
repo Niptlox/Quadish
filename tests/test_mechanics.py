@@ -2180,3 +2180,224 @@ def test_chopper_cuts_tree_above_on_signal():
     chunk = gm.chunk(gm.to_chunk_xy(x, y - 1))
     from units.common import OBJ_ITEM
     assert any(o.class_obj & OBJ_ITEM for o in chunk[1]), "должны выпасть брёвна"
+
+
+# ===================== двигатели, лифт, порталы, гнездо голема =====================
+
+def test_fuel_engine_burns_wood_and_pulses_network():
+    """Топливный двигатель должен разгонять сеть быстрее таймера, но за
+    дерево: бесплатной скорости в игре быть не должно, иначе таймер и
+    экономика дерева обесцениваются."""
+    game = fresh_world(70)
+    gm = game.game_map
+    x, y = 12, 4
+    engine = _place_block(gm, x, y, 228)
+    lamp = _place_block(gm, x + 1, y, 215)
+    from units.Objects.Items import ItemsTile
+    engine.inventory.put_to_inventory(ItemsTile(game, 11, count=1))   # доски
+
+    def run(ticks):
+        for _ in range(ticks):
+            game.tact += 1
+            engine.update(16)
+
+    run(engine.period + 1)
+    assert lamp.activated_tact >= game.tact - 1, "двигатель должен зажечь сеть"
+    assert engine.charge == engine.pulses_per_fuel - 1, "одна доска = запас импульсов"
+
+    # выработали топливо — двигатель встал
+    run(engine.period * (engine.pulses_per_fuel + 2))
+    assert not any(c for c in engine.inventory), "топливо должно сгореть"
+    assert engine.update(16) is engine.img_off, "без топлива двигатель стоит"
+
+
+def test_creative_engine_needs_no_fuel_and_is_fastest():
+    """Креативный двигатель — отладочный: топлива не просит и быстрее
+    остальных. Рецепта у него нет, иначе он обнулил бы смысл прочих."""
+    game = fresh_world(71)
+    gm = game.game_map
+    engine = _place_block(gm, 15, 4, 229)
+    from units.Objects.TileClasses import FuelEngine, SpaceEngine, HellEngine
+    assert engine.period < min(FuelEngine.period, SpaceEngine.period, HellEngine.period)
+
+    lamp = _place_block(gm, 16, 4, 215)
+    for _ in range(engine.period + 1):
+        game.tact += 1
+        engine.update(16)
+    assert lamp.activated_tact >= game.tact - 1
+
+    from units.creating_items import RECIPES
+    assert all(rec[0][0] != 229 for rec in RECIPES), "у креативного двигателя не должно быть рецепта"
+
+
+def test_space_and_hell_engines_accept_only_their_fuel():
+    """Космический и адский двигатели работают на ресурсах своих миров —
+    именно это и делает их наградой за поход туда, а не просто «ещё один
+    таймер»."""
+    game = fresh_world(72)
+    gm = game.game_map
+    space = _place_block(gm, 18, 4, 230)
+    hell = _place_block(gm, 22, 4, 231)
+    from units.Objects.TileClasses import FuelEngine
+    assert space.fuel_items == (408,) and hell.fuel_items == (402,)
+    assert space.inventory.filter_items == {408}
+    assert hell.inventory.filter_items == {402}
+
+    from units.Objects.Items import ItemsTile
+    space.inventory.put_to_inventory(ItemsTile(game, 408, count=1))
+    for _ in range(space.period + 1):
+        game.tact += 1
+        space.update(16)
+    assert space.charge == space.pulses_per_fuel - 1, "пыль должна дать длинный запас"
+    assert space.pulses_per_fuel > FuelEngine.pulses_per_fuel, "пыль экономнее дерева"
+
+
+def test_portals_pair_by_code_and_teleport_player():
+    """Два портала с одинаковым набором предметов — это пара. Пустая
+    «частота» парой не считается: два только что поставленных портала не
+    должны утаскивать игрока неизвестно куда."""
+    game = fresh_world(73)
+    gm = game.game_map
+    a = _place_block(gm, 10, 5, 232)
+    b = _place_block(gm, 400, 5, 232)
+    assert a.pair() is None and b.pair() is None, "пустые порталы не пара"
+
+    from units.Objects.Items import ItemsTile
+    for portal in (a, b):
+        portal.inventory.put_to_inventory(ItemsTile(game, 51, count=1))
+        portal.inventory.put_to_inventory(ItemsTile(game, 62, count=1))
+    assert a.pair() is b and b.pair() is a, "одинаковая частота = пара"
+
+    from units.common import TSIZE
+    game.player.tp_to((a.tx * TSIZE, a.ty * TSIZE))
+    game.tact += a.COOLDOWN * 2
+    a.update(16)
+    assert abs(game.player.rect.centerx - b.tx * TSIZE) <= TSIZE, "игрок должен оказаться у второго портала"
+    # обратного мгновенного прыжка быть не должно
+    at_b = tuple(game.player.rect.center)
+    b.update(16)
+    assert tuple(game.player.rect.center) == at_b, "кулдаун должен держать игрока на месте"
+
+
+def test_portal_code_changes_reindex_pairing():
+    """Смена предметов в портале должна менять и его частоту: иначе
+    перенастроенный портал остался бы связан со старой парой."""
+    game = fresh_world(74)
+    gm = game.game_map
+    a = _place_block(gm, 10, 5, 232)
+    b = _place_block(gm, 300, 5, 232)
+    from units.Objects.Items import ItemsTile
+    for portal in (a, b):
+        portal.inventory.put_to_inventory(ItemsTile(game, 51, count=1))
+    assert a.pair() is b
+
+    a.inventory.set_cell(0, None)
+    assert a.pair() is None, "частота изменилась — старая пара не действует"
+    assert b.pair() is None, "и обратная связь тоже"
+
+
+def test_elevator_carries_player_up_and_down():
+    """Лифт: расстояния до ада и космоса — тысячи блоков по вертикали,
+    пешком их не пройти. Спуск медленнее подъёма и ниже порога урона от
+    падения, иначе приезд на дно бил бы игрока."""
+    from units.common import ELEVATOR_UP_SPEED, ELEVATOR_DOWN_SPEED
+    assert ELEVATOR_DOWN_SPEED < 0.75, "спуск не должен наносить урон при приземлении"
+    assert ELEVATOR_DOWN_SPEED < ELEVATOR_UP_SPEED
+
+    from units.common import TSIZE
+    game = fresh_world(75)
+    gm = game.game_map
+    x, y = 50, 20
+    for dy in range(-6, 7):                 # шахта лифта
+        gm.set_static_tile(x, y + dy, 234)
+    player = game.player
+    player.tp_to((x * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    game.elapsed_time = 16
+    game.update()                           # кадр заполняет static_tiles
+    player.tp_to((x * TSIZE, y * TSIZE))
+
+    player.on_down = False
+    player.moving(16)
+    assert 234 in player.collisions_ttile, "игрок должен стоять в шахте"
+    assert player.vertical_momentum == -ELEVATOR_UP_SPEED, "в шахте игрока тянет вверх"
+    assert player.jump_count == 0, "лифт не должен съедать прыжки"
+
+    player.on_down = True
+    player.moving(16)
+    assert player.vertical_momentum == ELEVATOR_DOWN_SPEED, "присед опускает"
+
+
+def test_golem_nest_spawns_golem_for_stone_under_signal():
+    """Гнездо голема — ферма железа: отдаёшь камень, планета возвращает
+    камень и немного железа. Без сигнала и без камня — ничего."""
+    game = fresh_world(76)
+    gm = game.game_map
+    x, y = 40, 30
+    nest = _place_block(gm, x, y, 233)
+    from units.Objects.Items import ItemsTile
+    from units.Objects.Creatures import StoneGolem
+
+    def heat(ticks, powered=True):
+        for _ in range(ticks):
+            game.tact += 1
+            if powered:
+                nest.activated_tact = game.tact
+            nest.update(16)
+
+    # без камня гнездо не греется
+    heat(nest.HEAT_TACTS + 5)
+    assert nest.heat == 0, "пустое гнездо не должно греться"
+
+    nest.inventory.put_to_inventory(ItemsTile(game, 3, count=nest.STONE_PER_GOLEM))
+    # без сигнала — тоже. activated_tact сбрасываем явно: у сигнальных
+    # тайлов есть допуск в 1 такт, иначе первый же «выключенный» тик
+    # всё ещё читался бы как включённый
+    nest.activated_tact = float("-inf")
+    nest.heat = 0
+    heat(10, powered=False)
+    assert nest.heat == 0, "без сигнала гнездо холодное"
+
+    heat(nest.HEAT_TACTS + 1)
+    chunk = gm.chunk(gm.to_chunk_xy(x, y - 2))
+    assert any(isinstance(o, StoneGolem) for o in chunk[1]), "должен появиться голем"
+    assert nest.stone_count() == 0, "камень должен уйти на голема"
+    assert (64, (0, 2)) in [args for _cls, args in StoneGolem.drop_items], \
+        "голем — источник железа, иначе ферма бессмысленна"
+
+
+def test_new_machines_registered_consistently():
+    """Каждый новый блок должен быть зарегистрирован везде: без картинки
+    он падает при отрисовке, без прочности — при копании, без имени —
+    в инвентаре."""
+    get_app()
+    from units import Tiles
+    from units.Objects.TileClasses import tiles_class
+    from units.UI.BlocksUI import BLOCKS_UI
+    for index in (228, 229, 230, 231, 232, 233, 234):
+        assert index in Tiles.tile_imgs, index
+        assert index in Tiles.original_tile_words, index
+        assert index in Tiles.TILES_SOLIDITY, index
+        assert index in Tiles.iron_capability, index
+        assert index in Tiles.SEMIPHYSBODY_TILES, index
+    for index in (228, 229, 230, 231, 232, 233):
+        assert index in Tiles.CLASS_TILE, index
+        assert index in Tiles.CLASS_UPDATING_TILES, index
+        assert index in tiles_class, index
+        assert index in BLOCKS_UI, index
+    assert 234 not in Tiles.CLASS_TILE, "лифт обходится без класса — его ведёт физика игрока"
+
+
+def test_block_with_inventory_drops_itself_once():
+    """Блок с инвентарём не должен выпадать дважды: item_of_break_tile уже
+    кладёт сам блок, а items_of_break — только содержимое."""
+    game = fresh_world(77)
+    gm = game.game_map
+    x, y = 14, 4
+    hopper = _place_block(gm, x, y, 224)
+    from units.Objects.Items import ItemsTile
+    hopper.inventory.put_to_inventory(ItemsTile(game, 11, count=2))
+    from units.Tiles import item_of_break_tile
+    drops = item_of_break_tile(gm.get_static_tile(x, y), gm, (x, y))
+    assert sum(cnt for i, cnt in drops if i == 224) == 1, f"воронка должна выпасть один раз: {drops}"
+    assert any(i == 11 for i, _ in drops), "содержимое тоже должно выпасть"

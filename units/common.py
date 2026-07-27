@@ -292,6 +292,10 @@ HAND_RECT = (HAND_SIZE, HAND_SIZE)
 FALL_SPEED = 0.021
 FALL_SPEED = 0.017
 MAX_FALL_SPEED = 50
+# Лифт (тайл 234). Спуск медленнее подъёма и держится ниже порога урона от
+# падения (0.75, см. Player.moving), чтобы приезд на дно шахты не бил.
+ELEVATOR_UP_SPEED = 0.9
+ELEVATOR_DOWN_SPEED = 0.7
 AUTO_BUILD = True  # копать ближайший если мышка далеко
 
 CREATIVE_MODE = False

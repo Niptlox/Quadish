@@ -389,6 +389,14 @@ class Player(PhysicalObject):
             self.vertical_momentum /= 1.5
         elif {121, 125} & self.collisions_ttile:
             self.inventory.update_available_create_items()
+        if 234 in self.collisions_ttile:
+            # Лифт: шахта тянет вверх, присед (S/вниз) — опускает. Ад и
+            # космос лежат за тысячами блоков по вертикали, пешком туда не
+            # добраться. Скорость спуска (0.7) намеренно ниже порога урона
+            # от падения (0.75) — иначе приезд на дно шахты бил бы игрока.
+            self.vertical_momentum = ELEVATOR_DOWN_SPEED if self.on_down else -ELEVATOR_UP_SPEED
+            self.air_timer = 0
+            self.jump_count = 0
 
         # if self.game.blocks_ui_manager.opened:
         #     dist2 = (Vector2(self.game.blocks_ui_manager.opened.rect.center) - Vector2(self.rect.center)).length_squared()

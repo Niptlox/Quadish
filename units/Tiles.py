@@ -405,11 +405,97 @@ def create_chopper_img():
     return img
 
 
+def create_engine_img(body, flywheel, on):
+    """Двигатель: корпус с маховиком и выхлопом. Все четыре двигателя —
+    один силуэт в разных цветах: игроку важно с первого взгляда отличить
+    двигатель от вентиля, а уже потом — какой именно."""
+    img = create_tile_image(body)
+    w, h = img.get_size()
+    # станина
+    pygame.draw.rect(img, "#292524", (2, h - 8, w - 4, 6), border_radius=1)
+    # корпус
+    pygame.draw.rect(img, "#3F3A36", (4, 6, w - 8, h - 15), border_radius=2)
+    pygame.draw.rect(img, "#1C1917", (4, 6, w - 8, h - 15), width=1, border_radius=2)
+    # маховик: светится, когда двигатель даёт импульсы
+    cx, cy = w // 2, (6 + h - 9) // 2
+    r = max(3, (h - 17) // 2)
+    pygame.draw.circle(img, flywheel if on else "#44403C", (cx, cy), r)
+    pygame.draw.circle(img, "#1C1917", (cx, cy), r, width=1)
+    pygame.draw.line(img, "#1C1917", (cx - r + 1, cy), (cx + r - 1, cy), 1)
+    # выхлоп сверху — есть только на ходу
+    if on:
+        pygame.draw.rect(img, flywheel, (w - 9, 1, 3, 5))
+    else:
+        pygame.draw.rect(img, "#44403C", (w - 9, 1, 3, 5))
+    return img
+
+
+def create_portal_img(phase=0):
+    """Портал: тёмная рама с воронкой-вихрем внутри. Кадры проворачивают
+    вихрь, поэтому портал видно даже боковым зрением."""
+    img = create_tile_image("#1C1917", bd=0)
+    w, h = img.get_size()
+    pygame.draw.rect(img, "#3F3A36", (0, 0, w, h), width=3)
+    cx, cy = w // 2, h // 2
+    colors = ("#7C3AED", "#A855F7", "#C084FC", "#E9D5FF")
+    for i, r in enumerate(range(max(2, min(w, h) // 2 - 3), 1, -3)):
+        color = colors[(i + phase) % len(colors)]
+        pygame.draw.circle(img, color, (cx, cy), r, width=2)
+    pygame.draw.circle(img, "#FAF5FF", (cx, cy), 2)
+    return img
+
+
+def create_nest_img(on):
+    """Гнездо голема: каменная чаша; под сигналом внутри разогревается
+    камень — из него и вылезает голем (docs/FARMS_CONCEPT.md)."""
+    img = create_tile_image("#57534E")
+    w, h = img.get_size()
+    pygame.draw.polygon(img, "#44403C", [(3, 6), (w - 4, 6), (w - 8, h - 3), (7, h - 3)])
+    pygame.draw.polygon(img, "#1C1917", [(3, 6), (w - 4, 6), (w - 8, h - 3), (7, h - 3)], width=1)
+    core = "#F97316" if on else "#78716C"
+    pygame.draw.circle(img, core, (w // 2, h // 2 + 2), 5)
+    pygame.draw.circle(img, "#FDE047" if on else "#A8A29E", (w // 2, h // 2 + 2), 2)
+    if on:
+        for x in (w // 3, w // 2, w - w // 3):
+            pygame.draw.line(img, "#FB923C", (x, 5), (x, 2), 1)
+    return img
+
+
+def create_elevator_img():
+    """Лифт: направляющая шахта. Стоя внутри, игрок едет вверх — способ
+    покрыть тысячи блоков по вертикали между адом, поверхностью и космосом."""
+    img = create_tile_image("#3F3A36", bd=0)
+    w, h = img.get_size()
+    pygame.draw.rect(img, "#292524", (5, 0, w - 10, h))
+    for side in (3, w - 6):
+        pygame.draw.rect(img, "#78716C", (side, 0, 3, h))
+    for y in range(2, h, 8):
+        pygame.draw.polygon(img, "#22D3EE", [(w // 2 - 4, y + 5), (w // 2 + 4, y + 5), (w // 2, y)])
+    return img
+
+
 hopper_img = create_hopper_img()
 conveyor_imgs = [create_conveyor_img(True), create_conveyor_img(False)]
 conveyor_img = conveyor_imgs[0]
 dropper_img = create_dropper_img()
 chopper_img = create_chopper_img()
+
+engine_fuel_on_img = create_engine_img("#57534E", "#FB923C", True)
+engine_fuel_off_img = create_engine_img("#57534E", "#FB923C", False)
+engine_creative_img = create_engine_img("#4C1D95", "#C084FC", True)
+engine_space_on_img = create_engine_img("#334155", "#38BDF8", True)
+engine_space_off_img = create_engine_img("#334155", "#38BDF8", False)
+engine_hell_on_img = create_engine_img("#7F1D1D", "#FDE047", True)
+engine_hell_off_img = create_engine_img("#7F1D1D", "#FDE047", False)
+
+portal_imgs = [create_portal_img(p) for p in range(4)]
+portal_img = portal_imgs[0]
+
+nest_on_img = create_nest_img(True)
+nest_off_img = create_nest_img(False)
+
+elevator_img = create_elevator_img()
+
 
 def create_dynamite_img(lit=False, spark_bright=False):
     """Динамит: пучок из 3 шашек с бандажами и фитилём (раньше был просто
@@ -639,6 +725,13 @@ tile_imgs = {None: none_img,
              225: conveyor_img,
              226: dropper_img,
              227: chopper_img,
+             228: engine_fuel_off_img,
+             229: engine_creative_img,
+             230: engine_space_off_img,
+             231: engine_hell_off_img,
+             232: portal_img,
+             233: nest_off_img,
+             234: elevator_img,
              501: sword_1_img,
              502: sword_77_img,
              503: sword_2_img,
@@ -684,7 +777,8 @@ ON_EARTHEN_PLANTS = {101, 102, 103, 104}
 # блоки через которые нельзя пройти
 PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 21, 22, 23, 24, 25, 31, 32, 33, 103, 124, 128, 251}
 # полуфизические блоки например мебель листва вода
-SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 129, 131, 122, 104, 300, 140, 224, 225, 226, 227}
+SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 129, 131, 122, 104, 300, 140, 224, 225, 226, 227,
+                      228, 229, 230, 231, 232, 233, 234}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
 # STANDING_TILES = {0, 101, 102, 103, 104, 110, 120, 121, 122, 123, 125, 126, 130, 129, 251}
 STANDING_TILES = {0, 110, 120, 121, 122, 123, 125, 126, 130, 129, 131} | ON_EARTHEN_PLANTS
@@ -699,10 +793,10 @@ WOOD_TILES = {12, 110, 11, 121, 122, 123, 124, 126, 127, 128, 129, 131, 251}
 
 # блоки у которых есть прграммный класс
 CLASS_TILE = {131, 129, 200, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223,
-              300, 224, 225, 226, 227}
+              300, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233}
 # которые надо обновлять (213 провод не входит — у него нет своей логики)
 CLASS_UPDATING_TILES = {131, 200, 210, 211, 212, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223,
-                        224, 225, 226, 227}
+                        224, 225, 226, 227, 228, 229, 230, 231, 232, 233}
 # CLASS_UPDATING_TILES_IN_UI = {131}
 # которые надо обновлять не зависимо от загрузки чанка те всегда
 CLASS_ALLWAYS_UPDATING_TILES = {200, }
@@ -713,7 +807,8 @@ CLASS_ALLWAYS_UPDATING_TILES = {200, }
 # намеренно НЕ входят сюда — иначе чужой bfs_activate "затапливал" бы их
 # напрямую, как ещё один провод; вместо этого они сами читают соседей и
 # решают, включаться ли (см. LogicGate в units/Objects/TileClasses.py).
-ACTIVATE_TILES = {200, 210, 9, 211, 212, 213, 214, 215, 219, 221, 222, 223, 226, 227}
+ACTIVATE_TILES = {200, 210, 9, 211, 212, 213, 214, 215, 219, 221, 222, 223, 226, 227,
+                  228, 229, 230, 231, 233}
 # то же самое + вентили/задержка — только для того, чтобы они могли
 # читать состояние соседей (включая друг друга), не участвуя в самом обходе
 SIGNAL_TILES = ACTIVATE_TILES | {216, 217, 218, 220}
@@ -740,7 +835,8 @@ Eats = {52: 10, 53: 2, 56: 8, 55: 100, 401: 7, 251: 7, 351: 1,
 iron_capability = {1, 2, 3, 4, 9, 11, 12, 21, 22, 23, 24, 25, 31, 32, 33, 101, 102, 103, 104, 105, 106, 110, 121, 122,
                    123, 124, 125, 126, 131,
                    127, 251,
-                   128, 130, 300, 224, 225, 226, 227}
+                   128, 130, 300, 224, 225, 226, 227,
+                   228, 229, 230, 231, 232, 233, 234}
 spatula_iron_capability = {1003}
 Pickaxes_capability = {
     530: iron_capability,
@@ -872,6 +968,13 @@ original_tile_words = {None: "None",
                        225: "Конвейер",
                        226: "Дропер",
                        227: "Лесоруб",
+                       228: "Топливный двигатель",
+                       229: "Креативный двигатель",
+                       230: "Космический двигатель",
+                       231: "Адский двигатель",
+                       232: "Портал",
+                       233: "Гнездо голема",
+                       234: "Лифт",
                        501: "Железный меч",
                        502: "Золотой меч",
                        503: "Ядовитый меч",
@@ -893,6 +996,8 @@ all_tiles = set(tile_words)
 # Прочность блоков
 TILES_SOLIDITY = {
     224: 55, 225: 45, 226: 55, 227: 60,
+    228: 65, 229: 65, 230: 70, 231: 70,
+    232: 85, 233: 80, 234: 50,
     140: 100,  # лава — как вода, руками не убрать
     300: 90,  # плита с надписью — крепче кирпича, но выкопать можно
     1: 15,
@@ -946,6 +1051,7 @@ DAMAGE_TILES = {
 # читает tile_imgs заново каждый кадр и ничего не кэширует.
 ANIMATED_TILES = {
     140: {"frames": lava_imgs, "speed": 3, "fps": FPS},
+    232: {"frames": portal_imgs, "speed": 6, "fps": FPS},
 }
 
 # INIT PICKAXE ==================================================

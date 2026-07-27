@@ -447,9 +447,56 @@ class InventoryPlayerDropperUI(InventoryPlayerWithBlockUI):
         super().__init__(player, LogisticBlockUI())
 
 
+class InventoryPlayerFuelEngineUI(InventoryPlayerWithBlockUI):
+    index = 228
+
+    def __init__(self, player):
+        super().__init__(player, LogisticBlockUI())
+
+
+class InventoryPlayerCreativeEngineUI(InventoryPlayerWithBlockUI):
+    index = 229
+
+    def __init__(self, player):
+        super().__init__(player, LogisticBlockUI())
+
+
+class InventoryPlayerSpaceEngineUI(InventoryPlayerWithBlockUI):
+    index = 230
+
+    def __init__(self, player):
+        super().__init__(player, LogisticBlockUI())
+
+
+class InventoryPlayerHellEngineUI(InventoryPlayerWithBlockUI):
+    index = 231
+
+    def __init__(self, player):
+        super().__init__(player, LogisticBlockUI())
+
+
+class InventoryPlayerPortalUI(InventoryPlayerWithBlockUI):
+    """Портал настраивается той же 2x2 «частотой», что и рация: одинаковый
+    набор предметов в двух порталах и связывает их."""
+    index = 232
+
+    def __init__(self, player):
+        super().__init__(player, RadioBlockUI())
+
+
+class InventoryPlayerGolemNestUI(InventoryPlayerWithBlockUI):
+    index = 233
+
+    def __init__(self, player):
+        super().__init__(player, LogisticBlockUI())
+
+
 BLOCKS_UI = {cls.index: cls for cls in
              [InventoryPlayerChestUI, InventoryPlayerFurnaceUI, CommandBlockUI, InventoryPlayerMusicBlockUI,
               InventoryPlayerReceiverUI, InventoryPlayerTransmitterUI, LoreTabletUI,
-              InventoryPlayerHopperUI, InventoryPlayerDropperUI]
+              InventoryPlayerHopperUI, InventoryPlayerDropperUI,
+              InventoryPlayerFuelEngineUI, InventoryPlayerCreativeEngineUI,
+              InventoryPlayerSpaceEngineUI, InventoryPlayerHellEngineUI,
+              InventoryPlayerPortalUI, InventoryPlayerGolemNestUI]
              }
 BLOCKS_UI_SET = set(BLOCKS_UI)

@@ -22,7 +22,8 @@ from units.sound import sound_gate
 
 class GameMap(SavedObject):
     not_save_vars = SavedObject.not_save_vars | {"gate", "particles", "world_id", "world_meta",
-                                                 "dynamic_dump", "dump_keep_radius", "signal_receivers"}
+                                                 "dynamic_dump", "dump_keep_radius", "signal_receivers",
+                                                 "portals"}
     # держим в памяти чанки в этом радиусе (в чанках) вокруг игрока
     DUMP_KEEP_RADIUS = 8
 
@@ -67,6 +68,10 @@ class GameMap(SavedObject):
         # кэш (в not_save_vars), заполняется самими Receiver при создании/
         # загрузке (см. Receiver._reregister в TileClasses.py).
         self.signal_receivers = {}
+        # Тот же индекс, но для Порталов (232): пара ищется по "частоте" —
+        # набору предметов внутри. Тоже runtime-кэш: порталы перерегистрируют
+        # себя при создании и загрузке (Portal._register в TileClasses.py).
+        self.portals = {}
         if self.base_generation is None:
             self.new_base_generation()
 
@@ -460,6 +465,16 @@ class GameMap(SavedObject):
             bucket.discard(receiver)
             if not bucket:
                 del self.signal_receivers[code]
+
+    def register_portal(self, code, portal):
+        self.portals.setdefault(code, set()).add(portal)
+
+    def unregister_portal(self, code, portal):
+        bucket = self.portals.get(code)
+        if bucket:
+            bucket.discard(portal)
+            if not bucket:
+                del self.portals[code]
 
     def unload_far_chunks(self):
         """Выгрузить из памяти дальние немодифицированные чанки.

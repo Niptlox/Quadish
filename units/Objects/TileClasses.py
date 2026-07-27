@@ -9,7 +9,11 @@ from units.Tiles import (WOOD_TILES, furnace_imgs, ACTIVATE_TILES, SIGNAL_TILES,
                          chunk_loader_on_img, chunk_loader_off_img,
                          music_block_img, music_block_flash_img,
                          receiver_img, transmitter_img, conveyor_imgs,
-                         item_of_break_tile)
+                         item_of_break_tile,
+                         engine_fuel_on_img, engine_fuel_off_img, engine_creative_img,
+                         engine_space_on_img, engine_space_off_img,
+                         engine_hell_on_img, engine_hell_off_img,
+                         nest_on_img, nest_off_img)
 from units.sound import note_sound_for_item
 from units.common import *
 
@@ -594,7 +598,9 @@ class Hopper(ItemMover):
         self.inventory.set_vars(d)
 
     def items_of_break(self):
-        return [(self.index, 1)] + self.inventory.items_of_break()
+        # Сам блок уже кладёт item_of_break_tile (units/Tiles.py) — здесь
+        # только содержимое, иначе блок выпадал бы дважды.
+        return self.inventory.items_of_break()
 
     def update(self, elapsed_time):
         if self.game.tact % self.PERIOD:
@@ -670,7 +676,9 @@ class Dropper(SignalTile, ItemMover):
         self.inventory.set_vars(d)
 
     def items_of_break(self):
-        return [(self.index, 1)] + self.inventory.items_of_break()
+        # Сам блок уже кладёт item_of_break_tile (units/Tiles.py) — здесь
+        # только содержимое, иначе блок выпадал бы дважды.
+        return self.inventory.items_of_break()
 
     def drop_one(self):
         for i, cell in enumerate(self.inventory):
@@ -728,8 +736,299 @@ class Chopper(SignalTile):
         self._was_active = self.activating
 
 
+class Engine(SignalTile):
+    """Двигатель — источник сигнала, работающий на топливе.
+
+    Отличие от таймера: таймер бесплатен, но медленный (раз в 3 с). Чтобы
+    автоматика работала быстро, нужен двигатель, а он ест топливо — так у
+    скорости появляется цена, и фермы не становятся бесплатными.
+    """
+    not_save_vars = {"inventory"} | Tile.not_save_vars
+    view_interface_on_click = True
+    size_table = [3, 1]
+    period = FPS               # тактов между импульсами
+    pulses_per_fuel = 8        # сколько импульсов даёт одна единица топлива
+    fuel_items = ()            # что принимает как топливо (пусто = не нужно)
+    img_on = img_off = None
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.inventory = Inventory(self.game_map, self, self.size_table)
+        if self.fuel_items:
+            self.inventory.filter_items = set(self.fuel_items)
+        self.timer = 0
+        self.charge = 0        # оставшиеся импульсы от сожжённого топлива
+
+    def get_vars(self):
+        d = super().get_vars()
+        d.update(self.inventory.get_vars())
+        return d
+
+    def set_vars(self, d):
+        self.inventory.set_vars(d)
+
+    def items_of_break(self):
+        # Сам блок уже кладёт item_of_break_tile (units/Tiles.py) — здесь
+        # только содержимое, иначе блок выпадал бы дважды.
+        return self.inventory.items_of_break()
+
+    def take_fuel(self):
+        """Сжечь единицу топлива. True, если получилось."""
+        if not self.fuel_items:
+            return True                      # креативному топливо не нужно
+        for i, cell in enumerate(self.inventory):
+            if cell is not None and cell.index in self.fuel_items:
+                cell.count -= 1
+                if cell.count <= 0:
+                    self.inventory.set_cell(i, None)
+                return True
+        return False
+
+    def update(self, elapsed_time):
+        self.refresh_activating()
+        self.timer += 1
+        if self.timer < self.period:
+            return self.img_on if self.charge > 0 else self.img_off
+        self.timer = 0
+        if self.charge <= 0:
+            if not self.take_fuel():
+                return self.img_off
+            self.charge = self.pulses_per_fuel
+        self.charge -= 1
+        bfs_activate(self.game_map, self)
+        return self.img_on
+
+
+class FuelEngine(Engine):
+    """Топливный двигатель: работает на дереве, как печка."""
+    index = 228
+    period = FPS
+    pulses_per_fuel = 8
+    fuel_items = tuple(WOOD_TILES)
+
+    @property
+    def img_on(self):
+        return engine_fuel_on_img
+
+    @property
+    def img_off(self):
+        return engine_fuel_off_img
+
+
+class CreativeEngine(Engine):
+    """Креативный двигатель: без топлива и самый быстрый. Для отладки схем
+    и творческого режима — крафта у него нет."""
+    index = 229
+    period = max(1, FPS // 5)
+    fuel_items = ()
+
+    @property
+    def img_on(self):
+        return engine_creative_img
+
+    @property
+    def img_off(self):
+        return engine_creative_img
+
+
+class SpaceEngine(Engine):
+    """Космический двигатель: топливо — космическая пыль. Пыль редкая,
+    поэтому одной единицы хватает надолго."""
+    index = 230
+    period = max(1, int(FPS * 0.4))
+    pulses_per_fuel = 20
+    fuel_items = (408,)
+
+    @property
+    def img_on(self):
+        return engine_space_on_img
+
+    @property
+    def img_off(self):
+        return engine_space_off_img
+
+
+class HellEngine(Engine):
+    """Адский двигатель: топливо — сера. Самый быстрый из топливных, но
+    сера добывается только в аду."""
+    index = 231
+    period = max(1, FPS // 4)
+    pulses_per_fuel = 12
+    fuel_items = (402,)
+
+    @property
+    def img_on(self):
+        return engine_hell_on_img
+
+    @property
+    def img_off(self):
+        return engine_hell_off_img
+
+
+class Portal(SignalTile):
+    """Портал: связывает два места по «частоте» — набору предметов внутри,
+    ровно как рация. Мир огромен по горизонтали, а ад и космос лежат за
+    тысячами блоков по вертикали: без переноса туда просто не дойти.
+
+    Пара ищется по индексу в GameMap.portals (тот же приём, что и у
+    приёмников рации), а не перебором загруженного мира.
+    """
+    not_save_vars = Tile.not_save_vars | {"inventory"}
+    index = 232
+    view_interface_on_click = True
+    # Иначе портал-пара мгновенно перекидывала бы игрока обратно: он
+    # появляется внутри второго портала и сразу снова его касается.
+    COOLDOWN = FPS * 2
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self._registered_code = None
+        self._last_use = float("-inf")
+        self.inventory = Inventory(self.game_map, self, [2, 2],
+                                   items_update_event=self._reregister)
+        self._reregister()
+
+    def code(self):
+        return tuple(sorted(item.index for item in self.inventory.inventory if item))
+
+    def _reregister(self):
+        if self._registered_code is not None:
+            self.game_map.unregister_portal(self._registered_code, self)
+        self._registered_code = self.code()
+        self.game_map.register_portal(self._registered_code, self)
+
+    def get_vars(self):
+        d = super().get_vars()
+        d.update(self.inventory.get_vars())
+        return d
+
+    def set_vars(self, d):
+        self.inventory.set_vars(d)
+        self._reregister()
+
+    def items_of_break(self):
+        if self._registered_code is not None:
+            self.game_map.unregister_portal(self._registered_code, self)
+            self._registered_code = None
+        # Сам блок уже кладёт item_of_break_tile (units/Tiles.py) — здесь
+        # только содержимое, иначе блок выпадал бы дважды.
+        return self.inventory.items_of_break()
+
+    def pair(self):
+        """Другой портал с той же частотой (первый попавшийся).
+
+        Пустая частота парой не считается: иначе два только что
+        поставленных пустых портала уже связывали бы друг друга, и игрока
+        кидало бы туда, куда он не собирался.
+        """
+        code = self.code()
+        if not code:
+            return None
+        for other in self.game_map.portals.get(code, ()):
+            if other is not self:
+                return other
+        return None
+
+    def update(self, elapsed_time):
+        self.refresh_activating()
+        if self.game.tact - self._last_use < self.COOLDOWN:
+            return
+        if not self.rect.colliderect(self.game.player.rect):
+            return
+        other = self.pair()
+        if other is None:
+            return
+        # Отметку ставим обоим: иначе портал назначения тут же сработает
+        # сам и отправит игрока обратно.
+        self._last_use = other._last_use = self.game.tact
+        self.game.player.tp_to((other.tx * TSIZE, other.ty * TSIZE))
+
+
+class GolemNest(SignalTile):
+    """Гнездо голема — ферма железа (docs/FARMS_CONCEPT.md).
+
+    Кладёшь камень, гнездо под сигналом греется и выпускает каменного
+    голема: планета возвращает камень и немного железа. Железо тут —
+    «проценты» с тепла, а не подарок: тратятся камень, топливо и время, а
+    голема ещё надо убить.
+    """
+    not_save_vars = {"inventory"} | Tile.not_save_vars
+    index = 233
+    view_interface_on_click = True
+    size_table = [3, 1]
+    STONE = 3
+    STONE_PER_GOLEM = 8
+    HEAT_TACTS = FPS * 90     # сколько греться до появления голема
+    MAX_NEARBY = 2            # больше двух голенов рядом не плодим
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.inventory = Inventory(self.game_map, self, self.size_table)
+        self.inventory.filter_items = {self.STONE}
+        self.heat = 0
+
+    def get_vars(self):
+        d = super().get_vars()
+        d.update(self.inventory.get_vars())
+        return d
+
+    def set_vars(self, d):
+        self.inventory.set_vars(d)
+
+    def items_of_break(self):
+        # Сам блок уже кладёт item_of_break_tile (units/Tiles.py) — здесь
+        # только содержимое, иначе блок выпадал бы дважды.
+        return self.inventory.items_of_break()
+
+    def stone_count(self):
+        return sum(c.count for c in self.inventory if c is not None and c.index == self.STONE)
+
+    def take_stone(self):
+        left = self.STONE_PER_GOLEM
+        for i, cell in enumerate(self.inventory):
+            if cell is None or cell.index != self.STONE:
+                continue
+            take = min(cell.count, left)
+            cell.count -= take
+            left -= take
+            if cell.count <= 0:
+                self.inventory.set_cell(i, None)
+            if left <= 0:
+                return True
+        return left <= 0
+
+    def golems_nearby(self):
+        chunk = self.game_map.chunk(self.game_map.to_chunk_xy(self.tx, self.ty))
+        if not chunk:
+            return 0
+        from units.Objects.Creatures import StoneGolem
+        return sum(1 for o in chunk[1] if isinstance(o, StoneGolem) and o.alive)
+
+    def spawn_golem(self):
+        from units.Objects.Creatures import StoneGolem
+        golem = StoneGolem(self.game, ((self.tx) * TSIZE, (self.ty - 2) * TSIZE))
+        self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(self.tx, self.ty - 2), golem)
+        return golem
+
+    def update(self, elapsed_time):
+        self.refresh_activating()
+        if not self.activating:
+            return nest_off_img
+        if self.stone_count() < self.STONE_PER_GOLEM:
+            return nest_off_img
+        if self.golems_nearby() >= self.MAX_NEARBY:
+            return nest_on_img
+        self.heat += 1
+        if self.heat >= self.HEAT_TACTS:
+            self.heat = 0
+            if self.take_stone():
+                self.spawn_golem()
+        return nest_on_img
+
+
 classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate,
           Wire, Lever, Lamp, NotGate, AndGate, OrGate, DelayBlock, ChunkLoader, MusicBlock,
           Receiver, Transmitter, LoreTablet,
-          Hopper, Conveyor, Dropper, Chopper}
+          Hopper, Conveyor, Dropper, Chopper,
+          FuelEngine, CreativeEngine, SpaceEngine, HellEngine, Portal, GolemNest}
 tiles_class = {cls.index: cls for cls in classes}
