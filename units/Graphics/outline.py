@@ -1,50 +1,12 @@
-# Supply you own "img.png" to test outlines with. 40x40 or less is recommended.
-# press A to switch the outlining method
-# press S to show/hide the image
-# the part that activates the Pygame 2 method has been commented out. feel free to add it back in
+"""Обводка (контур) вокруг непрозрачной части изображения.
 
-# Setup Python ----------------------------------------------- #
-import pygame, sys, random, time, os
+Используется для читаемости текста поверх пёстрого фона (заголовки меню,
+всплывающие сообщения) — см. units/UI/UI.py.
+"""
+import os
+import sys
 
-# Setup pygame/window ---------------------------------------- #
-mainClock = pygame.time.Clock()
-from pygame.locals import *
-
-
-# method 1
-def outline_mask(img, loc):
-    mask = pygame.mask.from_surface(img)
-    mask_outline = mask.outline()
-    n = 0
-    for point in mask_outline:
-        mask_outline[n] = (point[0] + loc[0], point[1] + loc[1])
-        n += 1
-    pygame.draw.polygon(display, (255, 255, 255), mask_outline, 3)
-
-
-# method 2
-def perfect_outline(img, loc):
-    mask = pygame.mask.from_surface(img)
-    mask_surf = mask.to_surface()
-    mask_surf.set_colorkey((0, 0, 0))
-    display.blit(mask_surf, (loc[0] - 1, loc[1]))
-    display.blit(mask_surf, (loc[0] + 1, loc[1]))
-    display.blit(mask_surf, (loc[0], loc[1] - 1))
-    display.blit(mask_surf, (loc[0], loc[1] + 1))
-
-
-# method 3
-def perfect_outline_2(img, loc):
-    mask = pygame.mask.from_surface(img)
-    mask_outline = mask.outline()
-    mask_surf = pygame.Surface(img.get_size())
-    for pixel in mask_outline:
-        mask_surf.set_at(pixel, (255, 255, 255))
-    mask_surf.set_colorkey((0, 0, 0))
-    display.blit(mask_surf, (loc[0] - 1, loc[1]))
-    display.blit(mask_surf, (loc[0] + 1, loc[1]))
-    display.blit(mask_surf, (loc[0], loc[1] - 1))
-    display.blit(mask_surf, (loc[0], loc[1] + 1))
+import pygame
 
 
 def add_outline_to_image(image: pygame.Surface, thickness: int, color: tuple,
@@ -66,26 +28,21 @@ def add_outline_to_image(image: pygame.Surface, thickness: int, color: tuple,
 
 
 if __name__ == "__main__":
+    # Ручная проверка обводки: python -m units.Graphics.outline
     os.chdir(os.path.dirname(os.path.abspath(__file__ + "/../")))
 
     pygame.init()
     pygame.display.set_caption('outline test')
-    WINDOWWIDTH = 500
-    WINDOWHEIGHT = 300
-    screen = pygame.display.set_mode((WINDOWWIDTH, WINDOWHEIGHT), 0, 32)
-    display = pygame.Surface((250, 150))
+    screen = pygame.display.set_mode((500, 300), 0, 32)
 
-    # test_img = pygame.image.load(r'').convert()
-    # font = pygame.font.SysFont("", 20)
-    font = pygame.font.Font('data/fonts/xenoa.ttf', 40, )
-    test_img = font.render("Hi 100", False, "red").convert()
-    # test_img.set_colorkey((0, 0, 0))
-    test_img = add_outline_to_image(test_img, 2, (255, 255, 255))
+    font = pygame.font.Font('data/fonts/xenoa.ttf', 40)
+    test_img = add_outline_to_image(font.render("Hi 100", False, "red").convert(),
+                                    2, (255, 255, 255))
 
     while True:
         screen.blit(test_img, (10, 10))
         pygame.display.flip()
         for event in pygame.event.get():
-            if event.type == QUIT:
+            if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()

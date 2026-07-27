@@ -4,9 +4,8 @@ import os
 from units.UI.Translate import get_translated_text
 
 import math
-import pickle
 import sys
-from logging import warning, debug
+from logging import warning
 
 import pygame
 import pygame as pg

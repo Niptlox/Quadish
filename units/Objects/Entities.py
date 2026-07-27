@@ -37,7 +37,6 @@ class Dynamite(PhysicalObject):
     pattern = create_circle_pattern(boom_radius)
 
     def __init__(self, game, x=0, y=0):
-        print("d", x, y)
         super().__init__(game, x, y, TSIZE, TSIZE, use_physics=True)
         self.game = game
         self.arise_time = -1  # время повления

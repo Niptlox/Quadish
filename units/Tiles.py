@@ -1,10 +1,7 @@
 import random
 
 from units.Graphics.Image import *
-from units.UI.Translate import get_translated_dict_text, get_translated_tiles
-
-DEBUG_DRAW_TILES = False
-
+from units.UI.Translate import get_translated_tiles
 
 # CREATING TILE IMAGES ========================================
 
@@ -876,21 +873,3 @@ def item_of_right_click_tile(tile, res=True):
     return items
 
 
-def debug_draw():
-    clock = pg.time.Clock()
-    screen_.fill("green")
-
-    x, y = 5, 5
-    for im in pickaxe_0_imgs:
-        screen_.blit(im, (x, y))
-        x += im.get_width() + 5
-    pg.display.flip()
-    running = True
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-
-
-if DEBUG_DRAW_TILES:
-    debug_draw()

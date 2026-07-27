@@ -16,5 +16,3 @@ def get_obj_mouse() -> Union[Items, None]:
     return __object_in_mouse
 
 
-def get_place_obj_mouse() -> tuple:
-    return __place_of_object_in_mouse

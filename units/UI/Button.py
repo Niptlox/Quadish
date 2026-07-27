@@ -6,14 +6,6 @@ DARK = "#27272A"
 DEF_COLOR_SCHEME_BUT = ((WHITE, GRAY, DARK), (BLACK, BLACK, WHITE))
 
 
-def openImagesButton(nameImg: str, colorkey=COLORKEY):
-    path, extension = os.path.splitext(nameImg)
-    imgUp = load_image(path + "_up" + extension, colorkey)
-    imgIn = load_image(path + "_in" + extension, colorkey)
-    imgDown = load_image(path + "_down" + extension, colorkey)
-    return imgUp, imgIn, imgDown
-
-
 def createImageButton(size, text="", bg=BLACK, font=TEXTFONT_BTN, text_color=WHITE, colorkey=COLORKEY, border=3):
     text = get_translated_text(text)
     surf = get_texture_size(bg, size, colorkey=colorkey)
@@ -43,30 +35,6 @@ def createVSteckButtons(size, center_x, start_y, step, images_buttons, funcs, sc
     buts = []
     for images_button, func in zip(images_buttons, funcs):
         but = Button(func, ((x, y), size), *images_button, screenXY=(screen_position[0] + x, screen_position[1] + y))
-        y += step
-        buts.append(but)
-    return buts
-
-
-def createVSteckTextButtons(size, center_x, start_y, step, text_func_buttons, screen_position=(0, 0),
-                            color_schema=DEF_COLOR_SCHEME_BUT, font=TEXTFONT_BTN):
-    y = start_y
-    x = center_x - size[0] // 2
-    step += size[1]
-    buts = []
-    for _btn in text_func_buttons:
-        if isinstance(_btn, TextButton):
-            but = _btn
-            but.rect = pygame.Rect((x, y), size)
-            but.screenRect = pygame.Rect((screen_position[0] + x, screen_position[1] + y), size)
-            but.color_schema = color_schema
-            but.font = font
-            but.redraw_text()
-        else:
-            text_button, func = _btn
-            but = TextButton(func, ((x, y), size), text_button,
-                             screenXY=(screen_position[0] + x, screen_position[1] + y),
-                             color_schema=color_schema, font=font)
         y += step
         buts.append(but)
     return buts

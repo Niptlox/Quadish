@@ -3,8 +3,6 @@ import sys
 
 import pygame
 
-printD = lambda *st, sep=" ", end="\n": print("DEBAG:", *st, sep=sep, end=end)
-
 pygame.init()
 pygame.font.init()
 
@@ -22,12 +20,6 @@ TEXTFONT_BTN = pygame.font.SysFont('Roboto', 40)
 FPSFONT = pygame.font.SysFont('Roboto', 15)
 
 
-def isColor(arg):
-    if type(arg) is pygame.Color or (type(arg) in (tuple, list) and 3 <= len(arg) <= 4):
-        return True
-    return False
-
-
 def get_color_of_gradient(width, startcolor, endcolor, x):
     x = min(x, width)
     dd = 1.0 / width
@@ -42,30 +34,6 @@ def get_color_of_gradient(width, startcolor, endcolor, x):
             int(sb + bm * x),
             int(sa + am * x))
 
-
-
-def vertical_gradient(size, startcolor, endcolor):
-    """
-    Draws a vertical linear gradient filling the entire surface. Returns a
-    surface filled with the gradient (numeric is only 2-3 times faster).
-    """
-    height = size[1]
-    bigSurf = pygame.Surface((1, height)).convert_alpha()
-    dd = 1.0 / height
-    sr, sg, sb, sa = startcolor
-    er, eg, eb, ea = endcolor
-    rm = (er - sr) * dd
-    gm = (eg - sg) * dd
-    bm = (eb - sb) * dd
-    am = (ea - sa) * dd
-    for y in range(height):
-        bigSurf.set_at((0, y),
-                       (int(sr + rm * y),
-                        int(sg + gm * y),
-                        int(sb + bm * y),
-                        int(sa + am * y))
-                       )
-    return pygame.transform.scale(bigSurf, size)
 
 
 def get_texture(texture, colorkey=None):
@@ -115,12 +83,9 @@ def load_image(name, colorkey=None):
 
 
 def load_animation(path, frame_durations, size=None, colorkey=COLORKEY):
-    animation_name = path.split('/')[-1].split('\\')[-1]
     animation_frames = []
     n = 0
-    # print("load_animation", path, animation_name)
     for count_frame in frame_durations:
-        # animation_frame_id = animation_name + '_' + str(n)
         img_loc = path + '_' + str(n) + '.png'
         # player_animations/idle/idle_0.png
         animation_image = get_texture_size(img_loc, colorkey=colorkey, size=size)
@@ -130,8 +95,3 @@ def load_animation(path, frame_durations, size=None, colorkey=COLORKEY):
     return animation_frames
 
 
-def rot_center(image, angle, x, y):
-    rotated_image = pygame.transform.rotate(image, angle)
-    new_rect = rotated_image.get_rect(center=image.get_rect(center=(x, y)).center)
-
-    return rotated_image, new_rect

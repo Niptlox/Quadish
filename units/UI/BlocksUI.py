@@ -1,7 +1,7 @@
 from pygame import Vector2
 
 from units.UI.Button import TextButton
-from units.UI.ClassUI import SurfaceUI, MultilineText, MultilineEditText, GroupUI, Text
+from units.UI.ClassUI import SurfaceUI, MultilineEditText, GroupUI, Text
 from units.UI.ColorsUI import *
 from units.UI.InventoryUI import InventoryUI, cell_size, InventoryPlayerUI
 from units.UI.ItemInMouse import *

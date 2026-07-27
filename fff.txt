@@ -1,1 +1,0 @@
-<units.App.Game.GameScene object at 0x00000119E3707850> <units.Inventory.InventoryPlayer object at 0x00000119E3707FD0>

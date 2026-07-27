@@ -11,11 +11,6 @@ def create_tile_image(color, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
     return img
 
 
-def create_border(surface, bd=1, size=TILE_RECT, bd_color=BORDER_COLOR):
-    pygame.draw.rect(surface, bd_color, ((0, 0), (size[0], size[1])), width=bd)
-    return surface
-
-
 COLORKEY = (0, 255, 0)
 
 SIZE_2X = "2x"

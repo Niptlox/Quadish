@@ -1,4 +1,5 @@
 import os
+import pickle
 from typing import Union
 
 from units.noise_compat import snoise2 as noise2
@@ -90,8 +91,6 @@ class GameMap(SavedObject):
 
     def get_vars(self):
         d = super(GameMap, self).get_vars()
-        ch = d["game_map"][-1, -1]
-        print("==", d["game_map"][-1, -1])
         # === convert dynamic_objs ===
         game_map = {}
         for pos, chunk in d["game_map"].items():
@@ -117,8 +116,6 @@ class GameMap(SavedObject):
                 if crt_cash[1] < CHUNK_CREATURE_LIMIT:
                     crt_cash[2] = self.game.tact
                     dynamic_tiles = chunk[1]
-                    scroll = self.game.screen_map.scroll
-                    # if not self.game.screen_map.display_rect.collidepoint(x - scroll[0], y - scroll[1]):
                     crt_cnt = min(len(crt_cash[0]), random.randint(0, CHUNK_CREATURE_LIMIT - crt_cash[1]))
                     tiles_xy = random.choices(tuple(crt_cash[0]), k=crt_cnt)
                     for tile_xy in tiles_xy:

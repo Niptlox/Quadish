@@ -69,8 +69,6 @@ class ScreenMap:
         self.true_scroll[1] = self.player.rect.y - WSIZE[1] // 2
 
     def draw_sky(self):
-        # self.display.blit(self.sky_surface, (0, 0))
-        height = TSIZE * 10000
         sky_cosmos = (5, 7, 14, 255)
         sky_atmo = (10, 15, 28, 255)
         sky_center = (165, 243, 252, 255)

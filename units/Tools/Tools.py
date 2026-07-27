@@ -113,7 +113,6 @@ def check_dig_tile(game_map, x, y, tool):
     d_ttile = game_map.get_static_tile_type(x, y - 1)
     if d_ttile in {101, 103, 110} and ttile != 110:
         return None, None
-    count_items = 1
     if ttile == 0:
         return None, backtile  # self.set_tile(x, y)
     if not tool.can_dig_this_tile(ttile):
@@ -129,7 +128,6 @@ def dig_tile(game_map, x, y, tool, check=True):
             return tile
     else:
         tile, backtile = check
-    print(tile, backtile)
     if not tile:
         game_map.set_backtile(x, y, 0)
         game_map.add_item_of_index(backtile, 1, x, y)

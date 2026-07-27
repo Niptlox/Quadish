@@ -85,7 +85,9 @@ if not HAS_C_NOISE:
             n += tt * tt * tt * tt * (g[0] * x2 + g[1] * y2)
         return 70.0 * n
 
-    def snoise2(x, y, octaves=1, persistence=0.5, lacunarity=2.0, base=0.0,
+    # noqa: F811 — намеренно перекрывает C-версию snoise2 выше: сюда попадаем
+    # только когда пакет 'noise' недоступен и импорта не было.
+    def snoise2(x, y, octaves=1, persistence=0.5, lacunarity=2.0, base=0.0,  # noqa: F811
                 repeatx=None, repeaty=None):
         # base (сид) реализован сдвигом координат — миры с разными сидами разные
         if base:

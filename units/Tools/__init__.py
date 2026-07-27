@@ -35,7 +35,6 @@ class ItemTool(Items):
         self.tool.owner = owner
 
     def set_vars(self, vrs):
-        print(vrs)
         self.tool = vrs.get("_Tool")(None)
         self.__set_sprite(self.tool.sprite)
         super().set_vars(vrs)

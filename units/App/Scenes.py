@@ -2,7 +2,6 @@ import webbrowser
 
 from units.App.App import *
 from units.UI.UI import WorldListUI, EndUI, PauseUI, AchievementsUI, TitleUI, MainSettingsUI, SoundSettingsUI, HelpUI
-from units.config import Window
 
 
 class TitleScene(SceneMenu):

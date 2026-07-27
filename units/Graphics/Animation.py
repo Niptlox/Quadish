@@ -99,56 +99,6 @@ class Animation(SavedObject):
         self.frame_index = 0
 
 
-# Animation with Start Loop End
-class AnimationSLE(SavedObject):
-    is_not_saving = True
-
-    def __init__(self, start_anim: Animation, loop_anim: Animation, end_anim: Animation):
-        """Animation with Start Loop Stop"""
-        self.start_anim = start_anim
-        self.loop_anim = loop_anim
-        self.end_anim = end_anim
-        self.state = 0
-        self.animations = [start_anim, loop_anim, end_anim]
-        self.animation = False
-
-    def draw(self, surface, pos):
-        if self.animation:
-            self.animations[self.state].draw(surface, pos)
-
-    def get_frame(self):
-        return self.animations[self.state].get_frame()
-
-    def next_state(self):
-        self.set_state(self.state + 1)
-
-    def update(self, elapsed_time):
-        if self.animation:
-            self.animations[self.state].update(elapsed_time)
-            if not self.animations[self.state].animation:
-                self.next_state()
-
-    def start(self, restart=True):
-        if restart:
-            self.stop()
-        self.animation = True
-
-    def pause(self):
-        self.animation = False
-
-    def stop(self):
-        self.animation = False
-        self.state = 0
-
-    def set_state(self, state):
-        if state != self.state:
-            self.state = state
-            if self.state >= len(self.animations):
-                self.stop()
-            else:
-                self.animations[self.state].start(restart=True)
-
-
 def get_death_animation(size, color=(185, 28, 28), speed=15, time=0.3, start_alpha=200):
     count = 10
     count = int(1000 * time // speed)

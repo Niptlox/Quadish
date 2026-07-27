@@ -12,7 +12,6 @@ from units.Objects.Items import Items
 from units.Graphics.Particle import DamageParticle
 from units.Tiles import hand_pass_img, player_img, dig_rect_img
 from units.Tools import ToolHand, ItemTool, ToolCreativeHand
-from units.UI.BlocksUI import InventoryPlayerChestUI, InventoryPlayerFurnaceUI, BLOCKS_UI_SET
 from units.sound import *
 from units.common import *
 
@@ -398,7 +397,6 @@ class Player(PhysicalObject):
         #         self.inventory.ui.open()
         if collisions['bottom']:
             if not self.first_fall and self.vertical_momentum > 0.75:
-                print(self.vertical_momentum)
                 self.damage(int(self.vertical_momentum * 2) ** 2)
             self.air_timer = 0
             self.jump_count = 0

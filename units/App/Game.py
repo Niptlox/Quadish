@@ -126,11 +126,8 @@ class GameScene(Scene):
             self.first_start = False
 
     def update(self):
-        # print(self, self.inventory, file=f)
-
         self.elapsed_time = min(self.elapsed_time, 120)
         self.total_time += self.elapsed_time
-        # self.ui.draw_sky()
         self.screen_map.draw_sky()
 
         self.screen_map.update(self.tact, self.elapsed_time)

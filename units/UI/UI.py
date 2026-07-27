@@ -1,11 +1,11 @@
 from units.Achievements import achievements
-from units.UI.Button import createImagesButton, createVSteckButtons, Button, createVSteckTextButtons, \
+from units.UI.Button import createImagesButton, createVSteckButtons, Button, \
     ChangeTextButton, TextButton, KeyboardNav
 from units.UI.ClassUI import *
 from units.UI.InventoryUI import *
 from units.UI.ColorsUI import *
 from units.UI.FontsUI import *
-from units.UI.Translate import get_translated_text, get_translated_lst_text, get_translated_text_to_lang
+from units.UI.Translate import get_translated_text, get_translated_text_to_lang
 
 from units.Graphics.Texture import WHITE
 from units.Tiles import live_imgs, bg_live_img, goldlive_imgs, bg_livecreative_img, \
@@ -119,14 +119,6 @@ class GameUI(UI):
         self.playerui.rect.bottom = self.screen.get_height()
         self._playerui_state = None  # (lives, max_lives, creative) последней отрисовки
         self.new_sys_message("Привет игрок. Нажми [E]")
-
-    def draw_sky(self):
-        # self.display.blit(self.sky_surface, (0, 0))
-        sky_night = (15, 23, 42, 255)
-        sky = (165, 243, 252, 255)
-        sky_red = (135, 0, 0, 255)
-        # if self.
-        self.display.fill(sky)
 
     def blit_world(self):
         """Растянуть отрендеренный мир (self.display, может быть меньше экрана)
