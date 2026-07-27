@@ -1412,11 +1412,15 @@ def test_mods_animated_tile_frames_advance():
     читает его заново каждый кадр и не кэширует поверхности чанков)."""
     get_app()
     from units import mods, Tiles
-    assert mods.ANIMATED_TILES, "пример мода содержит анимированный блок"
-    tile_id, anim = next(iter(mods.ANIMATED_TILES.items()))
+    # реестр общий для ванильных тайлов (лава) и модов — см. units/Tiles.py
+    assert Tiles.ANIMATED_TILES, "должны быть анимированные тайлы (лава и блок мода)"
+    mod_animated = {i for i in Tiles.ANIMATED_TILES if i >= mods.MOD_ID_MIN}
+    assert mod_animated, "пример мода содержит анимированный блок"
+    tile_id = next(iter(mod_animated))
+    anim = Tiles.ANIMATED_TILES[tile_id]
     seen = set()
     for tact in range(anim["fps"] * 2):
-        mods.update_tile_animations(Tiles.tile_imgs, tact)
+        mods.update_tile_animations(Tiles.tile_imgs, tact, Tiles.ANIMATED_TILES)
         seen.add(id(Tiles.tile_imgs[tile_id]))
     assert len(seen) == len(anim["frames"]), \
         f"должны прокрутиться все {len(anim['frames'])} кадров, а прокрутилось {len(seen)}"
@@ -1954,3 +1958,112 @@ def test_mod_pixel_art_errors_are_reported():
     finally:
         mods.MODS[:], mods.MOD_ERRORS[:] = saved_mods, saved_errors
         mods.load_mods()
+
+
+# ===================== лава и тик вне экрана =====================
+
+def test_lava_damages_and_is_animated():
+    """Лава должна наносить урон по общей таблице (раньше урон был зашит
+    константой 103 прямо в физике) и анимироваться."""
+    get_app()
+    from units.Objects.Entity import PhysicalObject
+    from units.Tiles import DAMAGE_TILES, ANIMATED_TILES, original_tile_words
+    assert DAMAGE_TILES[140] > DAMAGE_TILES[103], "лава должна быть опаснее кактуса"
+    assert original_tile_words[140] == "Лава"
+    assert len(ANIMATED_TILES[140]["frames"]) >= 2, "лава анимирована"
+
+    game = fresh_world(51)
+
+    class Dummy(PhysicalObject):
+        max_lives = 100
+
+    d = Dummy(game, x=0, y=0, width=16, height=16)
+    d.lives = d.max_lives
+    d.move((40, 0), {(1, 0): 140})
+    assert d.max_lives - d.lives == DAMAGE_TILES[140], "урон лавы должен браться из таблицы"
+
+
+def test_lava_generated_in_hell():
+    """Лава появляется в аду сама, а не только в структурах — иначе ад
+    ничем не отличается от обычных пещер."""
+    game = fresh_world(52)
+    gm = game.game_map
+    from units.common import START_HELL_Y, LAVA_DEPTH_MARGIN
+    y = START_HELL_Y + LAVA_DEPTH_MARGIN + 60
+    found = 0
+    for x in range(0, 200, 4):
+        for dy in range(0, 40, 2):
+            if gm.get_static_tile_type(x, y + dy, default=0, create_chunk=True) == 140:
+                found += 1
+                break
+    assert found, "в аду должна встречаться лава"
+
+
+def test_forced_chunks_tick_only_when_loader_on():
+    """Прогрузчик тикает тайлы только когда включён; видимые чанки
+    пропускаются, иначе они получали бы два тика за кадр."""
+    game = fresh_world(53)
+    gm = game.game_map
+    far = ground = None
+    for cand in range(300, 900, 7):
+        y = gm.surface_y_at(cand, -60)
+        if y is not None:
+            far, ground = cand, y
+            break
+    assert far is not None
+    gm.set_static_tile(far, ground - 1, 101)          # куст с таймером
+    gm.set_static_tile(far + 2, ground - 1, 219)      # прогрузчик
+    tile = gm.get_static_tile(far + 2, ground - 1)
+    loader = gm.get_tile_obj(*gm.to_chunk_xy(far + 2, ground - 1), tile[3])
+
+    loader.activating = False
+    assert gm.tick_forced_chunks(gm.FORCED_TICK_PERIOD, ()) == 0, "выключенный не должен тикать"
+
+    loader.activated_tact, loader.activating = game.tact, True
+    ticked = gm.tick_forced_chunks(gm.FORCED_TICK_PERIOD * 2, ())
+    assert ticked > 0, "включённый должен тикать тайлы"
+
+    loader.activated_tact, loader.activating = game.tact, True
+    visible = gm.forced_chunk_coords()
+    assert gm.tick_forced_chunks(gm.FORCED_TICK_PERIOD * 3, visible) == 0, \
+        "видимые чанки должен обновлять ScreenMap, а не этот тик"
+
+
+def test_plant_grows_offscreen_under_loader():
+    """Главное, ради чего всё затевалось: саженец должен вырастать в
+    дерево, пока игрок далеко. До этого рост шёл только на экране."""
+    game = fresh_world(54)
+    gm = game.game_map
+    far = ground = None
+    for cand in range(300, 900, 7):
+        y = gm.surface_y_at(cand, -60)
+        if y is not None:
+            far, ground = cand, y
+            break
+    sap = (far, ground - 1)
+    gm.set_static_tile(sap[0], sap[1], 102)           # саженец
+    gm.set_static_tile(far + 2, ground - 1, 219)
+    tile = gm.get_static_tile(far + 2, ground - 1)
+    loader = gm.get_tile_obj(*gm.to_chunk_xy(far + 2, ground - 1), tile[3])
+
+    from units.common import FPS
+    tact = 0
+    for _ in range(FPS * 700):
+        tact += 1
+        loader.activated_tact, loader.activating = tact, True
+        if tact % gm.FORCED_TICK_PERIOD == 0:
+            gm.tick_forced_chunks(tact, ())
+    grown = any(gm.get_static_tile_type(sap[0], sap[1] - d, default=0) == 110
+                for d in range(0, 4))
+    assert grown, "саженец под прогрузчиком должен вырасти в дерево вне экрана"
+
+
+def test_plant_growth_logic_shared_with_screenmap():
+    """Рост на экране и вне его должен идти одним кодом: две копии
+    однажды разойдутся, и фермы будут вести себя по-разному."""
+    get_app()
+    import inspect
+    from units.Map.ScreenMap import ScreenMap
+    src = inspect.getsource(ScreenMap.update_tile)
+    assert "grow_plant_tile" in src, "ScreenMap должен звать общий GameMap.grow_plant_tile"
+    assert "TILE_TIMER" not in src, "своей копии логики роста в ScreenMap быть не должно"

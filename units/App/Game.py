@@ -1,5 +1,5 @@
 from units import Tiles, mods
-from units.Tiles import tile_imgs
+from units.Tiles import tile_imgs, ANIMATED_TILES
 from units.App.App import *
 from units.Graphics.Cursor import set_cursor, CURSOR_NORMAL
 from units.Objects.Player import Player
@@ -131,9 +131,9 @@ class GameScene(Scene):
         self.total_time += self.elapsed_time
         self.screen_map.draw_sky()
 
-        if mods.ANIMATED_TILES:
-            # подменить кадр анимированных блоков мода перед отрисовкой мира
-            mods.update_tile_animations(tile_imgs, self.tact)
+        if ANIMATED_TILES:
+            # подменить кадр анимированных тайлов (лава, блоки модов)
+            mods.update_tile_animations(tile_imgs, self.tact, ANIMATED_TILES)
 
         self.screen_map.update(self.tact, self.elapsed_time)
         self.player.update(self.tact, self.elapsed_time)
@@ -153,6 +153,9 @@ class GameScene(Scene):
         self.tact += 1
         if self.tact % 30 == 0:
             self.tutorial.update()
+        # Автоматика под прогрузчиком должна работать и когда игрок ушёл:
+        # ScreenMap обновляет только видимые тайлы.
+        self.game_map.tick_forced_chunks(self.tact, self.screen_map.visible_chunks)
         if self.tact % (FPS * 5) == 0:
             self.game_map.unload_far_chunks()
         if self.tact % AUTOSAVE_PERIOD_TACTS == 0 and self.game_map.world_id is not None:

@@ -1,4 +1,5 @@
 from units.Map.TileFlags import TILE_FLAGS, TileFlag
+from units.Tiles import DAMAGE_TILES
 from units.common import *
 
 
@@ -92,6 +93,7 @@ class PhysicalObject(SavedObject):
 
     def move(self, movement, static_tiles: dict, dynamic_tiles: list = [], first_tile_pos=(0, 0)):
         collision_types = {'top': [], 'bottom': [], 'right': [], 'left': [], 'semiphysbody': []}
+        touched_damage = set()   # опасные тайлы, задетые за это перемещение
         mx, my = movement
         self.rect.x += mx
         # блоки с которыми стлкунулись после премещения по оси x (hit_static_lst, hit_dynamic_lst )
@@ -113,13 +115,19 @@ class PhysicalObject(SavedObject):
                     elif type_coll == 1:
                         self.rect.left = block.right
                     collision_types['left'] = collision_lst_t
-                if type_coll == 0 and block[1] == 103:
-                    self.damage(1)
+                if type_coll == 0 and block[1] in DAMAGE_TILES:
+                    touched_damage.add(block[1])
         self.rect.y += my
         # блоки с которыми стлкунулись после премещения по оси y (hit_static_lst, hit_dynamic_lst )
         *collision_lsts, semiphysbody_lst = collision_test(self.game_map, self.rect, static_tiles, dynamic_tiles,
                                                            first_tile_pos, semiphysbody=True)
         collision_types["semiphysbody"] += semiphysbody_lst
+        # Урон от полу-физических тайлов: в лаву (как и в воду) можно
+        # ВОЙТИ, поэтому жёсткой коллизии она не даёт и проверка ниже её
+        # просто не видела — лава была безобидной.
+        for block in semiphysbody_lst:
+            if block[1] in DAMAGE_TILES:
+                touched_damage.add(block[1])
         for type_coll in range(2):
             collision_lst_t = collision_lsts[type_coll]
             for block in collision_lsts[type_coll]:
@@ -135,8 +143,14 @@ class PhysicalObject(SavedObject):
                     elif type_coll == 1:
                         self.rect.top = block.bottom
                     collision_types['top'] = collision_lst_t
-                if type_coll == 0 and block[1] == 103:
-                    self.damage(1)
+                if type_coll == 0 and block[1] in DAMAGE_TILES:
+                    touched_damage.add(block[1])
+        # Урон — ОДИН раз за перемещение, по самому опасному из задетых
+        # тайлов. Раньше он начислялся на каждую касающуюся вершину, из-за
+        # чего кактус бил вчетверо, а лава (8 x 4 вершины) убивала бы
+        # игрока с 30 HP мгновенно.
+        if touched_damage:
+            self.damage(max(DAMAGE_TILES[t] for t in touched_damage))
         return collision_types
 
     def not_collisions_move(self, movement):

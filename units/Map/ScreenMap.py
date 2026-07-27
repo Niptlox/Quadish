@@ -6,7 +6,6 @@ from units.Tiles import *
 from units.biomes import biome_tiles
 from units.config import GameSettings
 from units.Map.GameMap import GameMap
-from units.Trees import grow_tree
 
 srect_d = pg.Rect(-TSIZE, -TSIZE, WSIZE[0] + TSIZE, WSIZE[1] + TSIZE)
 
@@ -31,6 +30,7 @@ class ScreenMap:
         self.static_tiles = {}
         self.dynamic_tiles = []
         self.group_handlers = {}
+        self.visible_chunks = set()
 
         self.edges = [-20000, 20000, START_ATMO_Y * TSIZE, 20000]
         width = self.edges[1] - self.edges[0]
@@ -193,10 +193,15 @@ class ScreenMap:
         vis_y1 = (scroll[1] + sh) // TILE_SIZE + 1
         tds = self.game_map.tile_data_size
 
+        # Чанки, обойдённые на этом кадре: GameMap.tick_forced_chunks должен
+        # их пропустить, иначе тайлы получат два тика за кадр и растения
+        # под прогрузчиком росли бы вдвое быстрее прямо на экране.
+        self.visible_chunks.clear()
         for cy in range(WCSIZE[1]):
             chunk_x = scroll_chunk_x
             for cx in range(WCSIZE[0]):
                 chunk_pos = (chunk_x, chunk_y)
+                self.visible_chunks.add(chunk_pos)
                 chunk = self.game_map.chunk(chunk_pos, for_player=True)
                 if chunk is None:
                     # генериует статические и динамичские чанки
@@ -338,33 +343,12 @@ class ScreenMap:
             i += 1
 
     def update_tile(self, chunk, tile, tile_type, index, tile_x, tile_y, chunk_x, chunk_y, tact):
-        if tile_type == 101:
-            if tile[2] < 3:
-                if tile[3][TILE_TIMER] < tact:
-                    if tile[3][TILE_TIMER] != 0:
-                        chunk[0][index + 2] += 1
-                    else:
-                        chunk[0][index + 3][TILE_TIMER] = tact
-                    # tile[3] = tact --> тк срез
-                    chunk[0][index + 3][TILE_TIMER] += random.randint(FPS * 60, FPS * 120)
-        elif tile_type in CLASS_UPDATING_TILES:
+        if tile_type in CLASS_UPDATING_TILES:
             return self.game_map.get_tile_obj(chunk_x, chunk_y, tile[3]).update(self.elapsed_time)
-
-        elif tile_type == 102:
-            # дерево
-            if tile[2] == 0:
-                # посажено дерево
-                chunk[0][index + 3][TILE_TIMER] = tact + random.randint(FPS * 240, FPS * 660)
-                chunk[0][index + 2] = 1  # растет
-            elif tile[2] == 2:
-                # вырастить мгновено
-                grow_tree((tile_x, tile_y), game_map=self.game_map)
-            elif tile[2] == 1:
-                # растет дерево
-                if tile[3][TILE_TIMER] <= tact:
-                    if tile[3][TILE_TIMER] != 0:
-                        # проращиваем дерево
-                        grow_tree((tile_x, tile_y), game_map=self.game_map)
+        # Рост растений — общий код с обновлением чанков под прогрузчиком
+        # (GameMap.grow_plant_tile). Держать здесь вторую копию значило бы,
+        # что на экране и вне его фермы растут по-разному.
+        self.game_map.grow_plant_tile(chunk, index, tile, tile_x, tile_y, tact)
 
     '''
     def chunk_thread(self, idx=0):

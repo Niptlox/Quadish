@@ -342,6 +342,87 @@ class GameMap(SavedObject):
     def del_particle_of_idx(self, idx):
         return self.particles.pop(idx)
 
+    # Как часто обновлять тайлы в чанках под прогрузчиком. Не каждый кадр:
+    # там сканируется весь чанк (1024 тайла), а таймеры растений идут
+    # десятками секунд — раз в полсекунды более чем достаточно.
+    FORCED_TICK_PERIOD = FPS // 2
+
+    def grow_plant_tile(self, chunk, index, tile, tile_x, tile_y, tact):
+        """Отработать такт роста растения (куст 101 / саженец 102).
+
+        Раньше эта логика жила только в ScreenMap.update_tile, то есть
+        вызывалась ТОЛЬКО для видимых тайлов: стоило отойти — и грядка
+        замирала. Вынесено сюда, чтобы тот же код работал и для чанков под
+        прогрузчиком (см. tick_forced_chunks); две копии однажды разошлись
+        бы, и фермы вели бы себя по-разному на экране и вне его."""
+        tile_type = tile[0]
+        if tile_type == 101:
+            if tile[2] < 3 and tile[3][TILE_TIMER] < tact:
+                if tile[3][TILE_TIMER] != 0:
+                    chunk[0][index + 2] += 1
+                else:
+                    chunk[0][index + 3][TILE_TIMER] = tact
+                chunk[0][index + 3][TILE_TIMER] += random.randint(FPS * 60, FPS * 120)
+        elif tile_type == 102:
+            if tile[2] == 0:
+                chunk[0][index + 3][TILE_TIMER] = tact + random.randint(FPS * 240, FPS * 660)
+                chunk[0][index + 2] = 1
+            elif tile[2] == 2:
+                grow_tree((tile_x, tile_y), game_map=self)
+            elif tile[2] == 1 and tile[3][TILE_TIMER] <= tact:
+                if tile[3][TILE_TIMER] != 0:
+                    grow_tree((tile_x, tile_y), game_map=self)
+
+    def forced_chunk_coords(self):
+        """Чанки, которые держат включённые прогрузчики."""
+        forced = set()
+        for (cx, cy), chunk in self.game_map.items():
+            for obj in chunk[2].values():
+                if isinstance(obj, ChunkLoader) and obj.activating:
+                    r = obj.radius
+                    for dx in range(-r, r + 1):
+                        for dy in range(-r, r + 1):
+                            forced.add((cx + dx, cy + dy))
+        return forced
+
+    def tick_forced_chunks(self, tact, visible_chunks=()):
+        """Обновить тайлы в чанках под прогрузчиком, которых не видно.
+
+        Без этого автоматика работала только на экране: растения не росли,
+        а тайлы-механизмы не тикали, стоило игроку отойти — то есть фермы
+        не были фермами. Видимые чанки пропускаем: их уже обновляет
+        ScreenMap, и второй тик за кадр удвоил бы скорость роста."""
+        if tact % self.FORCED_TICK_PERIOD:
+            return 0
+        forced = self.forced_chunk_coords()
+        if not forced:
+            return 0
+        elapsed = self.FORCED_TICK_PERIOD * 1000 / FPS
+        ticked = 0
+        for cxy in forced - set(visible_chunks):
+            chunk = self.game_map.get(cxy)
+            if chunk is None:
+                continue
+            static = chunk[0]
+            base_x, base_y = cxy[0] * CHUNK_SIZE, cxy[1] * CHUNK_SIZE
+            for i in range(0, self.chunk_arr_size, self.tile_data_size):
+                ttile = static[i]
+                if ttile == 0:
+                    continue
+                if ttile in PLANT_WITH_TIMER or ttile in CLASS_UPDATING_TILES:
+                    cell = i // self.tile_data_size
+                    tx = base_x + cell % CHUNK_SIZE
+                    ty = base_y + cell // CHUNK_SIZE
+                    tile = static[i:i + self.tile_data_size]
+                    if ttile in CLASS_UPDATING_TILES:
+                        obj = self.get_tile_obj(cxy[0], cxy[1], tile[3])
+                        if obj is not None:
+                            obj.update(elapsed)
+                    else:
+                        self.grow_plant_tile(chunk, i, tile, tx, ty, tact)
+                    ticked += 1
+        return ticked
+
     def mark_inscription_read(self, inscription_id):
         """Запомнить прочитанную надпись (журнал сюжета).
 
@@ -794,8 +875,15 @@ class GameMap(SavedObject):
                                             cnt_creatures += 1
                 else:
                     # пусто
+                    # Лавовые озёра в аду: заполняют пустоты ниже уровня ада
+                    # своим шумом, поэтому получаются связными лужами, а не
+                    # рассыпанными пикселями.
+                    if tile_y > START_HELL_Y + LAVA_DEPTH_MARGIN:
+                        if noise2(tile_x * 0.04, tile_y * 0.09, 2, persistence=0.5,
+                                  base=base + 11, lacunarity=1.6) < LAVA_THRESHOLD:
+                            tile_type = 140  # лава
                     # ставим растение
-                    if y_pos == CHUNK_SIZE - 1 and \
+                    if tile_type is None and y_pos == CHUNK_SIZE - 1 and \
                             self.get_static_tile(tile_x, tile_y + 1, default=0) == 1:
                         on_ground_tiles.add((tile_x, tile_y))
                         tile_type_state = random_plant_selection(biome_info[i][0])

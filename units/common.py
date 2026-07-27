@@ -270,6 +270,11 @@ CHUNK_CREATURE_CHANCE = 0.2
 # загруженного мира (см. docs/SIGNAL_NETWORK_CONCEPT.md).
 TRANSMITTER_RANGE = CHUNK_SIZE * 4
 
+# Лава в аду: не сразу от границы ада, чтобы вход в него не был мгновенной
+# смертью, и порогом шума — лужи выходят связными, а не рассыпанными.
+LAVA_DEPTH_MARGIN = 40
+LAVA_THRESHOLD = -0.35
+
 CNT_BUILDS_OF_STRUCTURE_BLOCK = 400
 
 START_SPACE_Y = -1000

@@ -332,6 +332,30 @@ def create_lore_tablet_img():
 
 lore_tablet_img = create_lore_tablet_img()
 
+
+def create_lava_img(phase=0):
+    """Лава: тёмно-красная порода с пузырями. Кадры сдвигают пузыри, из-за
+    чего лава «кипит» (см. ANIMATED_TILES ниже)."""
+    img = create_tile_image("#7F1D1D", bd=0)
+    w, h = img.get_size()
+    # горячие прожилки
+    for i, y in enumerate(range(3, h, 7)):
+        off = (phase * 3 + i * 5) % w
+        pygame.draw.line(img, "#EA580C", (0, y), (w, y), 2)
+        pygame.draw.line(img, "#FDE047", (off, y), (min(w, off + 6), y), 1)
+    # пузыри
+    bubbles = ((6, 22, 3), (17, 9, 2), (25, 26, 2), (12, 16, 2))
+    for i, (bx, by, r) in enumerate(bubbles):
+        if (i + phase) % 4 != 3:            # пузырь то есть, то лопнул
+            cy = (by + phase * 2) % (h - 2) + 1
+            pygame.draw.circle(img, "#FB923C", (bx, cy), r)
+            pygame.draw.circle(img, "#FEF08A", (bx, cy), max(1, r - 1))
+    return img
+
+
+lava_imgs = [create_lava_img(p) for p in range(4)]
+lava_img = lava_imgs[0]
+
 def create_dynamite_img(lit=False, spark_bright=False):
     """Динамит: пучок из 3 шашек с бандажами и фитилём (раньше был просто
     закрашенный красный квадрат). lit — фитиль подожжён (анимация мигания
@@ -555,6 +579,7 @@ tile_imgs = {None: none_img,
              222: receiver_img,
              223: transmitter_img,
              300: lore_tablet_img,
+             140: lava_img,
              501: sword_1_img,
              502: sword_77_img,
              503: sword_2_img,
@@ -599,7 +624,7 @@ ON_EARTHEN_PLANTS = {101, 102, 103, 104}
 # блоки через которые нельзя пройти
 PHYSBODY_TILES = {1, 2, 3, 4, 5, 9, 11, 12, 21, 22, 23, 24, 25, 31, 32, 33, 103, 124, 128, 251}
 # полуфизические блоки например мебель листва вода
-SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 129, 131, 122, 104, 300}
+SEMIPHYSBODY_TILES = {106, 120, 127, 126, 125, 121, 129, 131, 122, 104, 300, 140}
 # блоки которые должны стоять на блоке (есть 0 т.к. на воздух ставить нельзя)
 # STANDING_TILES = {0, 101, 102, 103, 104, 110, 120, 121, 122, 123, 125, 126, 130, 129, 251}
 STANDING_TILES = {0, 110, 120, 121, 122, 123, 125, 126, 130, 129, 131} | ON_EARTHEN_PLANTS
@@ -781,6 +806,7 @@ original_tile_words = {None: "None",
                        222: "Приёмник",
                        223: "Передатчик",
                        300: "Плита с надписью",
+                       140: "Лава",
                        501: "Железный меч",
                        502: "Золотой меч",
                        503: "Ядовитый меч",
@@ -801,6 +827,7 @@ all_tiles = set(tile_words)
 
 # Прочность блоков
 TILES_SOLIDITY = {
+    140: 100,  # лава — как вода, руками не убрать
     300: 90,  # плита с надписью — крепче кирпича, но выкопать можно
     1: 15,
     2: 20,
@@ -837,7 +864,23 @@ TILES_SOLIDITY = {
     251: 45,
 }
 
-DYNAMITE_NOT_BREAK = {5, 120, 200, 210}  # granite water
+DYNAMITE_NOT_BREAK = {5, 120, 200, 210, 140}  # гранит, вода, лава
+
+# Урон при касании тайла. Раньше был зашит константой прямо в
+# units/Objects/Entity.py (`if block[1] == 103: self.damage(1)`), из-за чего
+# новый опасный блок было некуда добавить.
+DAMAGE_TILES = {
+    103: 1,    # кактус — царапина
+    140: 8,    # лава — в ней не выжить без спешки
+}
+
+# Анимированные тайлы: {tile_id: {"frames": [...], "speed": кадров/с}}.
+# Реестр общий для ванильных тайлов и модов: кадр подменяется прямо в
+# tile_imgs по такту (см. units/mods.update_tile_animations), а ScreenMap
+# читает tile_imgs заново каждый кадр и ничего не кэширует.
+ANIMATED_TILES = {
+    140: {"frames": lava_imgs, "speed": 3, "fps": FPS},
+}
 
 # INIT PICKAXE ==================================================
 # 61: "Блоровая руда",
@@ -919,8 +962,6 @@ def item_of_right_click_tile(tile, res=True):
 from units import mods as _mods  # noqa: E402 — нужен собранный tile_imgs выше
 
 _mods.load_mods()
-# реестр анимаций принадлежит этой регистрации — она же его и чистит
-_mods.ANIMATED_TILES.clear()
 
 for _spec in _mods.mod_blocks():
     _idx, _frames = _spec["id"], _spec["frames"]
@@ -943,7 +984,7 @@ for _spec in _mods.mod_blocks():
     if _spec["drops"]:
         tile_drops[_idx] = tuple(_spec["drops"])
     if len(_frames) > 1:
-        _mods.ANIMATED_TILES[_idx] = {"frames": _frames, "speed": _spec["speed"], "fps": FPS}
+        ANIMATED_TILES[_idx] = {"frames": _frames, "speed": _spec["speed"], "fps": FPS}
 
 if _mods.MODS:
     # пересобрать производные структуры с учётом мод-блоков

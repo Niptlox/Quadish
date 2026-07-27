@@ -35,12 +35,9 @@ TILE_RECT = (32, 32)
 MODS = []          # успешно загруженные моды
 MOD_ERRORS = []    # [(имя папки, текст ошибки)] — показываем в настройках
 
-# Анимированные тайлы: {tile_id: {"frames": [...], "speed": fps}}.
-# Кадры подменяются прямо в units.Tiles.tile_imgs по такту — см.
-# update_tile_animations(). Так работает потому, что ScreenMap читает
-# tile_imgs[tile_type] заново на каждом кадре и не кэширует поверхности
-# чанков; иначе подмена была бы не видна.
-ANIMATED_TILES = {}
+# Реестр анимаций общий с ванильными тайлами и живёт в units/Tiles.py
+# (там же лава). Держать здесь свою копию значило бы, что мод и ваниль
+# анимируются двумя разными механизмами.
 
 
 class ModError(Exception):
@@ -333,10 +330,6 @@ def load_mods(path=None):
     """Прочитать все моды. Возвращает (моды, ошибки) и заполняет MODS/MOD_ERRORS."""
     MODS.clear()
     MOD_ERRORS.clear()
-    # ANIMATED_TILES здесь НЕ чистим: заполняет его регистрация тайлов в
-    # units/Tiles.py, она же и чистит. Иначе повторный вызов load_mods()
-    # оставлял бы реестр анимаций пустым навсегда — анимированные блоки
-    # мода просто перестали бы анимироваться.
 
     if not config.ModSettings.enabled:
         print("Моды: загрузка отключена в настройках")
@@ -378,14 +371,16 @@ def mod_creatures():
             yield creature
 
 
-def update_tile_animations(tile_imgs, tact):
-    """Подменить кадры анимированных тайлов мода прямо в tile_imgs.
+def update_tile_animations(tile_imgs, tact, animated=None):
+    """Подменить кадры анимированных тайлов прямо в tile_imgs.
 
     Вызывается раз в игровой такт из GameScene.update(). Мутируем словарь
     по месту — все модули сделали `from units.Tiles import *` и держат
     ссылку на этот же объект, так что новый кадр видят все.
     """
-    for tile_id, anim in ANIMATED_TILES.items():
+    if animated is None:
+        from units.Tiles import ANIMATED_TILES as animated
+    for tile_id, anim in animated.items():
         frames = anim["frames"]
         # speed — кадров в секунду; FPS-такт игры даёт номер кадра
         i = int(tact * anim["speed"] / max(1, anim["fps"])) % len(frames)
