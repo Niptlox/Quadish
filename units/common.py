@@ -42,11 +42,11 @@ if not AUDIO_ENABLED:
 FPS = config.GameSettings.max_fps
 print("INIT GAME VARS")
 last_versions = ["0.9.1", "0.1.3-alpha", "0.1.5-alpha", "0.1.6-alpha", "0.1.7-alpha",
-                 "0.2.16-alpha", "0.2.17-alpha"]
+                 "0.2.16-alpha", "0.2.17-alpha", "0.2.18-alpha"]
 # Версия игры. Отставала от тегов релизов (0.1.7 против v0.2.x) — из-за
 # этого проверка обновлений (units/Updater.py) считала бы новым любой
 # опубликованный релиз. Держим синхронной с тегом.
-GAME_VERSION = "0.2.18-alpha"
+GAME_VERSION = "0.2.19-alpha"
 
 FULLSCREEN = config.Window.fullscreen
 
@@ -391,6 +391,35 @@ def difficulty_scale(tile_x, tile_y):
                       max(1, TOP_MIDDLE_WORLD - (START_SPACE_Y - 500)))
     part = max(horizontal, depth, height)
     return DIFFICULTY_MIN + (DIFFICULTY_MAX - DIFFICULTY_MIN) * part
+
+
+# Пороги шума для руд: базовый (у поверхности) и прибавка на полной глубине.
+# Чем выше порог, тем руда чаще. Числа подобраны замером по 15 000 тайлов
+# породы, см. docs/BALANCE_SCHEME.md — там же, почему лестница именно такая.
+# Железо — рабочая лошадка, оно и так везде, поэтому прибавка у него самая
+# скромная. Золото и серебро до этого не встречались практически НИКОГДА
+# (0 находок на 15 000 тайлов), из-за чего 7 рецептов на золоте были
+# недостижимы иначе как с босса.
+ORE_IRON_T, ORE_IRON_DEEP = -0.84, 0.03
+ORE_COPPER_T, ORE_COPPER_DEEP = -0.90, 0.02
+ORE_BLORE_T, ORE_BLORE_DEEP = -0.925, 0.055
+ORE_SILVER_T, ORE_SILVER_DEEP = -0.94, 0.06
+ORE_GOLD_T, ORE_GOLD_DEEP = -0.965, 0.067
+
+
+def depth_reward(tile_y):
+    """Насколько «глубоко» этот тайл — 0 у поверхности, 1 у ада.
+
+    Та же величина, из которой difficulty_scale берёт составляющую глубины,
+    вынесенная отдельно НАМЕРЕННО: риск и награда обязаны идти по одной
+    кривой. До этого руды раздавались порогами шума без всякой связи с
+    глубиной — замер по 15 000 тайлов породы давал железо 1 на 98 у
+    поверхности и 1 на 60 на глубине 1000, то есть спуск не окупался ничем,
+    хотя мобы там уже были вдвое сильнее.
+    """
+    if tile_y is None:
+        return 0.0
+    return _clamp01(tile_y / max(1, START_HELL_Y))
 # Player ===========================================================
 
 NUM_KEYS = [pg.K_1, pg.K_2, pg.K_3, pg.K_4, pg.K_5, pg.K_6, pg.K_7, pg.K_8, pg.K_9, pg.K_0]

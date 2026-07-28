@@ -1227,32 +1227,40 @@ class GameMap(SavedObject):
                                     tile_type = 2  # dirt
                                 else:
                                     cof = 0.05
+                                    # Порог руды поднимается с глубиной: риск и
+                                    # награда идут по ОДНОЙ кривой (см.
+                                    # depth_reward и docs/BALANCE_SCHEME.md).
+                                    # Раньше пороги были постоянными, и замер
+                                    # показывал железо 1 на 98 у поверхности
+                                    # против 1 на 60 на глубине 1000 — спуск не
+                                    # окупался, хотя мобы там уже вдвое сильнее.
+                                    deep = depth_reward(tile_y)
                                     v7 = noise2(tile_x * cof, tile_y * cof, 2, persistence=0.55, base=base + 4,
                                                 lacunarity=1)
-                                    if v7 < -0.915:
+                                    if v7 < ORE_BLORE_T + ORE_BLORE_DEEP * deep:
                                         tile_type = 21  # ore blore
                                     else:
                                         v8 = noise2(tile_x * cof, tile_y * cof, 2, persistence=0.55, base=base + 5,
                                                     lacunarity=1)
-                                        if v8 < -0.9:
+                                        if v8 < ORE_COPPER_T + ORE_COPPER_DEEP * deep:
                                             tile_type = 22  # ore copper
                                         else:
                                             v9 = noise2(tile_x * 0.03, tile_y * 0.03, 2, persistence=0.55,
                                                         base=base + 6,
                                                         lacunarity=1)
-                                            if v9 < -0.97:
+                                            if v9 < ORE_GOLD_T + ORE_GOLD_DEEP * deep:
                                                 tile_type = 23  # ore gold
                                             else:
                                                 v10 = noise2(tile_x * 0.08, tile_y * 0.08, 2, persistence=0.55,
                                                              base=base + 7,
                                                              lacunarity=1)
-                                                if v10 < -0.84:
+                                                if v10 < ORE_IRON_T + ORE_IRON_DEEP * deep:
                                                     tile_type = 24  # ore iron
                                                 else:
                                                     v10 = noise2(tile_x * cof, tile_y * cof, 2, persistence=0.55,
                                                                  base=base + 8,
                                                                  lacunarity=1)
-                                                    if v10 < -0.93:
+                                                    if v10 < ORE_SILVER_T + ORE_SILVER_DEEP * deep:
                                                         tile_type = 25  # ore silver
 
                     else:
@@ -1735,6 +1743,11 @@ def spawn_creature(cls, game, tile_x, tile_y):
         creature.max_lives = max(1, int(round(creature.max_lives * scale)))
         creature.lives = creature.max_lives
         creature.punch_damage = max(1, int(round(creature.punch_damage * scale)))
+    # Тот же множитель идёт и в лут: риск и награда обязаны идти по одной
+    # кривой (см. docs/BALANCE_SCHEME.md). Без этого каменный голем был худшей
+    # сделкой в игре — 120 HP и 20 урона ради 5-10 камня, а на глубине ещё и
+    # вдвое крепче за тот же камень.
+    creature.loot_scale = scale
     return creature
 
 

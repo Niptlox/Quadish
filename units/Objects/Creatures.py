@@ -89,12 +89,31 @@ class Creature(PhysicalObject):
 
     def kill(self):
         super().kill()
+        scale = getattr(self, "loot_scale", 1.0)
         for item_cls, params in self.drop_items:
             x, y = self.rect.x + random.randint(0, TSIZE - HAND_SIZE), self.rect.y
             idx, count = params
+            count = self._scaled_count(count, scale)
             items = item_cls(self.game, index=idx, count=count,
                              pos=(x, y))
             self.game_map.add_dinamic_obj(*self.game_map.to_chunk_xy(x // TSIZE, y // TSIZE), items)
+
+    @staticmethod
+    def _scaled_count(count, scale):
+        """Лут с поправкой на опасность места (см. spawn_creature).
+
+        Верхнюю границу поднимаем, нижнюю — нет: иначе на глубине пропал бы
+        сам факт неудачного боя, а с ним и разброс. Существа, порождённые не
+        миром, а игроком (гнездо голема), приходят без loot_scale и получают
+        базовый дроп — экономика фермы не должна зависеть от того, где игрок
+        её поставил."""
+        if scale <= 1.0:
+            return count
+        if isinstance(count, (list, tuple)) and len(count) == 2:
+            return (count[0], max(count[1], int(round(count[1] * scale))))
+        if isinstance(count, int):
+            return max(count, int(round(count * scale)))
+        return count
 
     def damage(self, lives):
         lives = min(lives, self.lives)

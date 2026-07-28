@@ -2736,6 +2736,95 @@ def test_difficulty_curve_grows_with_distance_and_depth():
     assert difficulty_scale(None, None) == 1.0, "без координат — без поправки"
 
 
+def _count_ores(game, y0, chunks_wide=14, chunks_tall=2):
+    """Сколько какой руды в куске породы на этой глубине."""
+    from collections import Counter
+    gm = game.game_map
+    c = Counter()
+    total = 0
+    for cx in range(chunks_wide):
+        for cy in range(y0 // 32, y0 // 32 + chunks_tall):
+            arr = gm.chunk((cx, cy), create_chunk=True)[0]
+            for i in range(0, len(arr), 4):
+                if arr[i]:
+                    total += 1
+                    if arr[i] in (21, 22, 23, 24, 25):
+                        c[arr[i]] += 1
+    return c, total
+
+
+def test_ore_reward_grows_with_depth():
+    """Риск и награда обязаны идти по одной кривой.
+
+    До этого пороги руд были постоянными: замер по 15 000 тайлов породы давал
+    железо 1 на 98 у поверхности и 1 на 60 на глубине 1000, то есть спуск не
+    окупался НИЧЕМ, хотя difficulty_scale делал мобов там вдвое сильнее.
+    """
+    game = fresh_world(4242)
+    shallow, n_shallow = _count_ores(game, 120)
+    deep, n_deep = _count_ores(game, 1000)
+
+    def per_tile(counter, total, ore):
+        return counter[ore] / max(1, total)
+
+    for ore, name in ((21, "блор"), (25, "серебро")):
+        near = per_tile(shallow, n_shallow, ore)
+        far = per_tile(deep, n_deep, ore)
+        assert far > near * 1.5, \
+            f"{name}: на глубине {far:.5f}/тайл против {near:.5f} у поверхности — спуск не окупается"
+
+
+def test_gold_is_findable_at_depth():
+    """Золото участвует в 7 рецептах, а в породе не встречалось ВООБЩЕ:
+    0 находок на 15 000 тайлов на всех глубинах. Золотая кирка (7 золота)
+    была недостижима иначе как с босса."""
+    game = fresh_world(4242)
+    deep, total = _count_ores(game, 1000, chunks_wide=20)
+    assert deep[23] > 0, f"золота нет на глубине даже в {total} тайлах породы"
+    # и остаётся самым редким — это по-прежнему сокровище, а не расходник
+    for ore, name in ((21, "блора"), (24, "железа"), (25, "серебра")):
+        assert deep[23] < deep[ore], f"золота не должно быть больше {name}"
+
+
+def test_ore_ladder_order_holds_at_depth():
+    """Лестница редкости: железо — рабочая лошадка, золото — сокровище.
+    Порядок должен держаться, иначе «ценность» материала ничем не обеспечена."""
+    game = fresh_world(4243)
+    deep, _ = _count_ores(game, 1000, chunks_wide=20)
+    assert deep[24] > deep[22], "железа должно быть больше меди"
+    assert deep[22] >= deep[23], "меди должно быть не меньше золота"
+    assert deep[25] > deep[23], "серебра должно быть больше золота"
+
+
+def test_loot_scales_with_danger_of_the_place():
+    """Лут идёт по той же кривой, что и сила. До этого каменный голем был
+    худшей сделкой в игре: 120 HP и 20 урона ради 5-10 камня, а на глубине
+    ещё и вдвое крепче — за тот же камень."""
+    from units.Map.GameMap import spawn_creature
+    from units.Objects.Creatures import StoneGolem
+    from units.common import START_HELL_Y
+    game = fresh_world(91)
+    easy = spawn_creature(StoneGolem, game, 0, 0)
+    hard = spawn_creature(StoneGolem, game, 0, START_HELL_Y)
+    assert hard.loot_scale > easy.loot_scale
+    top_easy = StoneGolem._scaled_count((5, 10), easy.loot_scale)[1]
+    top_hard = StoneGolem._scaled_count((5, 10), hard.loot_scale)[1]
+    assert top_hard > top_easy, f"на глубине лут должен быть богаче: {top_easy} против {top_hard}"
+    # нижняя граница не растёт — разброс и неудачный бой должны остаться
+    assert StoneGolem._scaled_count((5, 10), hard.loot_scale)[0] == 5
+
+
+def test_nest_golem_keeps_base_loot():
+    """Гнездо голема порождает настоящих големов, поэтому поправка на место
+    НЕ должна на них распространяться: иначе ферма железа меняла бы выработку
+    от того, где игрок её поставил, и глубокая ферма ломала бы экономику."""
+    from units.Objects.Creatures import StoneGolem
+    game = fresh_world(92)
+    golem = StoneGolem(game, (0, 0))          # так его создаёт гнездо
+    assert getattr(golem, "loot_scale", 1.0) == 1.0
+    assert StoneGolem._scaled_count((5, 10), 1.0) == (5, 10)
+
+
 def test_spawned_creature_scales_with_place():
     """Множитель должен садиться на экземпляр, а не на класс: одна и та же
     змея у спавна и в аду обязана отличаться, а класс общий на весь мир."""
