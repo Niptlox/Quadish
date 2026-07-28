@@ -155,7 +155,7 @@ class GameScene(Scene):
             self.tutorial.update()
         # Автоматика под прогрузчиком должна работать и когда игрок ушёл:
         # ScreenMap обновляет только видимые тайлы.
-        self.game_map.tick_forced_chunks(self.tact, self.screen_map.visible_chunks)
+        self.game_map.tick_offscreen(self.tact, self.screen_map.visible_chunks)
         if self.tact % (FPS * 5) == 0:
             self.game_map.unload_far_chunks()
         if self.tact % AUTOSAVE_PERIOD_TACTS == 0 and self.game_map.world_id is not None:

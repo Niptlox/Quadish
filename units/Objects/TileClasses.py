@@ -167,7 +167,7 @@ class TimerBlock(SignalTile):
 
     def update(self, elapsed_time):
         self.refresh_activating()
-        self.timer += 1
+        self.timer += self.steps
         if self.timer >= self.interval:
             self.timer = 0
             bfs_activate(self.game_map, self)
@@ -371,7 +371,7 @@ class ChunkLoader(SignalTile):
         if not self.activating:
             self.fueled = False
             return chunk_loader_off_img
-        self.timer += 1
+        self.timer += self.steps
         if self.timer >= self.FUEL_PERIOD or not self.fueled:
             if self.take_fuel():
                 self.fueled = True
@@ -574,7 +574,7 @@ class Furnace(Tile):
 
     def update(self, elapsed_time):
         if self.burning:
-            self.timer += 0.5
+            self.timer += 0.5 * self.steps
             self.progress = self.timer / self.burn_time
             if self.timer >= self.burn_time:
                 self.__finish_burning()
@@ -671,6 +671,7 @@ class Hopper(ItemMover):
 
     def __init__(self, game, tile_pos):
         super().__init__(game, tile_pos)
+        self.timer = 0
         self.inventory = Inventory(self.game_map, self, self.size_table)
 
     def get_vars(self):
@@ -687,8 +688,13 @@ class Hopper(ItemMover):
         return self.inventory.items_of_break()
 
     def update(self, elapsed_time):
-        if self.game.tact % self.PERIOD:
+        # Свой счётчик, а не сверка с ГЛОБАЛЬНЫМ тактом: иначе выработка за
+        # экраном зависит от НОК периода блока и периода тика — замер давал
+        # втрое меньше при периоде тика 31 вместо 30 (см. Tile.tick).
+        self.timer += self.steps
+        if self.timer < self.PERIOD:
             return
+        self.timer = 0
         # 1) подобрать всё, что лежит в самой воронке и на тайле над ней
         for ty in (self.ty, self.ty - 1):
             for item in self.items_in_tile(self.tx, ty):
@@ -717,6 +723,10 @@ class Conveyor(ItemMover):
     PERIOD = max(1, FPS // 10)
     PUSH = max(2, TSIZE // 8)
 
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.timer = 0
+
     def direction(self):
         tile = self.game_map.get_static_tile(self.tx, self.ty)
         return -1 if (tile and tile[2]) else 1
@@ -727,8 +737,10 @@ class Conveyor(ItemMover):
             self.game_map.set_static_tile_state_img(self.tx, self.ty, 0 if tile[2] else 1)
 
     def update(self, elapsed_time):
-        if self.game.tact % self.PERIOD:
-            return
+        self.timer += self.steps
+        if self.timer < self.PERIOD:
+            return conveyor_imgs[0 if self.direction() > 0 else 1]
+        self.timer = 0
         dx = self.direction() * self.PUSH
         # предметы едут по ВЕРХУ конвейера, поэтому смотрим тайл над собой
         for item in self.items_in_tile(self.tx, self.ty - 1):
@@ -870,7 +882,7 @@ class Engine(SignalTile):
 
     def update(self, elapsed_time):
         self.refresh_activating()
-        self.timer += 1
+        self.timer += self.steps
         if self.timer < self.period:
             return self.img_on if self.charge > 0 else self.img_off
         self.timer = 0
@@ -1102,7 +1114,7 @@ class GolemNest(SignalTile):
             return nest_off_img
         if self.golems_nearby() >= self.MAX_NEARBY:
             return nest_on_img
-        self.heat += 1
+        self.heat += self.steps
         if self.heat >= self.HEAT_TACTS:
             self.heat = 0
             if self.take_stone():
@@ -1162,7 +1174,7 @@ class DustCollector(SignalTile):
         if not self.activating or not self.works():
             self.timer = 0
             return dust_collector_off_img
-        self.timer += 1
+        self.timer += self.steps
         if self.timer >= self.PERIOD:
             self.timer = 0
             self.inventory.put_to_inventory(ItemsTile(self.game, self.DUST_ITEM, count=1))

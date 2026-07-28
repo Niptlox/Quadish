@@ -3829,3 +3829,184 @@ def test_tile_strip_is_cached_and_correct_width():
         strip = tile_strip(3, length)
         assert strip.get_size() == (TILE_SIZE * length, TILE_SIZE)
         assert tile_strip(3, length) is strip, "полоса должна кэшироваться"
+
+
+# ===================== обслуживание тайлов за экраном =====================
+#
+# Три измеренные проблемы прежней схемы (полный проход по площади раз в 30
+# кадров):
+#   1) 16384 просмотренных слота на 30 активных тайлов — 99.8% работы впустую;
+#   2) залп в один кадр: на 10 прогрузчиках 21.6 мс, то есть целый кадр стоя;
+#   3) блоки сверялись с ГЛОБАЛЬНЫМ тактом, поэтому выработка фермы за экраном
+#      зависела от НОК периода блока и периода тика — при периоде 31 вместо 30
+#      воронка складывала в сундук втрое меньше.
+
+def _offscreen_farm(seed, budget=None):
+    """Воронка + сундук + прогрузчик далеко от игрока. Возвращает всё нужное."""
+    from units.common import TSIZE
+    from units.Objects.Items import ItemsTile
+    game = fresh_world(seed)
+    gm = game.game_map
+    if budget is not None:
+        gm.OFFSCREEN_CHUNK_BUDGET = budget
+    px, y = 300, 8
+    for d in range(-6, 10):                     # площадка, не зависящая от сида
+        gm.set_static_tile(px + d, y + 1, 3)
+        for dy in range(0, 8):
+            gm.set_static_tile(px + d, y - dy, 0)
+    gm.set_static_tile(px, y, 224)              # воронка
+    hopper = gm.get_tile_obj(*gm.to_chunk_xy(px, y), gm.get_static_tile(px, y)[3])
+    gm.set_static_tile(px, y + 1, 129)          # сундук под ней
+    chest = gm.get_tile_obj(*gm.to_chunk_xy(px, y + 1), gm.get_static_tile(px, y + 1)[3])
+    gm.set_static_tile(px + 2, y, 219)          # прогрузчик
+    loader = gm.get_tile_obj(*gm.to_chunk_xy(px + 2, y), gm.get_static_tile(px + 2, y)[3])
+    loader.inventory.put_to_inventory(ItemsTile(game, 408, count=99))
+    gm.add_item_of_index(11, 8, px, y)
+    game.player.tp_to((0, 8 * TSIZE))           # игрок далеко: чанк не виден
+    game.screen_map.teleport_to_player()
+    game.elapsed_time = 16
+    return game, gm, hopper, chest, loader, (px, y)
+
+
+def _spin_offscreen(game, gm, loader, frames):
+    for _ in range(frames):
+        loader.activated_tact = game.tact
+        loader.update(16)
+        gm.tick_offscreen(game.tact, game.screen_map.visible_chunks)
+        game.tact += 1
+
+
+def test_offscreen_farm_delivers_to_chest():
+    """Ферма за экраном должна работать — ради этого прогрузчик и существует."""
+    from units.common import FPS
+    game, gm, hopper, chest, loader, _ = _offscreen_farm(650)
+    _spin_offscreen(game, gm, loader, FPS * 6)
+    assert sum(c.count for c in chest.inventory if c) > 0, "воронка за экраном не доносит до сундука"
+
+
+def test_offscreen_throughput_does_not_depend_on_schedule():
+    """Выработка не должна зависеть от того, как часто мы успеваем обслужить
+    чанк. Раньше зависела: блок сверялся с глобальным тактом, и при периоде
+    тика 31 вместо 30 воронка складывала втрое меньше."""
+    from units.common import FPS
+    results = {}
+    for budget in (1, 48):
+        game, gm, hopper, chest, loader, _ = _offscreen_farm(650, budget=budget)
+        _spin_offscreen(game, gm, loader, FPS * 6)
+        results[budget] = sum(c.count for c in chest.inventory if c)
+    slow, fast = results[1], results[48]
+    assert slow > 0 and fast > 0, f"ферма должна работать при любом бюджете: {results}"
+    assert abs(slow - fast) <= max(2, fast // 2), \
+        f"выработка не должна зависеть от расписания: {results}"
+
+
+def test_tile_steps_contract_matches_many_small_ticks():
+    """Один вызов со steps=N обязан дать то же, что N вызовов со steps=1 —
+    на этом стоит весь тик за экраном."""
+    from units.common import FPS
+    from units.Objects.TileClasses import TimerBlock
+    game = fresh_world(651)
+    gm = game.game_map
+    a = _place_block(gm, 20, 6, 211)
+    b = _place_block(gm, 60, 6, 211)
+    assert isinstance(a, TimerBlock) and isinstance(b, TimerBlock)
+    for _ in range(40):
+        a.tick(1)
+    b.tick(40)
+    assert a.timer == b.timer, f"steps не эквивалентны: {a.timer} против {b.timer}"
+
+
+def test_active_tile_registry_is_tiny_and_stays_in_sync():
+    """Индекс живых тайлов — вместо просмотра всей площади чанка. Раньше это
+    было 16384 просмотренных слота на 30 активных."""
+    game = fresh_world(652)
+    gm = game.game_map
+    cxy = gm.to_chunk_xy(400, 8)
+    gm.chunk(cxy, create_chunk=True)
+    active = gm.chunk_active_tiles(cxy)
+    assert active is not None
+    base = len(active)
+    slots = gm.chunk_arr_size // gm.tile_data_size
+    assert base < slots // 10, f"живых тайлов {base} из {slots} — индекс не имеет смысла"
+
+    # поставили механизм — он появился в индексе
+    tx, ty = cxy[0] * 32 + 5, cxy[1] * 32 + 5
+    gm.set_static_tile(tx, ty, 224)
+    i = gm.convert_pos_to_i(tx, ty)
+    assert i in gm.chunk_active_tiles(cxy), "новый механизм должен попасть в индекс"
+    # сломали — исчез
+    gm.set_static_tile(tx, ty, 0)
+    assert i not in gm.chunk_active_tiles(cxy), "сломанный блок должен уйти из индекса"
+    # обычный камень в индекс не попадает
+    gm.set_static_tile(tx, ty, 3)
+    assert i not in gm.chunk_active_tiles(cxy)
+
+
+def test_offscreen_tick_respects_frame_budget():
+    """Работа за экраном режется бюджетом: раньше всё делалось залпом раз в
+    30 кадров, и на 10 прогрузчиках залп занимал 21.6 мс."""
+    from units.common import FPS
+    from units.Objects.Items import ItemsTile
+    game = fresh_world(653)
+    gm = game.game_map
+    gm.OFFSCREEN_CHUNK_BUDGET = 5
+    game.player.tp_to((0, 8 * 32))
+    game.screen_map.teleport_to_player()
+    game.elapsed_time = 16
+    loaders = []
+    for i in range(3):
+        tx = 400 + i * 300
+        gm.set_static_tile(tx, 8, 219)
+        o = gm.get_tile_obj(*gm.to_chunk_xy(tx, 8), gm.get_static_tile(tx, 8)[3])
+        o.inventory.put_to_inventory(ItemsTile(game, 408, count=99))
+        o.activated_tact = game.tact
+        o.update(16)
+        loaders.append(o)
+    for cxy in gm.forced_chunk_coords():
+        gm.chunk(cxy, create_chunk=True)
+
+    served = []
+    real = gm._tick_chunk_offscreen
+    def counting(cxy, tact, steps, elapsed):
+        served[-1] += 1
+        return real(cxy, tact, steps, elapsed)
+    gm._tick_chunk_offscreen = counting
+    try:
+        for _ in range(50):
+            served.append(0)
+            for o in loaders:
+                o.activated_tact = game.tact
+            gm.tick_offscreen(game.tact, ())
+            game.tact += 1
+    finally:
+        # Именно del, а не присваивание обратно: присваивание оставило бы в
+        # gm.__dict__ атрибут с замыканием на game, а game держит
+        # pygame.time.Clock — get_vars() потом падает при pickle сохранения.
+        del gm._tick_chunk_offscreen
+    assert max(served) <= gm.OFFSCREEN_CHUNK_BUDGET, \
+        f"за кадр обслужено {max(served)} чанков при бюджете {gm.OFFSCREEN_CHUNK_BUDGET}"
+    assert sum(served) > 0, "круг должен идти"
+
+
+def test_offscreen_tick_never_generates_chunks():
+    """За экраном игра не должна создавать новый мир: генерация чанка это
+    ~7 мс прямо в кадре. Замер до правила: худший кадр тика 17.75 мс, из них
+    14 мс на две генерации, которые вызвал рост деревьев."""
+    from units.common import FPS
+    game, gm, hopper, chest, loader, (px, y) = _offscreen_farm(654)
+    # саженцы у самой границы чанка — самый вероятный источник генерации
+    for d in (30, 31, 32, 33):
+        gm.set_static_tile(px + d, y + 1, 1)
+        gm.set_static_tile(px + d, y, 102)
+    gens = []
+    real = gm.generate_chunk
+    def counting(x, cy, *a, **k):
+        if gm._offscreen_now:
+            gens.append((x, cy))
+        return real(x, cy, *a, **k)
+    gm.generate_chunk = counting
+    try:
+        _spin_offscreen(game, gm, loader, FPS * 8)
+    finally:
+        del gm.generate_chunk  # см. комментарий выше: иначе не пикнется
+    assert not gens, f"тик за экраном сгенерировал чанки: {gens[:5]}"

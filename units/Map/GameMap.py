@@ -25,7 +25,11 @@ from units.Updater import parse_version
 class GameMap(SavedObject):
     not_save_vars = SavedObject.not_save_vars | {"gate", "particles", "world_id", "world_meta",
                                                  "dynamic_dump", "dump_keep_radius", "signal_receivers",
-                                                 "portals", "lake_sites"}
+                                                 "portals", "lake_sites", "active_tiles",
+                                                 "_offscreen_ring", "_offscreen_ring_set",
+                                                 "_offscreen_pos", "_offscreen_round_tact",
+                                                 "_offscreen_steps", "_forced_cache",
+                                                 "_forced_checked_tact", "_offscreen_now"}
     # держим в памяти чанки в этом радиусе (в чанках) вокруг игрока
     DUMP_KEEP_RADIUS = 8
 
@@ -79,6 +83,23 @@ class GameMap(SavedObject):
         # КАЖДОГО чанка: замер давал +61% к стоимости генерации чанка. Кэш
         # выводится из сида, поэтому в сейв не идёт.
         self.lake_sites = {}
+        # Индекс «живых» тайлов по чанкам: {cxy: {индекс_в_массиве}}. Тик за
+        # экраном раньше просматривал ВСЮ площадь чанка — замер дал 16384
+        # просмотренных слота на 30 активных тайлов (0.18%). Лежит на карте, а
+        # не в самом чанке, чтобы не менять формат сохранений; строится лениво
+        # и поддерживается в set_static_tile.
+        self.active_tiles = {}
+        # Круговое обслуживание тайлов за экраном с бюджетом на кадр: раньше
+        # вся работа шла залпом раз в 30 кадров, и на 10 прогрузчиках один
+        # такой залп занимал 21.6 мс — целый кадр.
+        self._offscreen_ring = []
+        self._offscreen_ring_set = frozenset()
+        self._offscreen_pos = 0
+        self._offscreen_round_tact = 0
+        self._offscreen_steps = 1
+        self._forced_cache = None
+        self._forced_checked_tact = 0
+        self._offscreen_now = False
         if self.base_generation is None:
             self.new_base_generation()
 
@@ -122,6 +143,13 @@ class GameMap(SavedObject):
 
     def chunk(self, xy, default=None, for_player=False, create_chunk=False):
         res = self.game_map.get(xy, default)
+        if res is default and create_chunk and self._offscreen_now:
+            # Единое правило: обслуживание за экраном не создаёт мир.
+            # Путей, ведущих к записи тайла, много (рост дерева, лесоруб,
+            # гнездо голема, выброс предмета), и каждый из них по умолчанию
+            # готов сгенерировать чанк — а это ~7 мс прямо в кадре. Замер до
+            # правила: худший кадр тика 17.75 мс, из них 14 на две генерации.
+            create_chunk = False
         if res is default and create_chunk:
             res = self.generate_chunk(*xy)
         if res and for_player:
@@ -230,8 +258,37 @@ class GameMap(SavedObject):
             i = self.convert_pos_to_i(x, y)
             chunk[0][i:i + self.tile_data_size] = tile
             self.modified_chunks.add(cxy)
+            self._note_active_tile(cxy, i, tile[0])
             return True
         return False
+
+    def _note_active_tile(self, cxy, index, tile_type):
+        """Поддержать индекс живых тайлов при записи тайла."""
+        active = self.active_tiles.get(cxy)
+        if active is None:
+            return            # индекс для этого чанка ещё не строился
+        if tile_type in NEEDS_TICK:
+            active.add(index)
+        else:
+            active.discard(index)
+
+    def chunk_active_tiles(self, cxy):
+        """Индексы тайлов чанка, которым есть что делать в свой такт.
+
+        Один полный проход по чанку на весь его срок жизни вместо прохода на
+        каждый тик: активных тайлов — единицы на тысячу.
+        """
+        active = self.active_tiles.get(cxy)
+        if active is not None:
+            return active
+        chunk = self.game_map.get(cxy)
+        if chunk is None:
+            return None
+        static = chunk[0]
+        active = {i for i in range(0, self.chunk_arr_size, self.tile_data_size)
+                  if static[i] in NEEDS_TICK}
+        self.active_tiles[cxy] = active
+        return active
 
     def set_static_tile_state_img(self, x, y, state_img):
         """Сменить кадр тайла (например направление конвейера), не трогая
@@ -385,11 +442,23 @@ class GameMap(SavedObject):
     # там сканируется весь чанк (1024 тайла), а таймеры растений идут
     # десятками секунд — раз в полсекунды более чем достаточно.
     FORCED_TICK_PERIOD = FPS // 2
+    # Сколько обновлений тайлов за экраном разрешено за один кадр. Раньше вся
+    # работа шла залпом раз в FORCED_TICK_PERIOD кадров, и на 10 прогрузчиках
+    # залп занимал 21.6 мс — игрок видел это как рывок.
+    OFFSCREEN_CHUNK_BUDGET = 12
+    # Предел «сколько тактов зачесть за один круг»: на первом круге и после
+    # долгой паузы разница тактов может быть огромной, а мгновенный скачок
+    # фермы на минуту вперёд — это не работа, а телепорт.
+    OFFSCREEN_MAX_STEPS = FPS * 2
+    # Как часто пересчитывать набор чанков под прогрузчиками: пересчёт
+    # обходит все загруженные чанки и их тайл-объекты, и каждый кадр это
+    # дорого.
+    FORCED_RECHECK = FPS // 4
     # Запас вокруг экрана (в тайлах), внутри которого существо не спавнится:
     # рождение у самой кромки видно почти так же хорошо, как в центре.
     SPAWN_VIEW_MARGIN = 6
 
-    def grow_plant_tile(self, chunk, index, tile, tile_x, tile_y, tact):
+    def grow_plant_tile(self, chunk, index, tile, tile_x, tile_y, tact, create_chunk=True):
         """Отработать такт роста растения (куст 101 / саженец 102).
 
         Раньше эта логика жила только в ScreenMap.update_tile, то есть
@@ -410,10 +479,10 @@ class GameMap(SavedObject):
                 chunk[0][index + 3][TILE_TIMER] = tact + random.randint(FPS * 240, FPS * 660)
                 chunk[0][index + 2] = 1
             elif tile[2] == 2:
-                grow_tree((tile_x, tile_y), game_map=self)
+                grow_tree((tile_x, tile_y), game_map=self, create_chunk=create_chunk)
             elif tile[2] == 1 and tile[3][TILE_TIMER] <= tact:
                 if tile[3][TILE_TIMER] != 0:
-                    grow_tree((tile_x, tile_y), game_map=self)
+                    grow_tree((tile_x, tile_y), game_map=self, create_chunk=create_chunk)
 
     def _chunk_touches_lake(self, base_x, base_y):
         """Может ли в этом чанке быть вода озера."""
@@ -471,43 +540,112 @@ class GameMap(SavedObject):
                             forced.add((cx + dx, cy + dy))
         return forced
 
-    def tick_forced_chunks(self, tact, visible_chunks=()):
-        """Обновить тайлы в чанках под прогрузчиком, которых не видно.
+    def forced_chunk_coords_cached(self, tact):
+        """Набор чанков под прогрузчиками, с кэшем на несколько кадров.
 
-        Без этого автоматика работала только на экране: растения не росли,
-        а тайлы-механизмы не тикали, стоило игроку отойти — то есть фермы
-        не были фермами. Видимые чанки пропускаем: их уже обновляет
-        ScreenMap, и второй тик за кадр удвоил бы скорость роста."""
-        if tact % self.FORCED_TICK_PERIOD:
+        Пересчёт обходит все загруженные чанки и все их тайл-объекты. Раньше
+        это делалось раз в 30 кадров и было незаметно; при обслуживании
+        каждый кадр — уже нет, поэтому держим кэш.
+        """
+        if tact - self._forced_checked_tact >= self.FORCED_RECHECK or self._forced_cache is None:
+            self._forced_checked_tact = tact
+            self._forced_cache = self.forced_chunk_coords()
+        return self._forced_cache
+
+    def tick_offscreen(self, tact, visible_chunks=()):
+        """Обслужить тайлы за экраном: круг по чанкам с бюджетом на кадр.
+
+        Три вещи, которые здесь исправлены (все три измерены):
+
+        1. **Площадь вместо списка.** Раньше просматривался каждый тайл
+           каждого чанка под прогрузчиком: 16384 слота на 30 активных тайлов,
+           99.8% работы впустую. Теперь у чанка есть индекс живых тайлов
+           (chunk_active_tiles), и он строится один раз за жизнь чанка.
+        2. **Залп в один кадр.** Раньше вся работа шла раз в 30 кадров: на 10
+           прогрузчиках это 21.6 мс в одном кадре — целый кадр стоя. Теперь за
+           кадр обслуживается не больше OFFSCREEN_CHUNK_BUDGET чанков, круг
+           идёт дальше на следующем кадре. Бюджет ограничивает и построение
+           индексов: их строится столько же, сколько обслуживается чанков.
+        3. **Скрытая связь периодов.** Блоки сверялись с ГЛОБАЛЬНЫМ тактом
+           (`game.tact % PERIOD`), поэтому выработка фермы за экраном зависела
+           от НОК периода блока и периода тика: при периоде 31 вместо 30
+           воронка складывала втрое меньше. Теперь блок получает steps —
+           сколько тактов прошло с его прошлого обслуживания.
+
+        Следствие схемы: маленькая ферма (чанков меньше бюджета) обслуживается
+        каждый кадр со steps=1, то есть работает буквально как на экране;
+        большая — реже, но с большим steps, и суммарная выработка та же. Цена
+        кадра при этом ограничена сверху.
+        """
+        forced = self.forced_chunk_coords_cached(tact)
+        visible = set(visible_chunks)
+        target = forced - visible
+        if not target:
+            self._offscreen_ring = []
+            self._offscreen_pos = 0
             return 0
-        forced = self.forced_chunk_coords()
-        if not forced:
-            return 0
-        elapsed = self.FORCED_TICK_PERIOD * 1000 / FPS
+
+        ring = self._offscreen_ring
+        if self._offscreen_pos >= len(ring) or target != self._offscreen_ring_set:
+            # Новый круг: сколько тактов он занял — столько и зачтём каждому
+            # тайлу. Предел нужен на первом круге и после долгой паузы: скачок
+            # фермы на минуту вперёд — это не работа, а телепорт.
+            passed = tact - self._offscreen_round_tact
+            self._offscreen_steps = max(1, min(passed, self.OFFSCREEN_MAX_STEPS))
+            self._offscreen_round_tact = tact
+            self._offscreen_ring_set = frozenset(target)
+            ring = self._offscreen_ring = sorted(target)
+            self._offscreen_pos = 0
+
+        steps = self._offscreen_steps
+        elapsed = steps * (1000 / FPS)
+        end = min(len(ring), self._offscreen_pos + self.OFFSCREEN_CHUNK_BUDGET)
         ticked = 0
-        for cxy in forced - set(visible_chunks):
-            chunk = self.game_map.get(cxy)
-            if chunk is None:
-                continue
-            static = chunk[0]
-            base_x, base_y = cxy[0] * CHUNK_SIZE, cxy[1] * CHUNK_SIZE
-            for i in range(0, self.chunk_arr_size, self.tile_data_size):
-                ttile = static[i]
-                if ttile == 0:
-                    continue
-                if ttile in PLANT_WITH_TIMER or ttile in CLASS_UPDATING_TILES:
-                    cell = i // self.tile_data_size
-                    tx = base_x + cell % CHUNK_SIZE
-                    ty = base_y + cell // CHUNK_SIZE
-                    tile = static[i:i + self.tile_data_size]
-                    if ttile in CLASS_UPDATING_TILES:
-                        obj = self.get_tile_obj(cxy[0], cxy[1], tile[3])
-                        if obj is not None:
-                            obj.update(elapsed)
-                    else:
-                        self.grow_plant_tile(chunk, i, tile, tx, ty, tact)
-                    ticked += 1
+        self._offscreen_now = True
+        try:
+            for pos in range(self._offscreen_pos, end):
+                ticked += self._tick_chunk_offscreen(ring[pos], tact, steps, elapsed)
+        finally:
+            self._offscreen_now = False
+        self._offscreen_pos = end
         return ticked
+
+    def _tick_chunk_offscreen(self, cxy, tact, steps, elapsed):
+        """Обслужить живые тайлы одного чанка."""
+        chunk = self.game_map.get(cxy)
+        if chunk is None:
+            return 0
+        active = self.chunk_active_tiles(cxy)
+        if not active:
+            return 0
+        static = chunk[0]
+        base_x, base_y = cxy[0] * CHUNK_SIZE, cxy[1] * CHUNK_SIZE
+        ticked = 0
+        # список, а не сам set: grow_plant_tile может заменить тайл и через
+        # set_static_tile изменить индекс во время обхода
+        for index in list(active):
+            ttile = static[index]
+            if ttile not in NEEDS_TICK:
+                continue                  # тайл сломали/заменили с прошлого круга
+            if ttile in CLASS_UPDATING_TILES:
+                obj = self.get_tile_obj(cxy[0], cxy[1], static[index + 3])
+                if obj is not None:
+                    obj.tick(steps, elapsed)
+                    ticked += 1
+            else:
+                cell = index // self.tile_data_size
+                tx = base_x + cell % CHUNK_SIZE
+                ty = base_y + cell // CHUNK_SIZE
+                # create_chunk=False: за экраном игра не должна создавать
+                # новый мир — генерация чанка это ~7 мс прямо в кадре.
+                self.grow_plant_tile(chunk, index, static[index:index + self.tile_data_size],
+                                     tx, ty, tact, create_chunk=False)
+                ticked += 1
+        return ticked
+
+    # Совместимость: имя из v0.2.14 осталось у вызывающего кода и тестов.
+    def tick_forced_chunks(self, tact, visible_chunks=()):
+        return self.tick_offscreen(tact, visible_chunks)
 
     def mark_inscription_read(self, inscription_id):
         """Запомнить прочитанную надпись (журнал сюжета).

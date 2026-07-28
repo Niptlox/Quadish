@@ -445,7 +445,10 @@ class ScreenMap:
 
     def update_tile(self, chunk, tile, tile_type, index, tile_x, tile_y, chunk_x, chunk_y, tact):
         if tile_type in CLASS_UPDATING_TILES:
-            return self.game_map.get_tile_obj(chunk_x, chunk_y, tile[3]).update(self.elapsed_time)
+            # tick(1), а не update напрямую: у блока со своим счётчиком
+            # steps=1 на экране и steps=N за экраном — так выработка не
+            # зависит от того, кто его обслуживает (см. Tile.tick).
+            return self.game_map.get_tile_obj(chunk_x, chunk_y, tile[3]).tick(1, self.elapsed_time)
         # Рост растений — общий код с обновлением чанков под прогрузчиком
         # (GameMap.grow_plant_tile). Держать здесь вторую копию значило бы,
         # что на экране и вне его фермы растут по-разному.
