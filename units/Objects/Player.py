@@ -24,7 +24,8 @@ class Player(PhysicalObject):
                                                     "inventory_ui", "achievements", "dig_rect", "dig_rect_img",
                                                     "dig_pos", "dig_dist", "set_dist", "set", "dig", "sitting", "moving_left",
                                                     "moving_right", "on_wall", "tact", "eat", "jump_speed", "max_speed",
-                                                    "accelerate_x", "fall_speed", "max_fall_speed", "fly_speed"}
+                                                    "accelerate_x", "fall_speed", "max_fall_speed", "fly_speed",
+                                                    "vehicle"}
     class_obj = OBJ_PLAYER
     width, height = max(1, TSIZE - 10), max(1, TSIZE - 2)
     player_img = player_img
@@ -96,6 +97,10 @@ class Player(PhysicalObject):
         self.on_down = False
         # Разгон от блоровой дорожки под ногами (см. docs/TRANSPORT.md)
         self.track_speed = 0
+        # Средство, за рулём которого игрок (units/Objects/Vehicles.py).
+        # В сейв не идёт: средство само лежит в чанке, а ссылка на него
+        # восстанавливается посадкой.
+        self.vehicle = None
 
         self.achievements = Achievements(self)
         self.killer = ""
@@ -189,6 +194,11 @@ class Player(PhysicalObject):
                 # в меньшем логическом разрешении (см. WSIZE/SCREEN_SIZE) —
                 # переводим клик в мировые координаты перед прицеливанием
                 vector_to_mouse = Vector2(screen_to_world_pos(event.pos)) - vector_player_display
+                # Посадка в транспорт — раньше остальных действий: сидя за
+                # рулём правый клик высаживает, а не строит. Отдельной клавиши
+                # нет намеренно, новых жестов игроку учить не нужно.
+                if self.toggle_vehicle(vector_to_mouse):
+                    return True
                 if not self.tool.right_button_click(vector_to_mouse):
                     self.set = True
 
@@ -242,7 +252,9 @@ class Player(PhysicalObject):
 
         if not self.alive:
             return False
-        if not self.sitting:
+        # За рулём физику игрока ведёт средство (Vehicle.carry_driver):
+        # иначе игрок падал бы сквозь него собственной гравитацией.
+        if not self.sitting and self.vehicle is None:
             self.moving(elapsed_time)
 
         if not self.creative_mode:
@@ -335,6 +347,29 @@ class Player(PhysicalObject):
             self.vertical_momentum = -self.jump_speed * (self.jump_count * 0.25 + 1)
         elif self.creative_mode:
             self.vertical_momentum = -self.jump_speed * (self.jump_count * 0.25 + 1)
+
+    def toggle_vehicle(self, vector_to_mouse):
+        """Сесть в средство под курсором или выйти из текущего.
+
+        Возвращает True, если клик был «про транспорт», — тогда обычное
+        действие правой кнопки (поставить блок) не выполняется.
+        """
+        if self.vehicle is not None:
+            self.vehicle.dismount()
+            return True
+        target = Vector2(self.rect.center) + Vector2(vector_to_mouse)
+        gm = self.game_map
+        tx, ty = int(target.x) // TSIZE, int(target.y) // TSIZE
+        for cx in (tx // CHUNK_SIZE - 1, tx // CHUNK_SIZE, tx // CHUNK_SIZE + 1):
+            for cy in (ty // CHUNK_SIZE - 1, ty // CHUNK_SIZE, ty // CHUNK_SIZE + 1):
+                chunk = gm.chunk((cx, cy))
+                if not chunk:
+                    continue
+                for obj in chunk[1]:
+                    if (obj.class_obj & OBJ_VEHICLE and obj.alive
+                            and obj.rect.collidepoint(target)):
+                        return obj.mount(self)
+        return False
 
     def sit(self, pos=None):
         self.sitting = True
@@ -449,8 +484,12 @@ class Player(PhysicalObject):
                     step_sound = get_random_sound_of(sounds_step_dry).play()
                 else:
                     step_sound = sounds_step_stomp.rplay()
-                step_sound.set_endevent(EVENT_END_OF_STEP_SOUND)
-                self.state_step_sound = 1
+                # play() возвращает None, когда свободных каналов микшера нет
+                # (или звук отключён вовсе) — без этой проверки шаг игрока
+                # ронял игру ровно тогда, когда вокруг и так много звука.
+                if step_sound is not None:
+                    step_sound.set_endevent(EVENT_END_OF_STEP_SOUND)
+                    self.state_step_sound = 1
 
         else:
             self.air_timer += 1

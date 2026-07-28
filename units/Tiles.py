@@ -79,13 +79,41 @@ _extra_biome_ground_colors = {
 }
 
 
+def _is_grass_pixel(r, g, b, a):
+    """Травяной ли это пиксель спрайта земли.
+
+    Границу травы и земли берём по самому пикселю, а не по номеру строки:
+    в спрайте она неровная — на правом краю земля начинается на строку
+    выше, чем в середине. У травы зелёный канал старше красного и синего,
+    у земли наоборот (104,73,55 против 96,178,49).
+    """
+    return bool(a) and g > r and g > b
+
+
+def _grass_tint_overlay(img, color, alpha):
+    """Накладка цвета биома ТОЛЬКО по травяным пикселям."""
+    overlay = pygame.Surface(img.get_size(), pygame.SRCALPHA, 32)
+    overlay.fill((0, 0, 0, 0))
+    w, h = img.get_size()
+    tint = (*color, alpha)
+    for y in range(h):
+        for x in range(w):
+            if _is_grass_pixel(*img.get_at((x, y))):
+                overlay.set_at((x, y), tint)
+    return overlay
+
+
 def _tinted_ground_set(color, alpha=90):
+    """Земля биома: красится трава, а не весь блок.
+
+    Раньше накладка заливала тайл целиком, и в лесных биомах «земля с травой»
+    зеленела вся — вместе с землёй под дёрном, хотя цвет биома относится
+    только к траве.
+    """
     tinted = []
     for img in (ground_img, ground_L_img, ground_R_img, ground_LR_img):
         t = img.copy()
-        overlay = pygame.Surface(t.get_size()).convert_alpha()
-        overlay.fill((*color, alpha))
-        t.blit(overlay, (0, 0))
+        t.blit(_grass_tint_overlay(img, color, alpha), (0, 0))
         tinted.append(t)
     return tuple(tinted)
 
@@ -745,6 +773,27 @@ ruby_item_img = load_img(r"data\sprites\items\ruby.png", None)
 
 summonerSlimeBoss_img = load_img(r"data/sprites/tools/SummonerSlimeBoss/SummonerSlimeBoss.png", None)
 
+
+def create_vehicle_item_img(body, detail):
+    """Иконка транспортного средства в инвентаре.
+
+    Средство в мире — сущность вдвое шире тайла, в клетку инвентаря она не
+    влезает, поэтому иконка рисуется отдельно: силуэт корпуса и цветная
+    деталь, по которой средства различаются в хотбаре."""
+    img = pygame.Surface(TILE_RECT, pygame.SRCALPHA, 32)
+    w, h = img.get_size()
+    pygame.draw.polygon(img, body, [(3, h // 2), (w - 4, h // 2), (w - 8, h - 5), (7, h - 5)])
+    pygame.draw.polygon(img, "#00000088", [(3, h // 2), (w - 4, h // 2), (w - 8, h - 5), (7, h - 5)], 2)
+    pygame.draw.ellipse(img, detail, (w // 4, h // 5, w // 2, h // 3))
+    return img
+
+
+raft_item_img = create_vehicle_item_img("#A16207", "#78350F")
+airboat_item_img = create_vehicle_item_img("#C2A878", "#E7E5E4")
+crawler_item_img = create_vehicle_item_img("#57534E", "#FDE047")
+lava_barge_item_img = create_vehicle_item_img("#7F1D1D", "#FB923C")
+void_skiff_item_img = create_vehicle_item_img("#334155", "#38BDF8")
+
 sword_77_img, sword_77_imgs = load_round_tool_imgs("data/sprites/tools/sword_77/sword_77_{}.png", 4)
 
 sword_1_img, sword_1_imgs = load_round_tool_imgs("data/sprites/tools/sword_1/sword_1_{}.png", 4)
@@ -868,6 +917,11 @@ tile_imgs = {None: none_img,
              533: pickaxe_3_img,
              581: spatula_1_img,
              610: summonerSlimeBoss_img,
+             611: raft_item_img,
+             612: airboat_item_img,
+             613: crawler_item_img,
+             614: lava_barge_item_img,
+             615: void_skiff_item_img,
 
              801: stick_img,
 
@@ -893,7 +947,10 @@ tile_many_imgs = {225: conveyor_imgs,
                   581: spatula_1_imgs,
                   }
 
-IDX_TOOLS = {501, 502, 503, 530, 531, 532, 533, 581, 610}
+# 611-615 — транспортные средства (units/Objects/Vehicles.py): предмет
+# ставит средство в мир, поэтому он инструмент, а не блок.
+IDX_TOOLS = {501, 502, 503, 530, 531, 532, 533, 581, 610,
+             611, 612, 613, 614, 615}
 
 # EATS = {52: 10, 53: 2, 56: 8, 55: 100, 401: 8}
 
@@ -1230,6 +1287,11 @@ original_tile_words = {None: "None",
                        581: "Шпатель",
 
                        610: "Призыатель босса слизней",
+                       611: "Плот",
+                       612: "Воздушная лодка",
+                       613: "Шахтный ползун",
+                       614: "Адская баржа",
+                       615: "Пустотный скиф",
 
                        801: "Палка",
                        1003: "Панелька камня"

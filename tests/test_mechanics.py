@@ -1820,6 +1820,40 @@ def test_pixel_art_builder():
             raise AssertionError(f"должно падать: {bad}")
 
 
+def test_biome_tint_paints_grass_not_earth():
+    """Цвет биома относится к траве. Накладка заливала тайл целиком, и в
+    лесных биомах «земля с травой» зеленела вся — вместе с землёй под дёрном."""
+    from units.Tiles import ground_imgs, _is_grass_pixel
+    get_app()
+    base_set = ground_imgs[None]
+    for biome_id in (4, 5, 6, 7, 8):
+        for base, tinted in zip(base_set, ground_imgs[biome_id]):
+            grass_changed = earth_changed = 0
+            for y in range(base.get_height()):
+                for x in range(base.get_width()):
+                    b, c = base.get_at((x, y)), tinted.get_at((x, y))
+                    if (b.r, b.g, b.b) == (c.r, c.g, c.b):
+                        continue
+                    if _is_grass_pixel(b.r, b.g, b.b, b.a):
+                        grass_changed += 1
+                    else:
+                        earth_changed += 1
+            assert earth_changed == 0, \
+                f"биом {biome_id}: перекрашено {earth_changed} пикселей земли"
+            assert grass_changed > 0, f"биом {biome_id}: трава не перекрашена вовсе"
+
+
+def test_grass_mask_separates_turf_from_soil():
+    """Маска должна разделять дёрн и землю по пикселю, а не по номеру строки:
+    в спрайте граница неровная — на правом краю земля начинается выше."""
+    from units.Tiles import _is_grass_pixel
+    assert _is_grass_pixel(96, 178, 49, 255), "зелень дёрна — трава"
+    assert _is_grass_pixel(46, 135, 43, 255)
+    assert not _is_grass_pixel(104, 73, 55, 255), "коричневая земля — не трава"
+    assert not _is_grass_pixel(81, 57, 43, 255)
+    assert not _is_grass_pixel(96, 178, 49, 0), "прозрачный пиксель красить нечего"
+
+
 def test_creature_sprites_are_pixel_art_grids():
     """Каждое животное должно иметь корректную сетку (все строки одной
     длины, только известные символы) и рисоваться в свой размер."""
@@ -3970,6 +4004,223 @@ def test_transport_ladder_is_ordered_by_materials():
     assert 61 not in ids(237), "батут не должен требовать блора"
     # Портал — верх лестницы: дороже по числу разных материалов
     assert len(ids(232)) >= len(ids(238)), "портал должен требовать не меньше видов ресурсов"
+
+
+# ===================== транспортные средства =====================
+#
+# Второй вид транспорта: не линия, которую строят, а сущность, на которой
+# едут. Ключевое правило — каждое средство умеет РОВНО одну среду и вне её
+# мёртвый груз, а не медленный вариант. См. docs/TRANSPORT.md.
+
+def _spawn_vehicle(game, cls, tx, ty):
+    from units.common import TSIZE
+    v = cls(game, (tx * TSIZE, ty * TSIZE))
+    game.game_map.add_dinamic_obj(*game.game_map.to_chunk_xy(tx, ty), v)
+    return v
+
+
+def test_all_five_vehicles_are_registered():
+    """Пять средств: по одному на среду — вода, воздух, твердь, лава, вакуум."""
+    from units.Objects.Vehicles import VEHICLES, VEHICLES_D
+    from units.Tiles import tile_words, IDX_TOOLS
+    from units.Tools import TOOLS_CLASSES
+    from units.creating_items import RECIPES
+    assert len(VEHICLES) == 5, f"средств должно быть 5, а не {len(VEHICLES)}"
+    outs = {r[0][0] for r in RECIPES}
+    for cls in VEHICLES:
+        i = cls.index
+        assert i in tile_words, f"{cls.__name__}: нет названия"
+        assert i in IDX_TOOLS, f"{cls.__name__}: предмет не зарегистрирован как инструмент"
+        assert i in TOOLS_CLASSES, f"{cls.__name__}: нет инструмента установки"
+        assert i in outs, f"{cls.__name__}: нет рецепта"
+        assert VEHICLES_D[i] is cls
+    # среды должны быть разными — иначе средства дублируют друг друга
+    mediums = [(c.medium, c.vertical_control) for c in VEHICLES]
+    assert len(set(mediums)) >= 4, f"средства должны отличаться средой: {mediums}"
+
+
+def test_vehicle_carries_the_player():
+    """Сел — едешь. Игрок за рулём не должен идти своей физикой."""
+    from units.common import TSIZE
+    from units.Objects.Vehicles import MineCrawler
+    game = fresh_world(700)
+    x, y = _flat_arena(game, w=60)
+    crawler = _spawn_vehicle(game, MineCrawler, x + 5, y)
+    p = game.player
+    p.active = True
+    p.tp_to(((x + 5) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    assert crawler.mount(p), "не удалось сесть"
+    assert p.vehicle is crawler
+    p.moving_right, p.moving_left = True, False
+    start = crawler.rect.x
+    _run_frames(game, 40)
+    assert crawler.rect.x > start + TSIZE, f"ползун не поехал: {start} -> {crawler.rect.x}"
+    assert abs(p.rect.centerx - crawler.rect.centerx) <= 2, "игрок должен ехать вместе со средством"
+
+
+def test_vehicle_dismount_puts_player_back():
+    from units.common import TSIZE
+    from units.Objects.Vehicles import MineCrawler
+    game = fresh_world(701)
+    x, y = _flat_arena(game, w=40)
+    crawler = _spawn_vehicle(game, MineCrawler, x + 5, y)
+    p = game.player
+    p.active = True
+    p.tp_to(((x + 5) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    crawler.mount(p)
+    crawler.dismount()
+    assert p.vehicle is None
+    assert crawler.driver is None
+    assert p.rect.bottom <= crawler.rect.top + 1, "игрок должен встать НА средство, а не в него"
+    # и снова может ходить сам
+    p.moving_right = True
+    start = p.rect.x
+    _run_frames(game, 30)
+    assert p.rect.x != start, "после высадки игрок должен снова ходить"
+
+
+def test_vehicle_is_occupied_by_one_driver():
+    from units.Objects.Vehicles import Raft
+    game = fresh_world(702)
+    x, y = _flat_arena(game, w=20)
+    raft = _spawn_vehicle(game, Raft, x + 3, y)
+    p = game.player
+    assert raft.mount(p) is True
+    assert raft.mount(p) is False, "занятое средство не должно пускать второго"
+
+
+def test_each_vehicle_works_only_in_its_medium():
+    """Главное правило: вне своей среды средство не едет.
+
+    Иначе пять средств были бы пятью скинами одного, и смысла в лестнице
+    (вода → воздух → твердь → лава → вакуум) не осталось бы."""
+    from units.common import TSIZE, START_SPACE_Y
+    from units.Objects.Vehicles import Raft, LavaBarge, VoidSkiff
+    game = fresh_world(703)
+    x, y = _flat_arena(game, w=30)
+    gm = game.game_map
+
+    # плот на суше — не в своей среде
+    raft = _spawn_vehicle(game, Raft, x + 3, y)
+    raft.collisions = {"bottom": [((0, 0), 3)]}
+    assert not raft.in_medium(), "плот на суше работать не должен"
+    # налили воду — заработал
+    for tx in range(x, x + 10):
+        gm.set_static_tile(tx, y + 1, 120)
+    raft.rect.midbottom = ((x + 5) * TSIZE, (y + 1) * TSIZE)
+    assert raft.in_medium(), "плот на воде должен работать"
+
+    # баржа держится на лаве, но не на воде
+    barge = _spawn_vehicle(game, LavaBarge, x + 3, y)
+    barge.rect.midbottom = ((x + 5) * TSIZE, (y + 1) * TSIZE)
+    assert not barge.in_medium(), "баржа не должна работать на воде"
+    gm.set_static_tile(x + 5, y + 1, 140)
+    assert barge.in_medium(), "баржа должна работать на лаве"
+
+    # скиф — только в вакууме
+    skiff = _spawn_vehicle(game, VoidSkiff, x + 3, y)
+    assert not skiff.in_medium(), "скиф в атмосфере работать не должен"
+    skiff.rect.centery = (START_SPACE_Y - 10) * TSIZE
+    assert skiff.in_medium(), "скиф в космосе должен работать"
+
+
+def test_lava_barge_survives_lava():
+    """Баржа делает главное препятствие ада его же дорогой — значит не горит."""
+    from units.Objects.Vehicles import LavaBarge, Raft
+    assert 140 in LavaBarge.immune_tiles, "баржа обязана быть неуязвима к лаве"
+    assert 140 not in Raft.immune_tiles, "плот в лаве гореть должен"
+
+
+def test_broken_vehicle_returns_its_item():
+    """Разбил — получил предмет обратно, а не потерял средство насовсем."""
+    from units.common import TSIZE, OBJ_ITEM
+    from units.Objects.Vehicles import MineCrawler
+    game = fresh_world(704)
+    x, y = _flat_arena(game, w=20)
+    crawler = _spawn_vehicle(game, MineCrawler, x + 5, y)
+    crawler.kill()
+    gm = game.game_map
+    chunk = gm.chunk(gm.to_chunk_xy(x + 5, y))
+    dropped = [o for o in chunk[1] if o.class_obj & OBJ_ITEM and o.index == MineCrawler.index]
+    assert dropped, "разбитое средство должно выпасть предметом"
+
+
+def test_vehicle_speed_ladder():
+    """Средство обязано быть быстрее ходьбы, иначе оно не транспорт, а мебель.
+
+    Первая версия этого не проходила: опора проверялась по
+    collisions['bottom'], а стоя на месте средство падает на доли пикселя,
+    rect.y округляется до нуля и столкновения в кадре нет — опора «мигала»
+    через кадр и рвала разгон (ползун 10.9 блока против 9.1 у пешей ходьбы).
+    """
+    from units.common import TSIZE
+    from units.Objects.Vehicles import MineCrawler
+
+    def walk():
+        game = fresh_world(705)
+        x, y = _flat_arena(game, w=90)
+        p = game.player
+        p.active = True
+        p.tp_to((x * TSIZE, y * TSIZE))
+        game.screen_map.teleport_to_player()
+        p.moving_right, p.moving_left = True, False
+        start = p.rect.x
+        _run_frames(game, 60)
+        return (p.rect.x - start) / TSIZE
+
+    def ride():
+        game = fresh_world(705)
+        x, y = _flat_arena(game, w=90)
+        v = _spawn_vehicle(game, MineCrawler, x + 3, y)
+        p = game.player
+        p.active = True
+        p.tp_to(((x + 3) * TSIZE, y * TSIZE))
+        game.screen_map.teleport_to_player()
+        v.mount(p)
+        p.moving_right, p.moving_left = True, False
+        start = v.rect.x
+        _run_frames(game, 60)
+        return (v.rect.x - start) / TSIZE
+
+    on_foot, on_crawler = walk(), ride()
+    assert on_crawler > on_foot * 1.4, \
+        f"ползун ({on_crawler:.1f} блока) должен быть заметно быстрее ходьбы ({on_foot:.1f})"
+
+
+def test_vehicle_survives_save_and_load():
+    """Средство живёт в чанке как существо — значит обязано сохраняться."""
+    from units.common import TSIZE, OBJ_VEHICLE
+    from units.Objects.Vehicles import AirBoat
+    game = fresh_world(706)
+    x, y = _flat_arena(game, w=30)
+    _spawn_vehicle(game, AirBoat, x + 5, y)
+    gm = game.game_map
+    gm.save_current_game_map()
+    wid = gm.world_id
+    fresh_world(707)                      # затираем всё другим миром
+    assert gm.open_game_map(game, wid), "мир должен загрузиться"
+    chunk = gm.chunk(gm.to_chunk_xy(x + 5, y))
+    found = [o for o in (chunk[1] if chunk else []) if o.class_obj & OBJ_VEHICLE]
+    assert found, "средство пропало после сохранения и загрузки"
+    assert isinstance(found[0], AirBoat)
+    assert found[0].driver is None, "водитель не должен воскресать из сейва"
+
+
+def test_vehicle_recipes_are_gated_by_zone():
+    """Зональный вентиль: баржу не собрать, не побывав в аду, скиф — в космосе.
+    Это единственное, что удерживает порядок открытия (docs/BALANCE_SCHEME.md)."""
+    from units.creating_items import RECIPES
+    by_out = {r[0][0]: r for r in RECIPES}
+    def ids(idx):
+        return {i[0] for i in by_out[idx][1] if i[1] > 0}
+    assert 402 in ids(614), "адская баржа должна требовать серу"
+    assert 408 in ids(615), "пустотный скиф должен требовать космическую пыль"
+    assert 61 in ids(612), "воздушная лодка держится на блоре — как и всё перемещение"
+    # плот — самое раннее: ни металла, ни зональных ресурсов
+    early = {12, 106, 801, 11, 51, 3}
+    assert ids(611) <= early, f"плот не должен требовать {ids(611) - early}"
 
 
 def test_creatures_do_not_see_through_stone():

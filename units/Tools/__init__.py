@@ -7,6 +7,7 @@ from units.Tools.ToolsPickaxe import *
 from units.Tools.ToolsSummoner import *
 from units.Tools.ToolsSword import *
 from units.Tools.ToolSpatula import *
+from units.Tools.ToolsVehicle import *
 
 
 # модуль обобщения and items
