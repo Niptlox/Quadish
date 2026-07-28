@@ -2,6 +2,8 @@ import string
 
 import pygame as pg
 
+from units import common
+
 
 # находит позицию xy чтобы один стоял в центре другого
 def center_pos_2lens(len1, big_len):
@@ -24,6 +26,20 @@ class UI:
 
     def init_ui(self):
         pass
+
+    def ensure_layout(self):
+        """Пересчитать раскладку, если экран менялся с прошлого раза.
+
+        Ленивая проверка, а не рассылка события всем UI: сцена держит
+        несколько экранов (титул, настройки, звук), событие ресайза приходит
+        только в активную сцену, и неактивные экраны оставались с раскладкой
+        от старого размера окна. Здесь ни один экран нельзя забыть — он сам
+        пересчитается, когда его в следующий раз покажут.
+        """
+        gen = common.SCREEN_GENERATION[0]
+        if getattr(self, "_layout_generation", None) != gen:
+            self._layout_generation = gen
+            self.relayout()
 
     def relayout(self):
         """Безопасный дефолт: пересчитать self.rect под текущий экран.

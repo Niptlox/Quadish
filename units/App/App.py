@@ -83,14 +83,27 @@ class Scene(App):
             return True
         return False
 
+    def all_uis(self):
+        """Все UI-объекты, которыми владеет сцена.
+
+        Сцена держит не один экран (титул + настройки + звук), поэтому
+        пересчёта только self.ui не хватало: растянув окно на титуле, игрок
+        получал корректный титул и разъехавшиеся настройки.
+        """
+        # Утиная проверка вместо isinstance: ensure_layout есть только у UI,
+        # а импортировать units.UI.ClassUI сюда значило бы связать
+        # низкоуровневый App с деревом UI-модулей.
+        return [ui for ui in vars(self).values() if hasattr(ui, "ensure_layout")]
+
     def _on_screen_changed(self):
-        ui = getattr(self, "ui", None)
-        relayout = getattr(ui, "relayout", None)
-        if relayout is not None:
-            relayout()
+        for ui in self.all_uis():
+            ui.ensure_layout()
 
     def main(self):
         self.running = True
+        # Экран мог измениться, пока эта сцена была неактивна: события
+        # ресайза приходят только в активную сцену.
+        self._on_screen_changed()
         while self.running:
             self.elapsed_time = self.clock.tick(FPS)
             self.pg_events()
@@ -115,8 +128,9 @@ class SceneMenu(Scene):
 
     def set_ui(self, ui):
         if ui is not None:
-            print(ui)
             self.ui = ui
+            # Экран мог измениться, пока этот UI не показывали.
+            ui.ensure_layout()
 
     def pg_events(self):
 

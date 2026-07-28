@@ -1367,10 +1367,14 @@ def test_help_ui():
 
 def test_settings_ui_view_tiles_dropdown():
     """Настройка 'Обзор (блоков в ширину)' должна строиться без падений и
-    сохранять выбор через config.Window.set_view_tiles_width."""
+    сохранять выбор через config.Window.set_view_tiles_width.
+
+    Живёт в разделе «Экран и производительность»: в основном меню оставлены
+    только размер меню и режим экрана (см. MainSettingsUI).
+    """
     from units import config as cfg
     app = get_app()
-    ui = app.title_scene.settings_ui
+    ui = app.title_scene.screen_settings_ui
     ui.draw()  # не должен падать
     dd = next(d for d in ui.dropdowns if "Обзор" in d.label)
     assert str(cfg.Window.view_tiles_width) == dd.options[dd.index]
@@ -3271,3 +3275,189 @@ def test_lake_generation_is_free_for_chunks_without_lakes():
         "дорогой поиск уровня не должен идти раньше дешёвой отсечки"
     assert lake_shape(0, gm.base_generation) is None or \
         len(lake_shape(0, gm.base_generation)) == 2, "форма — только центр и радиус"
+
+
+# ===================== пересчёт меню при смене размера окна =====================
+
+def test_resize_relayouts_every_menu_of_the_scene():
+    """Сцена держит несколько экранов (титул, настройки, звук), а событие
+    ресайза приходит только в активную сцену. Раньше пересчитывался лишь
+    self.ui: растянув окно на титуле, игрок получал корректный титул и
+    разъехавшиеся настройки."""
+    app = get_app()
+    from units import common
+    scene = app.title_scene
+    uis = scene.all_uis()
+    assert len(uis) >= 3, f"у титульной сцены должно быть несколько экранов, нашлось {len(uis)}"
+
+    old = tuple(common.SCREEN_SIZE)
+    try:
+        common.apply_resize((900, 700))
+        scene._on_screen_changed()
+        for ui in uis:
+            assert ui.rect.size == (900, 700), f"{type(ui).__name__} не пересчитался: {ui.rect.size}"
+    finally:
+        common.apply_resize(old)
+        scene._on_screen_changed()
+
+
+def test_inactive_scene_relayouts_lazily():
+    """Пересчёт должен быть ленивым: сцена, которая была неактивна во время
+    ресайза, обязана привести раскладку в порядок, когда её покажут."""
+    app = get_app()
+    from units import common
+    scene = app.title_scene
+    ui = scene.settings_ui
+    old = tuple(common.SCREEN_SIZE)
+    try:
+        # ресайз «в другой сцене»: событие сюда не приходило
+        common.apply_resize((1000, 600))
+        assert ui.rect.size != (1000, 600), "раскладка ещё старая — это нормально"
+        ui.ensure_layout()
+        assert ui.rect.size == (1000, 600), "показ экрана должен пересчитать раскладку"
+        # повторный вызов не должен пересчитывать заново
+        gen = ui._layout_generation
+        ui.ensure_layout()
+        assert ui._layout_generation == gen
+    finally:
+        common.apply_resize(old)
+        scene._on_screen_changed()
+
+
+def test_screen_generation_grows_on_resize():
+    """Поколение экрана — то, по чему UI понимает, что пора пересчитаться."""
+    get_app()
+    from units import common
+    old = tuple(common.SCREEN_SIZE)
+    before = common.SCREEN_GENERATION[0]
+    try:
+        common.apply_resize((820, 640))
+        assert common.SCREEN_GENERATION[0] > before
+    finally:
+        common.apply_resize(old)
+
+
+# ===================== настройки по разделам и меню модов =====================
+
+def test_main_settings_keeps_only_the_frequent_options():
+    """15 пунктов одним списком не влезали в низкое окно, а нужное
+    приходилось искать глазами. В основном меню остаются размер меню и режим
+    экрана, остальное — по разделам."""
+    app = get_app()
+    ui = app.title_scene.settings_ui
+    ui.draw()
+    labels = [d.label for d in ui.dropdowns]
+    assert any("Размер меню" in l for l in labels), labels
+    assert any("Режим экрана" in l for l in labels), labels
+    assert len(ui.dropdowns) == 2, f"в основном меню только две настройки, а не {labels}"
+    texts = [b.text for b in ui.buttons]
+    for section in ("Экран", "Графика", "Звук", "Мир", "Модификации"):
+        assert any(section in t for t in texts), f"нет перехода в раздел {section}: {texts}"
+
+
+def test_every_settings_section_draws_and_has_way_back():
+    """Из каждого раздела должен быть выход — иначе игрок в нём застревает."""
+    app = get_app()
+    scene = app.title_scene
+    sections = [scene.screen_settings_ui, scene.graphics_settings_ui,
+                scene.sound_settings_ui, scene.world_settings_ui, scene.mods_settings_ui]
+    for ui in sections:
+        ui.draw()                                   # не должен падать
+        texts = [b.text for b in ui.buttons]
+        assert any("Назад" in t for t in texts), f"{type(ui).__name__}: нет кнопки назад ({texts})"
+
+
+def test_settings_sections_cover_all_old_options():
+    """При разбивке легко потерять настройку. Все, что были в одном списке,
+    должны найтись в разделах."""
+    app = get_app()
+    scene = app.title_scene
+    labels = []
+    for ui in (scene.settings_ui, scene.screen_settings_ui, scene.graphics_settings_ui,
+               scene.world_settings_ui, scene.mods_settings_ui):
+        ui.draw()
+        labels += [d.label for d in ui.dropdowns]
+    for expected in ("Монитор", "Обзор", "Режим экрана", "Размер меню", "Лимит FPS",
+                     "Вертикальная синхронизация", "Выгрузка карты", "облаков",
+                     "звёзд", "ID предмета", "Курсор", "моды"):
+        assert any(expected in l for l in labels), f"настройка «{expected}» потерялась"
+
+
+def test_mods_menu_lists_mods_with_state():
+    """Общий выключатель — это «всё или ничего», а ломает игру обычно один
+    мод. Меню должно показывать каждый мод: что добавляет и включён ли."""
+    app = get_app()
+    ui = app.title_scene.mods_settings_ui
+    ui.draw()
+    from units import mods
+    folders = mods.mod_folders()
+    if not folders:
+        return                                      # модов нет — рисуем подсказку
+    assert ui.mod_rows, "моды на диске есть, а список пуст"
+    for info, rect, btn in ui.mod_rows:
+        assert info["folder"] in folders
+        assert isinstance(info["blocks"], int) and isinstance(info["creatures"], int)
+        assert btn.text in ("Выключить", "Включить")
+
+
+def test_single_mod_can_be_disabled_without_the_others():
+    """Выключение одного мода не должно отключать остальные и не должно
+    трогать общий выключатель."""
+    get_app()
+    from units import config as cfg, mods
+    folders = mods.mod_folders()
+    if not folders:
+        return
+    folder = folders[0]
+    was_disabled = cfg.ModSettings.is_disabled(folder)
+    was_enabled = cfg.ModSettings.enabled
+    try:
+        cfg.ModSettings.set_mod_disabled(folder, True)
+        assert cfg.ModSettings.is_disabled(folder)
+        assert cfg.ModSettings.enabled == was_enabled, "общий выключатель трогать нельзя"
+        loaded, errors = mods.load_mods()
+        assert folder in mods.MOD_SKIPPED, "выключенный мод не должен загружаться"
+        assert all(os.path.basename(m["dir"]) != folder for m in loaded)
+    finally:
+        cfg.ModSettings.set_mod_disabled(folder, was_disabled)
+        mods.load_mods()
+
+
+def test_worlds_menu_uses_the_same_button_geometry_as_settings():
+    """Экран миров был отдельным окном-панелью со своими шрифтами и мелкими
+    кнопками — рядом с остальными меню он читался как чужой. Геометрия
+    строки и высота кнопки должны совпадать с настройками."""
+    app = get_app()
+    worlds = app.worlds_scene.ui if hasattr(app, "worlds_scene") else None
+    if worlds is None:
+        from units.UI.UI import WorldListUI
+        worlds = WorldListUI(app.title_scene)
+    settings = app.title_scene.settings_ui
+    settings.draw()
+    worlds.draw()
+    ref = settings.widgets[0].rect
+    assert worlds.btn_back.rect.width == ref.width, \
+        f"ширина кнопки {worlds.btn_back.rect.width} != {ref.width} в настройках"
+    assert worlds.btn_back.rect.height == ref.height, \
+        f"высота кнопки {worlds.btn_back.rect.height} != {ref.height} в настройках"
+    assert worlds.btn_tutorial.rect.height == ref.height
+    assert worlds.btn_new.rect.height == ref.height
+    # и заголовок ставится так же, как в настройках
+    assert worlds.header_pos[1] == settings.header_pos[1]
+
+
+def test_worlds_menu_relayouts_with_the_window():
+    """Экран миров тоже должен переживать ресайз без перезапуска."""
+    app = get_app()
+    from units import common
+    from units.UI.UI import WorldListUI
+    ui = WorldListUI(app.title_scene)
+    old = tuple(common.SCREEN_SIZE)
+    try:
+        common.apply_resize((950, 660))
+        ui.ensure_layout()
+        assert ui.rect.size == (950, 660)
+        assert ui.btn_back.rect.centerx == ui.rect.centerx, "кнопки должны переехать в центр"
+        ui.draw()
+    finally:
+        common.apply_resize(old)

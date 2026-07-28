@@ -141,6 +141,17 @@ display_ = pygame.Surface(WSIZE).convert()
 print(pg.display.get_allow_screensaver())
 
 
+# Номер «поколения экрана»: растёт при каждом ресайзе/переключении режима.
+# Список, а не int, по той же причине, что и SCREEN_SIZE: модули делают
+# "from units.common import *", и переприсваивание они бы не увидели.
+#
+# Нужен для ЛЕНИВОГО пересчёта раскладки. Пересчитывать только активный UI
+# недостаточно: сцена держит несколько экранов (титул, настройки, звук), и
+# растянув окно на титуле, игрок получал корректный титул и разъехавшиеся
+# настройки. А события ресайза приходят вообще только в активную сцену.
+SCREEN_GENERATION = [0]
+
+
 def apply_resize(size=None, fullscreen=None):
     """Применить новый размер окна и/или режим экрана. Единая точка входа
     и для живого перетаскивания рамки (VIDEORESIZE), и для F11/переключателя
@@ -173,6 +184,7 @@ def apply_resize(size=None, fullscreen=None):
     WORLD_SCALE = (WSIZE[0] / SCREEN_SIZE[0], WSIZE[1] / SCREEN_SIZE[1])
     if not FULLSCREEN:
         config.Window.set_size(f"{SCREEN_SIZE[0]},{SCREEN_SIZE[1]}")
+    SCREEN_GENERATION[0] += 1
     return new_screen
 
 

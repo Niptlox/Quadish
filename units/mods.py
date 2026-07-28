@@ -34,6 +34,7 @@ TILE_RECT = (32, 32)
 
 MODS = []          # успешно загруженные моды
 MOD_ERRORS = []    # [(имя папки, текст ошибки)] — показываем в настройках
+MOD_SKIPPED = []   # папки, выключенные по отдельности в настройках
 
 # Реестр анимаций общий с ванильными тайлами и живёт в units/Tiles.py
 # (там же лава). Держать здесь свою копию значило бы, что мод и ваниль
@@ -330,6 +331,7 @@ def load_mods(path=None):
     """Прочитать все моды. Возвращает (моды, ошибки) и заполняет MODS/MOD_ERRORS."""
     MODS.clear()
     MOD_ERRORS.clear()
+    MOD_SKIPPED.clear()
 
     if not config.ModSettings.enabled:
         print("Моды: загрузка отключена в настройках")
@@ -344,6 +346,10 @@ def load_mods(path=None):
         mod_dir = os.path.join(root, entry)
         if not os.path.isdir(mod_dir):
             continue
+        if config.ModSettings.is_disabled(entry):
+            MOD_SKIPPED.append(entry)
+            print(f"Мод '{entry}' выключен в настройках")
+            continue
         try:
             MODS.append(_load_one(mod_dir, used_ids, used_names))
         except ModError as exc:
@@ -357,6 +363,45 @@ def load_mods(path=None):
         print(f"Мод загружен: {mod['name']} {mod['version']} — "
               f"блоков/предметов: {len(mod['blocks'])}, существ: {len(mod['creatures'])}")
     return MODS, MOD_ERRORS
+
+
+def mod_folders(path=None):
+    """Все папки модов на диске — включая выключенные и сломанные.
+
+    Меню модов должно показывать мод, даже если он выключен или не
+    загрузился: иначе включить его обратно неоткуда.
+    """
+    root = path or MODS_PATH
+    if not os.path.isdir(root):
+        return []
+    return sorted(e for e in os.listdir(root) if os.path.isdir(os.path.join(root, e)))
+
+
+def mod_info(folder, path=None):
+    """Что показать про мод в меню: имя, версия, автор, счётчики, состояние."""
+    root = path or MODS_PATH
+    loaded = next((m for m in MODS if os.path.basename(m["dir"]) == folder), None)
+    error = next((text for name, text in MOD_ERRORS if name == folder), None)
+    info = {"folder": folder, "name": folder, "version": "", "author": "",
+            "blocks": 0, "creatures": 0, "error": error,
+            "disabled": config.ModSettings.is_disabled(folder)}
+    if loaded is not None:
+        info.update(name=loaded["name"], version=loaded["version"], author=loaded["author"],
+                    blocks=len(loaded["blocks"]), creatures=len(loaded["creatures"]))
+        return info
+    # Мод выключен или сломан — имя всё равно достанем из манифеста, чтобы в
+    # списке не стояла безымянная папка.
+    try:
+        with open(os.path.join(root, folder, "mod.json"), "r", encoding="utf-8") as f:
+            data = json.load(f)
+        info.update(name=str(data.get("name", folder)),
+                    version=str(data.get("version", "")),
+                    author=str(data.get("author", "")),
+                    blocks=len(data.get("blocks", [])) + len(data.get("items", [])),
+                    creatures=len(data.get("creatures", [])))
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
+    return info
 
 
 def mod_blocks():

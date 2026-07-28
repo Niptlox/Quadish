@@ -78,10 +78,26 @@ class ModSettings(__Settings):
     section = 'mods'
     # Загружать ли моды из data/modifications (см. units/mods.py).
     enabled = config.getboolean(section, 'enabled', fallback=True)
+    # Папки модов, выключенных по отдельности. Общий выключатель оставляет
+    # только «всё или ничего», а мод обычно ломает игру ровно один — нужен
+    # способ выключить его, не отключая остальные.
+    disabled = [n for n in config.get(section, 'disabled', fallback='').replace(' ', '').split(',') if n]
 
     @classmethod
     def set_enabled(cls, value):
         cls.set('enabled', bool(value))
+
+    @classmethod
+    def is_disabled(cls, folder):
+        return folder in cls.disabled
+
+    @classmethod
+    def set_mod_disabled(cls, folder, value):
+        names = [n for n in cls.disabled if n != folder]
+        if value:
+            names.append(folder)
+        cls.disabled = sorted(names)
+        cls.set('disabled', ",".join(cls.disabled))
 
 
 class GameSettings(__Settings):

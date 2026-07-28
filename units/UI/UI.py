@@ -613,30 +613,25 @@ class MainSettingsUI(TitleUI):
         menu_size_idx = MENU_SIZES.index(win.menu_size) if win.menu_size in MENU_SIZES else 0
         from units.Graphics.Cursor import CURSOR_KINDS, CURSOR_KIND_LABELS as cursor_kind_labels
         cursor_idx = CURSOR_KINDS.index(gs.cursor) if gs.cursor in CURSOR_KINDS else 0
+        # В основном меню — только то, что игрок меняет чаще всего.
+        # Раньше здесь лежали все 15 пунктов одним списком: он не влезал в
+        # низкое окно, а нужное приходилось искать глазами.
         items = [
-            ("dd", "Монитор: {}", [str(i + 1) for i in range(n_mon)],
-             win.monitor if win.monitor < n_mon else 0, set_mon, scr_icon),
-            ("dd", "Обзор (блоков в ширину): {}", [str(v) for v in view_tiles_lst], view_tiles_idx,
-             set_view_tiles, scr_icon),
-            ("dd", "Режим экрана: {}", ["Оконный", "Полноэкранный"], 1 if win.fullscreen else 0, set_fs, scr_icon),
             ("dd", "Размер меню: {}", menu_size_labels, menu_size_idx, set_menu_size, None),
-            ("dd", "Лимит FPS: {}", fps_values_lst, fps_idx, set_fps, None),
-            ("dd", "Вертикальная синхронизация: {}", ru_bool_lst, 0 if gs.vsync else 1,
-             lambda v, i: (gs.set_vsync(bool_dict[v]), self.sys_message.send_reload_game_for_change()), None),
-            ("dd", "Выгрузка карты: {}", ru_bool_lst, 0 if gs.dynamic_dump else 1, set_dump, None),
-            ("dd", "Отображение облаков: {}", ru_bool_lst, 0 if gs.clouds else 1,
-             lambda v, i: gs.set_clouds_state(bool_dict[v]), None),
-            ("dd", "Отображение звёзд: {}", ru_bool_lst, 0 if gs.stars else 1,
-             lambda v, i: gs.set_stars_state(bool_dict[v]), None),
-            ("dd", "ID предмета: {}", ru_bool_lst, 0 if gs.view_item_index else 1,
-             lambda v, i: gs.set_item_index_state(bool_dict[v]), None),
-            ("dd", "Курсор: {}", cursor_kind_labels, cursor_idx, set_cursor_kind, None),
-            ("dd", mods_label(), ru_bool_lst, 0 if config.ModSettings.enabled else 1, set_mods, None),
+            ("dd", "Режим экрана: {}", ["Оконный", "Полноэкранный"], 1 if win.fullscreen else 0, set_fs, scr_icon),
+            ("btn", "Экран и производительность...",
+             lambda _: self.scene.set_ui(self.scene.screen_settings_ui)),
+            ("btn", "Графика и интерфейс...",
+             lambda _: self.scene.set_ui(self.scene.graphics_settings_ui)),
             ("btn", "Звуки и музыка...", lambda _: self.scene.set_ui(self.scene.sound_settings_ui)),
-            ("btn", "Создать мир обучения", lambda _: self.scene.create_tutorial_world()),
+            ("btn", "Мир и игра...", lambda _: self.scene.set_ui(self.scene.world_settings_ui)),
+            ("btn", "Модификации...", lambda _: self.scene.set_ui(self.scene.mods_settings_ui)),
             ("btn", "В главное меню", lambda _: self.scene.set_ui(self.scene.title_ui)),
         ]
         return items
+
+    def back_to_settings(self):
+        return ("btn", "Назад", lambda _: self.scene.set_ui(self.scene.settings_ui))
 
     # ---------- события/отрисовка ----------
 
@@ -665,6 +660,211 @@ class MainSettingsUI(TitleUI):
         pg.display.flip()
 
 
+class ScreenSettingsUI(MainSettingsUI):
+    """Всё, что про монитор и скорость отрисовки."""
+    header_title = "Экран и производительность"
+
+    def get_settings_items(self):
+        gs = config.GameSettings
+        win = config.Window
+        n_mon = max(1, len(pygame.display.get_desktop_sizes()))
+        scr_icon = make_screen_icon()
+
+        def set_mon(value, i):
+            win.set_monitor(i)
+            self.sys_message.send_reload_game_for_change()
+
+        def set_fps(value, i):
+            gs.set_max_fps(value)
+            self.sys_message.send_reload_game_for_change()
+
+        def set_view_tiles(value, i):
+            win.set_view_tiles_width(value)
+            self.sys_message.send_reload_game_for_change()
+
+        fps_idx = fps_values_lst.index(gs.max_fps) if gs.max_fps in fps_values_lst else 1
+        view_tiles_idx = view_tiles_lst.index(win.view_tiles_width) if win.view_tiles_width in view_tiles_lst else 2
+        return [
+            ("dd", "Монитор: {}", [str(i + 1) for i in range(n_mon)],
+             win.monitor if win.monitor < n_mon else 0, set_mon, scr_icon),
+            ("dd", "Обзор (блоков в ширину): {}", [str(v) for v in view_tiles_lst], view_tiles_idx,
+             set_view_tiles, scr_icon),
+            ("dd", "Лимит FPS: {}", fps_values_lst, fps_idx, set_fps, None),
+            ("dd", "Вертикальная синхронизация: {}", ru_bool_lst, 0 if gs.vsync else 1,
+             lambda v, i: (gs.set_vsync(bool_dict[v]), self.sys_message.send_reload_game_for_change()), None),
+            self.back_to_settings(),
+        ]
+
+
+class GraphicsSettingsUI(MainSettingsUI):
+    """Что видно на экране: небо, курсор, подписи."""
+    header_title = "Графика и интерфейс"
+
+    def get_settings_items(self):
+        gs = config.GameSettings
+
+        def set_cursor_kind(value, i):
+            from units.Graphics.Cursor import CURSOR_KINDS, apply_cursor_kind
+            gs.set_cursor(CURSOR_KINDS[i])
+            apply_cursor_kind()   # применяется сразу, перезапуск не нужен
+
+        from units.Graphics.Cursor import CURSOR_KINDS, CURSOR_KIND_LABELS as cursor_kind_labels
+        cursor_idx = CURSOR_KINDS.index(gs.cursor) if gs.cursor in CURSOR_KINDS else 0
+        return [
+            ("dd", "Отображение облаков: {}", ru_bool_lst, 0 if gs.clouds else 1,
+             lambda v, i: gs.set_clouds_state(bool_dict[v]), None),
+            ("dd", "Отображение звёзд: {}", ru_bool_lst, 0 if gs.stars else 1,
+             lambda v, i: gs.set_stars_state(bool_dict[v]), None),
+            ("dd", "ID предмета: {}", ru_bool_lst, 0 if gs.view_item_index else 1,
+             lambda v, i: gs.set_item_index_state(bool_dict[v]), None),
+            ("dd", "Курсор: {}", cursor_kind_labels, cursor_idx, set_cursor_kind, None),
+            self.back_to_settings(),
+        ]
+
+
+class WorldSettingsUI(MainSettingsUI):
+    """Настройки самого мира и служебные действия с ним."""
+    header_title = "Мир и игра"
+
+    def get_settings_items(self):
+        gs = config.GameSettings
+
+        def set_dump(value, i):
+            gs.set_dynamic_dump(bool_dict[value])
+            try:
+                self.scene.app.game_scene.game_map.dynamic_dump = bool_dict[value]
+            except Exception:
+                pass
+
+        return [
+            ("dd", "Выгрузка карты: {}", ru_bool_lst, 0 if gs.dynamic_dump else 1, set_dump, None),
+            ("btn", "Создать мир обучения", lambda _: self.scene.create_tutorial_world()),
+            self.back_to_settings(),
+        ]
+
+
+class ModsSettingsUI(MainSettingsUI):
+    """Большое меню модификаций: список модов с их состоянием.
+
+    Общий выключатель оставлял только «всё или ничего», а ломает игру обычно
+    ровно один мод — и узнать, какой именно, можно было только из консоли.
+    Здесь каждый мод — строка: что он добавляет, включён ли, и текст ошибки,
+    если не загрузился.
+    """
+    header_title = "Модификации"
+    row_h = int(58 * UI_SCALE)
+    font_row = pygame.font.Font(MAIN_FONT_PATH, int(17 * UI_SCALE))
+    font_sub = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', int(13 * UI_SCALE))
+    row_bg = (63, 63, 70)
+    row_bg_off = (39, 39, 42)
+    err_color = "#F87171"
+    off_color = "#A1A1AA"
+
+    def __init__(self, scene):
+        super().__init__(scene)
+        self._build_rows()
+
+    def relayout(self):
+        super().relayout()
+        self._build_rows()
+
+    def get_settings_items(self):
+        """Сверху — общий выключатель и выход; сами моды рисуются списком."""
+        def set_mods(value, i):
+            config.ModSettings.set_enabled(bool_dict[value])
+            # блоки/существа модов регистрируются один раз при импорте
+            # units.Tiles — включение/выключение требует перезапуска
+            self.sys_message.send_reload_game_for_change()
+
+        return [
+            ("dd", "Загружать моды: {}", ru_bool_lst,
+             0 if config.ModSettings.enabled else 1, set_mods, None),
+            self.back_to_settings(),
+        ]
+
+    def _build_rows(self):
+        from units import mods
+        self.mod_rows = []       # (info, rect, кнопка переключения)
+        folders = mods.mod_folders()
+        if not folders:
+            return
+        w = int(460 * UI_SCALE)
+        x = self.rect.centerx - w // 2
+        # список идёт под виджетами настроек (общий выключатель + «Назад»)
+        top = max(w2.rect.bottom for w2 in self.widgets) + int(14 * UI_SCALE)
+        btn_w = int(96 * UI_SCALE)
+        for i, folder in enumerate(folders):
+            info = mods.mod_info(folder)
+            y = top + i * (self.row_h + 6)
+            if y + self.row_h > self.rect.h - 10:
+                break            # ниже экрана не рисуем: прокрутки тут нет
+            rect = pg.Rect(x, y, w, self.row_h)
+            label = "Выключить" if not info["disabled"] else "Включить"
+            btn = TextButton(lambda _, f=folder: self.toggle_mod(f),
+                             (rect.right - btn_w - 8, y + (self.row_h - int(28 * UI_SCALE)) // 2,
+                              btn_w, int(28 * UI_SCALE)),
+                             label, font=self.font_sub)
+            self.mod_rows.append((info, rect, btn))
+
+    def toggle_mod(self, folder):
+        config.ModSettings.set_mod_disabled(folder, not config.ModSettings.is_disabled(folder))
+        self._build_rows()
+        # мод регистрирует блоки при импорте units.Tiles — без перезапуска
+        # его содержимое из игры не убрать и не добавить
+        self.sys_message.send_reload_game_for_change()
+
+    def pg_event(self, event: pg.event.Event):
+        for _info, _rect, btn in getattr(self, "mod_rows", ()):
+            if btn.pg_event(event):
+                return
+        return super().pg_event(event)
+
+    def draw(self):
+        self.draw_background()
+        self.screen.blit(self.header_surf, self.header_pos)
+        for wdg in self.widgets:
+            wdg.draw(self.screen)
+        self._draw_rows()
+        for dd in self.dropdowns:
+            dd.draw_options(self.screen)
+        self.sys_message.draw(self.screen)
+        pg.display.flip()
+
+    def _draw_rows(self):
+        rows = getattr(self, "mod_rows", ())
+        if not rows:
+            text = self.font_row.render(
+                get_translated_text("Моды не найдены: положите папку в data/modifications"),
+                True, self.off_color)
+            self.screen.blit(text, (self.rect.centerx - text.get_width() // 2,
+                                    max(w.rect.bottom for w in self.widgets) + 20))
+            return
+        for info, rect, btn in rows:
+            pg.draw.rect(self.screen, self.row_bg_off if info["disabled"] else self.row_bg,
+                         rect, border_radius=6)
+            pg.draw.rect(self.screen, (24, 24, 27), rect, width=1, border_radius=6)
+            title = f"{info['name']} {info['version']}".strip()
+            color = self.off_color if info["disabled"] else "#FFFFFF"
+            self.screen.blit(self.font_row.render(title, True, color), (rect.x + 10, rect.y + 6))
+            if info["error"]:
+                sub = get_translated_text("Ошибка: ") + info["error"]
+                sub_color = self.err_color
+            elif info["disabled"]:
+                sub, sub_color = get_translated_text("Выключен"), self.off_color
+            else:
+                sub = (get_translated_text("блоков: ") + str(info["blocks"]) + "   " +
+                       get_translated_text("существ: ") + str(info["creatures"]))
+                if info["author"]:
+                    sub += "   " + info["author"]
+                sub_color = "#A1A1AA"
+            surf = self.font_sub.render(sub, True, sub_color)
+            max_w = rect.w - 130
+            if surf.get_width() > max_w:
+                surf = surf.subsurface((0, 0, max_w, surf.get_height()))
+            self.screen.blit(surf, (rect.x + 10, rect.y + self.row_h - surf.get_height() - 6))
+            btn.draw(self.screen)
+
+
 categories_sounds = {
     "ui",
     'player',
@@ -691,7 +891,7 @@ class SoundSettingsUI(MainSettingsUI):
             ("dd", "Игрок: {}%", volume_values_lst, self._volume_index(vs.player_volume), vol("player"), None),
             ("dd", "Существа: {}%", volume_values_lst, self._volume_index(vs.creatures_volume), vol("creatures"), None),
             ("dd", "Интерфейс: {}%", volume_values_lst, self._volume_index(vs.ui_volume), vol("ui"), None),
-            ("btn", "Назад", lambda _: self.scene.set_ui(self.scene.settings_ui)),
+            self.back_to_settings(),
         ]
 
     @staticmethod
@@ -701,62 +901,55 @@ class SoundSettingsUI(MainSettingsUI):
         return min(range(len(volume_values_lst)), key=lambda i: abs(volume_values_lst[i] - value))
 
 
-class WorldListUI(UI):
-    """Экран «Мои миры»: карточки миров (имя, дата, время в игре),
-    клик — играть, крестик — удалить с подтверждением. Сверху — «Назад»,
-    всегда доступны «Пройти обучение» и «Новый мир»."""
-    panel_bg = (39, 39, 42)
-    header_bg = (24, 24, 27)
-    card_bg = (63, 63, 70)
-    card_bg_hint = (82, 82, 91)
-    accent = "#FDE047"
-    text_color = "#FFFFFF"
+class WorldListUI(TitleUI):
+    """Экран «Мои миры» — в общем стиле меню.
+
+    Раньше он был отдельным окном-панелью со своими шрифтами и мелкими
+    кнопками: рядом с остальными меню это читалось как чужой экран. Теперь
+    наследует фон, заголовок и ГЕОМЕТРИЮ настроек — ширина строки и высота
+    кнопки те же самые, поэтому размеры кнопок совпадают везде.
+    """
+    header_title = "Мои миры"
+    font_item = pygame.font.Font(MAIN_FONT_PATH, int(20 * UI_SCALE))
+    font_sub = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', int(13 * UI_SCALE))
+    font_hint = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', int(13 * UI_SCALE))
     sub_color = "#A1A1AA"
-    font_title = pygame.font.Font(MAIN_FONT_PATH, 24)
-    font_name = pygame.font.Font(MAIN_FONT_PATH, 18)
-    font_sub = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 14)
-    font_hint = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 13)
-    font_empty = pygame.font.Font(MAIN_FONT_PATH, 18)
-    header_h = 44
-    footer_h = 26
-    card_h = 46
-    card_gap = 8
+    card_bg = (63, 63, 70)
+    row_w = int(460 * UI_SCALE)      # как у виджетов настроек
+    row_h = int(34 * UI_SCALE)
+    card_h = int(48 * UI_SCALE)      # строка мира выше: под ней подпись
+    gap = int(8 * UI_SCALE)
+    del_w = int(44 * UI_SCALE)
 
     def __init__(self, scene) -> None:
         super().__init__(scene)
-        w = min(560, SCREEN_SIZE[0] - 40)
-        h = min(600, SCREEN_SIZE[1] - 40)
-        self.rect = pg.Rect(0, 0, w, h)
-        self.rect.center = SCREEN_SIZE[0] // 2, SCREEN_SIZE[1] // 2
+        self.objects = GroupUI([])   # логотип и кнопки титула тут не нужны
 
-        # фиксированные кнопки (координаты в экранной системе — рисуем на screen)
-        bx = self.rect.x
-        by = self.rect.y
-        self.btn_back = TextButton(lambda _: self.scene.back(),
-                                   (bx + self.rect.w - 96, by + 8, 82, 28), "Назад",
-                                   font=self.font_sub)
-        act_y = self.header_h + 8
-        act_h = 30
-        half = (self.rect.w - 40 - 12) // 2
+        htxt = add_outline_to_image(textfont_btn.render(get_translated_text(self.header_title), True, WHITE),
+                                    2, "#1C1917")
+        self.header_surf = htxt
+        self.header_pos = (self.rect.centerx - htxt.get_width() // 2, 20)
+
+        x = self.rect.centerx - self.row_w // 2
+        y = self.header_pos[1] + htxt.get_height() + 14
+        half = (self.row_w - self.gap) // 2
         self.btn_tutorial = TextButton(lambda _: self.scene.create_tutorial_world(),
-                                       (bx + 20, by + act_y, half, act_h), "Пройти обучение",
-                                       font=self.font_sub)
+                                       (x, y, half, self.row_h), "Пройти обучение",
+                                       font=self.font_item)
         self.btn_new = TextButton(lambda _: self.scene.new_world(),
-                                  (bx + 20 + half + 12, by + act_y, half, act_h), "+ Новый мир",
-                                  font=self.font_sub)
+                                  (x + half + self.gap, y, half, self.row_h), "+ Новый мир",
+                                  font=self.font_item)
+        self.list_top = y + self.row_h + int(14 * UI_SCALE)
+        # «Назад» — снизу, на месте, где у настроек последний пункт списка
+        self.btn_back = TextButton(lambda _: self.scene.back(),
+                                   (x, self.rect.h - self.row_h - int(34 * UI_SCALE),
+                                    self.row_w, self.row_h), "Назад", font=self.font_item)
+        self.list_bottom = self.btn_back.rect.top - int(10 * UI_SCALE)
 
-        self.list_top = act_y + act_h + 12
         self.scroll_y = 0
         self.worlds = []
-        self.card_btns = []      # (name_btn, del_btn, meta, base_y)
+        self.card_btns = []      # (name_btn, del_btn, meta, y)
         self.confirm_delete_id = None
-
-        # полупрозрачная панель со скруглением (фон — живой параллакс игры)
-        self._panel = pg.Surface(self.rect.size).convert_alpha()
-        self._panel.fill((0, 0, 0, 0))
-        pg.draw.rect(self._panel, (39, 39, 42, 228), (0, 0, self.rect.w, self.rect.h), border_radius=14)
-        pg.draw.rect(self._panel, (24, 24, 27, 240), (0, 0, self.rect.w, self.header_h),
-                     border_top_left_radius=14, border_top_right_radius=14)
         self.reload_worlds()
 
     def reload_worlds(self):
@@ -768,21 +961,18 @@ class WorldListUI(UI):
 
     def _build(self):
         self.card_btns = []
-        x = 20
-        w = self.rect.w - 40
-        bx, by = self.rect.x, self.rect.y
+        x = self.rect.centerx - self.row_w // 2
         for i, meta in enumerate(self.worlds):
             wid = meta["id"]
-            base_y = self.list_top + i * (self.card_h + self.card_gap)
-            sy = by + base_y + self.scroll_y  # экранный y
+            y = self.list_top + i * (self.card_h + self.gap) + self.scroll_y
             name_btn = TextButton(lambda _, wid=wid: self.scene.play_world(wid),
-                                  (bx + x, sy, w - 52, self.card_h - 22), meta.get("name", wid),
-                                  font=self.font_name)
+                                  (x, y, self.row_w - self.del_w - self.gap, self.row_h),
+                                  meta.get("name", wid), font=self.font_item)
             del_text = "?" if self.confirm_delete_id == wid else "X"
             del_btn = TextButton(lambda _, wid=wid: self.delete_world(wid),
-                                 (bx + x + w - 44, sy, 44, self.card_h - 12), del_text,
-                                 font=self.font_name)
-            self.card_btns.append((name_btn, del_btn, meta, base_y))
+                                 (x + self.row_w - self.del_w, y, self.del_w, self.row_h),
+                                 del_text, font=self.font_item)
+            self.card_btns.append((name_btn, del_btn, meta, y))
 
     def delete_world(self, wid):
         from units.Map import WorldStorage
@@ -793,13 +983,9 @@ class WorldListUI(UI):
             self.confirm_delete_id = wid  # первый клик — просим подтвердить
             self._build()
 
-    @property
-    def _list_bottom(self):
-        return self.rect.h - self.footer_h - 6
-
     def scroll(self, dy):
-        content_h = len(self.worlds) * (self.card_h + self.card_gap)
-        view_h = self._list_bottom - self.list_top
+        content_h = len(self.worlds) * (self.card_h + self.gap)
+        view_h = self.list_bottom - self.list_top
         min_scroll = min(0, view_h - content_h)
         self.scroll_y = max(min_scroll, min(0, self.scroll_y + dy))
         self._build()
@@ -811,57 +997,44 @@ class WorldListUI(UI):
         self.btn_back.pg_event(event)
         self.btn_tutorial.pg_event(event)
         self.btn_new.pg_event(event)
-        for name_btn, del_btn, meta, base_y in self.card_btns:
-            # клики только по видимой области списка
-            if self.list_top <= base_y + self.scroll_y <= self._list_bottom - 10:
+        for name_btn, del_btn, meta, y in self.card_btns:
+            if self.list_top <= y <= self.list_bottom - self.row_h:
                 name_btn.pg_event(event)
                 del_btn.pg_event(event)
 
     def draw(self):
-        # живой фон игры (параллакс-острова), как в остальных меню
-        try:
-            self.scene.app.title_scene.title_ui.draw_background()
-        except Exception:
-            self.screen.fill(self.header_bg)
-        self.screen.blit(self._panel, self.rect)
-        self.screen.blit(self.font_title.render(get_translated_text("Мои миры"), True, self.accent),
-                         (self.rect.x + 18, self.rect.y + 12))
-        self.btn_back.draw(self.screen)
+        self.draw_background()
+        self.screen.blit(self.header_surf, self.header_pos)
         self.btn_tutorial.draw(self.screen)
         self.btn_new.draw(self.screen)
+        self.btn_back.draw(self.screen)
 
         if not self.worlds:
-            msg = self.font_empty.render(get_translated_text("Пока нет миров — начните с обучения"),
-                                         True, self.sub_color)
-            self.screen.blit(msg, (self.rect.centerx - msg.get_width() // 2,
-                                   self.rect.y + self.list_top + 30))
+            msg = self.font_item.render(get_translated_text("Пока нет миров — начните с обучения"),
+                                        True, self.sub_color)
+            self.screen.blit(msg, (self.rect.centerx - msg.get_width() // 2, self.list_top + 20))
         else:
-            top = self.rect.y + self.list_top
-            bottom = self.rect.y + self._list_bottom
-            for name_btn, del_btn, meta, base_y in self.card_btns:
-                cy = self.rect.y + base_y + self.scroll_y
-                if cy + self.card_h < top or cy > bottom:
+            from units.Map import WorldStorage
+            for name_btn, del_btn, meta, y in self.card_btns:
+                if y + self.card_h < self.list_top or y > self.list_bottom:
                     continue
-                # карточка-подложка
                 pg.draw.rect(self.screen, self.card_bg,
-                             (self.rect.x + 14, cy - 4, self.rect.w - 28, self.card_h), border_radius=8)
+                             (name_btn.rect.x - 6, y - 4, self.row_w + 12, self.card_h),
+                             border_radius=6)
                 name_btn.draw(self.screen)
                 del_btn.draw(self.screen)
-                from units.Map import WorldStorage
                 sub = f"{WorldStorage.format_last_played(meta.get('last_played'))}  •  " \
                       f"{WorldStorage.format_playtime(meta.get('playtime'))}"
                 if meta.get("tutorial"):
                     sub = get_translated_text("обучение") + "  •  " + sub
                 self.screen.blit(self.font_sub.render(sub, True, self.sub_color),
-                                 (self.rect.x + 24, cy + self.card_h - 24))
+                                 (name_btn.rect.x, y + self.row_h - 2))
 
         hint = self.font_hint.render(get_translated_text("Esc — назад   •   колесо — прокрутка"),
                                      True, self.sub_color)
-        self.screen.blit(hint, (self.rect.x + 18, self.rect.y + self.rect.h - self.footer_h + 4))
+        self.screen.blit(hint, (self.rect.centerx - hint.get_width() // 2,
+                                self.rect.h - int(22 * UI_SCALE)))
         pygame.display.flip()
-
-    def relayout(self):
-        self.__init__(self.scene)
 
 
 class EndUI(UI):

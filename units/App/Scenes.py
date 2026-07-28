@@ -1,15 +1,23 @@
 import webbrowser
 
 from units.App.App import *
-from units.UI.UI import WorldListUI, EndUI, PauseUI, AchievementsUI, TitleUI, MainSettingsUI, SoundSettingsUI, HelpUI
+from units.UI.UI import (WorldListUI, EndUI, PauseUI, AchievementsUI, TitleUI, MainSettingsUI,
+                         SoundSettingsUI, HelpUI, ScreenSettingsUI, GraphicsSettingsUI,
+                         WorldSettingsUI, ModsSettingsUI)
 
 
 class TitleScene(SceneMenu):
     def __init__(self, app):
         super(TitleScene, self).__init__(app, TitleUI)
         self.title_ui = self.ui
+        # Настройки разбиты на модули: в основном меню только размер меню и
+        # режим экрана, остальное — по разделам (см. MainSettingsUI).
         self.settings_ui = MainSettingsUI(self)
         self.sound_settings_ui = SoundSettingsUI(self)
+        self.screen_settings_ui = ScreenSettingsUI(self)
+        self.graphics_settings_ui = GraphicsSettingsUI(self)
+        self.world_settings_ui = WorldSettingsUI(self)
+        self.mods_settings_ui = ModsSettingsUI(self)
 
         self.developers_ui = None
 
