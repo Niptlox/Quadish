@@ -71,7 +71,7 @@ class Dynamite(PhysicalObject):
         if self.detonation_state == 0:
             self.detonation_state = 1
             center_tnt = self.rect.centerx // TSIZE, self.rect.centery // TSIZE
-            center_ttile = self.game.screen_map.static_tiles.get(center_tnt)
+            center_ttile = self.collision_tiles().get(center_tnt)
             if center_ttile == 120:  # water
                 return  # not break blocks
             for x, y in self.pattern:

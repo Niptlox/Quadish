@@ -29,7 +29,9 @@ class GameMap(SavedObject):
                                                  "_offscreen_ring", "_offscreen_ring_set",
                                                  "_offscreen_pos", "_offscreen_round_tact",
                                                  "_offscreen_steps", "_forced_cache",
-                                                 "_forced_checked_tact", "_offscreen_now"}
+                                                 "_forced_checked_tact", "_offscreen_now",
+                                                 "_offscreen_seen", "_offscreen_tiles_done",
+                                                 "_offscreen_entity_left"}
     # держим в памяти чанки в этом радиусе (в чанках) вокруг игрока
     DUMP_KEEP_RADIUS = 8
 
@@ -100,6 +102,12 @@ class GameMap(SavedObject):
         self._forced_cache = None
         self._forced_checked_tact = 0
         self._offscreen_now = False
+        # id предметов, уже обслуженных в текущем круге: предмет может уехать
+        # в чанк, который в этом же круге ещё не обслужен
+        self._offscreen_seen = set()
+        # чанки, тайлы которых уже отработали такт в текущем круге
+        self._offscreen_tiles_done = set()
+        self._offscreen_entity_left = 0
         if self.base_generation is None:
             self.new_base_generation()
 
@@ -416,6 +424,15 @@ class GameMap(SavedObject):
         # print(chunk_x, chunk_y, new_chunk_x, new_chunk_y, obj)
         chunk = self.chunk((new_chunk_x, new_chunk_y))
         if not chunk:
+            if self._offscreen_now:
+                # Тот же запрет, что и в chunk(), но этот путь шёл мимо него —
+                # прямой вызов generate_chunk. Замер поймал его не сразу:
+                # ОДИН падающий за экраном предмет, пересёкший границу чанка,
+                # давал кадр 5.7 мс (две генерации по ~10 мс на два подшага).
+                # Предмет остаётся в старом чанке и переедет, когда чанк
+                # появится: вернув False, мы просим вызывающего не менять
+                # chunk_pos, иначе объект «числился» бы там, где его нет.
+                return False
             chunk = self.generate_chunk(new_chunk_x, new_chunk_y)
         ochunk = self.chunk((chunk_x, chunk_y))
         if ochunk is not None and obj in ochunk[1]:
@@ -430,7 +447,7 @@ class GameMap(SavedObject):
             print(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
             # raise Exception(f"Ошибка передвижения динамики. Объект {obj} не находится в чанке {(chunk_x, chunk_y)}")
 
-        return
+        return False
 
     def add_particle(self, particle):
         self.particles.append(particle)
@@ -454,6 +471,19 @@ class GameMap(SavedObject):
     # обходит все загруженные чанки и их тайл-объекты, и каждый кадр это
     # дорого.
     FORCED_RECHECK = FPS // 4
+    # Сколько кадров физики разрешено сущности за один круг обслуживания.
+    # Физику нельзя ускорить, растянув elapsed_time: move() смещает rect
+    # целиком и проверяет только его вершины, так что большой шаг проходит
+    # сквозь пол. Поэтому за экраном идут честные кадровые подшаги, но их
+    # число ограничено — иначе большая ферма после долгой паузы потратила бы
+    # на догон весь кадр.
+    OFFSCREEN_ENTITY_SUBSTEPS = 4
+    # Сколько предметов разрешено продвинуть за один кадр — тот же приём, что
+    # и OFFSCREEN_CHUNK_BUDGET, и по той же причине: замер без бюджета давал
+    # худший кадр 9.57 мс на 150 лежащих предметах, то есть цена снова росла с
+    # размером фермы. Чанк, в котором предметы не поместились в бюджет,
+    # дорабатывается на следующем кадре — круг стоит на месте.
+    OFFSCREEN_ENTITY_BUDGET = 24
     # Запас вокруг экрана (в тайлах), внутри которого существо не спавнится:
     # рождение у самой кромки видно почти так же хорошо, как в центре.
     SPAWN_VIEW_MARGIN = 6
@@ -596,31 +626,144 @@ class GameMap(SavedObject):
             self._offscreen_ring_set = frozenset(target)
             ring = self._offscreen_ring = sorted(target)
             self._offscreen_pos = 0
+            self._offscreen_seen = set()
+            self._offscreen_tiles_done = set()
 
         steps = self._offscreen_steps
         elapsed = steps * (1000 / FPS)
         end = min(len(ring), self._offscreen_pos + self.OFFSCREEN_CHUNK_BUDGET)
         ticked = 0
+        self._offscreen_entity_left = self.OFFSCREEN_ENTITY_BUDGET
         self._offscreen_now = True
         try:
             for pos in range(self._offscreen_pos, end):
                 ticked += self._tick_chunk_offscreen(ring[pos], tact, steps, elapsed)
+                if self._offscreen_entity_left <= 0:
+                    # Предметов в чанке больше, чем помещается в кадр:
+                    # останавливаем круг на нём же. Повторно двигать уже
+                    # обслуженные предметы и тайлы не даст память круга
+                    # (_offscreen_seen / _offscreen_tiles_done).
+                    end = pos
+                    break
         finally:
             self._offscreen_now = False
         self._offscreen_pos = end
         return ticked
 
+    def tiles_around(self, rect, margin=1):
+        """Локальная карта коллизий вокруг rect — {(tx, ty): тип}.
+
+        Тот же формат, что строит ScreenMap, но на десяток тайлов вместо
+        экрана. Нужна потому, что физика сущности смотрит в
+        screen_map.static_tiles, а там лежит только окрестность экрана: за
+        экраном предмет падал бы сквозь пол. Строить ради одного предмета
+        полную карту экрана — это ~2000 тайлов; здесь их 12.
+
+        Воздух (0) не кладём — так же, как ScreenMap: collision_test всё
+        равно трактует отсутствие ключа как «пусто».
+        """
+        x0, x1 = rect.left // TSIZE - margin, rect.right // TSIZE + margin
+        y0, y1 = rect.top // TSIZE - margin, rect.bottom // TSIZE + margin
+        tiles = {}
+        for ty in range(y0, y1 + 1):
+            for tx in range(x0, x1 + 1):
+                # create_chunk=False: обслуживание за экраном не создаёт мир
+                ttile = self.get_static_tile_type(tx, ty, 0, create_chunk=False)
+                if ttile:
+                    tiles[(tx, ty)] = ttile
+        return tiles
+
+    def _tick_entities_offscreen(self, chunk, tact, steps):
+        """Продвинуть физику лежащих предметов в чанке за экраном.
+
+        Зачем вообще: конвейер за экраном толкает предмет вбок, но упасть в
+        сундук предмет не мог — физика сущностей идёт только по видимым
+        чанкам, и за экраном предмет висел в воздухе. Хуже: конвейер меняет
+        rect напрямую, а перерегистрацию в новый чанк делает как раз физика,
+        так что предмет, уехавший за границу чанка, оставался записан не туда.
+
+        Только предметы. Существа за экраном по-прежнему стоят: их шаг — это
+        зрение, память и поиск пути, то есть совсем другая цена, и оживлять
+        их вне кадра означало бы, что моб придёт к игроку из ниоткуда.
+        """
+        objs = chunk[1]
+        if not objs:
+            return 0
+        substeps = min(steps, self.OFFSCREEN_ENTITY_SUBSTEPS)
+        frame = 1000 / FPS
+        seen = self._offscreen_seen
+        moved = 0
+        # Слияние одинаковых предметов сверяет предмет со ВСЕМ списком чанка.
+        # На 150 лежащих предметах это 150 проверок на каждого — квадрат, и
+        # замер это подтвердил: худший кадр 9.41 мс, из них 9.39 на слияние.
+        # Раскладываем предметы по тайловым корзинам один раз за вызов и даём
+        # каждому только соседей. Корзины за круг слегка устаревают — предмет
+        # успевает сдвинуться; это стоит пропущенного слияния, которое
+        # случится следующим кругом, а не потери предмета.
+        grid = {}
+        for o in objs:
+            if o.class_obj & OBJ_ITEM and o.alive:
+                grid.setdefault((o.rect.centerx // TSIZE, o.rect.centery // TSIZE), []).append(o)
+        for obj in list(objs):
+            if self._offscreen_entity_left <= 0:
+                break
+            if not (obj.class_obj & OBJ_ITEM) or not obj.alive:
+                continue
+            # Предмет мог переехать в ещё не обслуженный чанк того же круга:
+            # без этой отметки он получил бы двойную скорость, и выработка
+            # снова зависела бы от расписания, а не от игры.
+            if id(obj) in seen:
+                continue
+            seen.add(id(obj))
+            self._offscreen_entity_left -= 1
+            region = None
+            near = None
+            box = None
+            try:
+                for _ in range(substeps):
+                    r = obj.rect
+                    now = (r.left // TSIZE, r.top // TSIZE, r.right // TSIZE, r.bottom // TSIZE)
+                    if now != box:
+                        # Пересобираем окрестность только когда предмет
+                        # действительно перешёл на другие тайлы.
+                        box = now
+                        region = self.tiles_around(r)
+                        gx, gy = r.centerx // TSIZE, r.centery // TSIZE
+                        near = [o for dy in (-1, 0, 1) for dx in (-1, 0, 1)
+                                for o in grid.get((gx + dx, gy + dy), ())]
+                    obj._collision_tiles = region
+                    obj._collision_dynamic = near
+                    obj.update(tact, frame)
+                    # По значению update судить нельзя: Items.update возвращает
+                    # None при успехе. Признак жизни — alive, как и в
+                    # ScreenMap.update_dynamic.
+                    if not obj.alive:
+                        break
+            finally:
+                obj.__dict__.pop("_collision_tiles", None)
+                obj.__dict__.pop("_collision_dynamic", None)
+            if not obj.alive:
+                self.del_dinamic_obj(*self.to_chunk_xy(*self.to_tile_xy(*obj.rect.topleft)), obj)
+            moved += 1
+        return moved
+
     def _tick_chunk_offscreen(self, cxy, tact, steps, elapsed):
-        """Обслужить живые тайлы одного чанка."""
+        """Обслужить живые тайлы и лежащие предметы одного чанка."""
         chunk = self.game_map.get(cxy)
         if chunk is None:
             return 0
+        ticked = self._tick_entities_offscreen(chunk, tact, steps)
+        if cxy in self._offscreen_tiles_done:
+            # Чанк доигрывается на следующем кадре из-за бюджета на предметы —
+            # тайлы в нём свой такт уже получили, второй был бы двойной
+            # выработкой.
+            return ticked
+        self._offscreen_tiles_done.add(cxy)
         active = self.chunk_active_tiles(cxy)
         if not active:
-            return 0
+            return ticked
         static = chunk[0]
         base_x, base_y = cxy[0] * CHUNK_SIZE, cxy[1] * CHUNK_SIZE
-        ticked = 0
         # список, а не сам set: grow_plant_tile может заменить тайл и через
         # set_static_tile изменить индекс во время обхода
         for index in list(active):

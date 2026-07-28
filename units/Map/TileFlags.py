@@ -95,6 +95,20 @@ def _build_tile_flags():
 TILE_FLAGS = _build_tile_flags()
 
 
+# Те же флаги обычными int. IntFlag читается лучше, но его `&` идёт через
+# enum.__call__/__new__ и стоит дорого: в профиле обслуживания за экраном
+# enum.__and__ оказался САМОЙ дорогой строкой — 28924 вызова, больше, чем сама
+# физика. В горячих циклах (collision_test — а он работает и на экране, на
+# каждой сущности каждый кадр) берём биты отсюда, а TileFlag остаётся для
+# читаемого кода вне горячего пути.
+#
+# Считается после TILE_FLAGS и потому уже включает блоки модов: они
+# регистрируются в конце units/Tiles.py, то есть до импорта этого модуля.
+TILE_FLAG_BITS = {ttile: int(flags) for ttile, flags in TILE_FLAGS.items()}
+BIT_PHYSBODY = int(TileFlag.PHYSBODY)
+BIT_SEMIPHYSBODY = int(TileFlag.SEMIPHYSBODY)
+
+
 def get_flags(ttile) -> TileFlag:
     return TILE_FLAGS.get(ttile, TileFlag.NONE)
 

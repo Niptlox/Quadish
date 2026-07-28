@@ -37,7 +37,7 @@ class Items(PhysicalObject):
         if not super().update(tact, elapsed_time):
             return False
         if self.physical_vector.xy != (0, 0):
-            _, dynamic = collision_test(self.game_map, self.rect, {}, self.game.screen_map.dynamic_tiles)
+            _, dynamic = collision_test(self.game_map, self.rect, {}, self.collision_dynamic())
             for obj in dynamic:
                 # проверка объекта и если он такой же то сложение в один
                 self.add(obj)

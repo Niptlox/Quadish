@@ -3998,6 +3998,10 @@ def test_offscreen_tick_never_generates_chunks():
     for d in (30, 31, 32, 33):
         gm.set_static_tile(px + d, y + 1, 1)
         gm.set_static_tile(px + d, y, 102)
+    # и падающие предметы: их переезд в соседний чанк шёл мимо запрета, потому
+    # что move_dinamic_obj звал generate_chunk напрямую
+    for d in (30, 31, 32, 33):
+        gm.add_item_of_index(3, 1, px + d, y - 4)
     gens = []
     real = gm.generate_chunk
     def counting(x, cy, *a, **k):
@@ -4010,3 +4014,239 @@ def test_offscreen_tick_never_generates_chunks():
     finally:
         del gm.generate_chunk  # см. комментарий выше: иначе не пикнется
     assert not gens, f"тик за экраном сгенерировал чанки: {gens[:5]}"
+
+
+def _item_at(gm, tx, ty, index=3, count=1):
+    """Положить предмет в мир и вернуть его объект."""
+    gm.add_item_of_index(index, count, tx, ty)
+    return gm.chunk(gm.to_chunk_xy(tx, ty))[1][-1]
+
+
+def test_offscreen_item_falls():
+    """Предмет за экраном должен падать.
+
+    Физика сущностей шла только по видимым чанкам, поэтому за экраном
+    предмет висел в воздухе: конвейер его толкал, а в воронку он не попадал
+    никогда — ферма молча стояла, хотя блоки исправно тикали.
+    """
+    from units.common import FPS
+    game, gm, hopper, chest, loader, (px, y) = _offscreen_farm(660)
+    item = _item_at(gm, px + 5, y - 5)
+    start = item.rect.y
+    _spin_offscreen(game, gm, loader, FPS * 6)
+    assert item.rect.y > start, "предмет за экраном не падает"
+
+
+def test_offscreen_item_lands_on_the_floor():
+    """И не проваливается сквозь пол: за экраном коллизии считаются по той же
+    физике, просто окружение собирается локально (GameMap.tiles_around)."""
+    from units.common import FPS, TSIZE
+    game, gm, hopper, chest, loader, (px, y) = _offscreen_farm(661)
+    item = _item_at(gm, px + 5, y - 5)
+    _spin_offscreen(game, gm, loader, FPS * 10)
+    assert item.alive, "предмет потерялся"
+    assert item.rect.bottom <= (y + 1) * TSIZE, \
+        f"предмет провалился сквозь пол: bottom={item.rect.bottom}, пол={(y + 1) * TSIZE}"
+    assert item.rect.bottom >= y * TSIZE, "предмет не долетел до пола"
+
+
+def test_offscreen_item_reaches_the_hopper():
+    """Смысл всей затеи: предмет, упавший за экраном, доходит до логистики."""
+    from units.common import FPS
+    game, gm, hopper, chest, loader, (px, y) = _offscreen_farm(662)
+    _item_at(gm, px, y - 5, index=3, count=4)
+    _spin_offscreen(game, gm, loader, FPS * 8)
+    got = sum(c.count for c in chest.inventory if c and c.index == 3)
+    assert got > 0, "упавший за экраном предмет не дошёл до сундука"
+
+
+def test_offscreen_item_reregisters_when_it_crosses_chunk_border():
+    """Конвейер меняет rect напрямую, а перерегистрацию в новый чанк делает
+    физика. Пока физика за экраном не шла, уехавший предмет оставался записан
+    в старом чанке: воронка нового его не видела, и он выпадал из логистики
+    насовсем."""
+    from units.common import FPS, TSIZE, CHUNK_SIZE
+    game, gm, hopper, chest, loader, (px, y) = _offscreen_farm(663)
+    border = (px // CHUNK_SIZE + 1) * CHUNK_SIZE      # первый тайл нового чанка
+    old_cxy = gm.to_chunk_xy(border - 1, y)
+    new_cxy = gm.to_chunk_xy(border, y)
+    assert old_cxy != new_cxy
+    # пол под предметом на обеих сторонах границы, чтобы он не улетел вниз
+    for tx in (border - 1, border):
+        gm.set_static_tile(tx, y + 1, 3)
+        gm.set_static_tile(tx, y, 0)
+    item = _item_at(gm, border - 1, y)
+    assert item in gm.chunk(old_cxy)[1]
+    item.rect.x = border * TSIZE + 2                  # так его толкает конвейер
+    _spin_offscreen(game, gm, loader, FPS)
+    assert item in gm.chunk(new_cxy)[1], "предмет не перерегистрировался в новый чанк"
+    assert item not in gm.chunk(old_cxy)[1], "предмет остался записан в старом чанке"
+
+
+def test_offscreen_creatures_stay_still():
+    """Осознанная граница охвата: за экраном двигаются предметы, но не
+    существа. Шаг существа — это зрение, память и поиск пути, то есть совсем
+    другая цена, и оживлять мобов вне кадра значило бы, что моб приходит к
+    игроку из ниоткуда."""
+    from units.common import FPS
+    from units.Objects.Creatures import Cow
+    game, gm, hopper, chest, loader, (px, y) = _offscreen_farm(664)
+    cow = Cow(game, ((px + 5) * 32, (y - 3) * 32))
+    gm.add_dinamic_obj(*gm.to_chunk_xy(px + 5, y - 3), cow)
+    pos = cow.rect.topleft
+    _spin_offscreen(game, gm, loader, FPS * 4)
+    assert cow.rect.topleft == pos, f"существо за экраном сдвинулось: {pos} -> {cow.rect.topleft}"
+
+
+def test_offscreen_entity_substeps_are_capped():
+    """Догон после долгой паузы — не телепорт. Растянуть elapsed_time нельзя:
+    move() смещает rect целиком и проверяет только его вершины, так что
+    большой шаг проходит сквозь пол. Поэтому подшаги честные, кадровые, но их
+    число за круг ограничено."""
+    from units.common import FPS
+    game, gm, hopper, chest, loader, (px, y) = _offscreen_farm(665)
+    item = _item_at(gm, px + 5, y - 5)
+    chunk = gm.chunk(gm.to_chunk_xy(px + 5, y - 5))
+    calls = []
+    real = item.update
+
+    def counting(tact, elapsed_time):
+        calls.append(elapsed_time)
+        return real(tact, elapsed_time)
+
+    item.update = counting
+    # бюджет кадра обычно ставит tick_offscreen; здесь дёргаем чанк напрямую
+    gm._offscreen_entity_left = gm.OFFSCREEN_ENTITY_BUDGET
+    try:
+        gm._tick_entities_offscreen(chunk, game.tact, 1000)
+    finally:
+        del item.update
+    assert len(calls) == gm.OFFSCREEN_ENTITY_SUBSTEPS, \
+        f"подшагов {len(calls)} при пределе {gm.OFFSCREEN_ENTITY_SUBSTEPS}"
+    assert all(abs(e - 1000 / FPS) < 0.01 for e in calls), \
+        f"подшаг должен быть кадровым, а не растянутым: {calls}"
+
+
+def test_offscreen_move_between_chunks_does_not_generate():
+    """Переезд предмета в другой чанк шёл мимо запрета на генерацию: он звал
+    generate_chunk напрямую. Замер: ОДИН падающий за экраном предмет,
+    пересёкший границу чанка, давал кадр 5.7 мс на двух генерациях."""
+    game, gm, hopper, chest, loader, (px, y) = _offscreen_farm(669)
+    old_cxy = gm.to_chunk_xy(px + 5, y - 5)
+    far = (old_cxy[0] + 200, 0)                 # заведомо не загруженный чанк
+    assert gm.game_map.get(far) is None
+    item = _item_at(gm, px + 5, y - 5)
+    before = len(gm.game_map)
+    gm._offscreen_now = True
+    try:
+        moved = gm.move_dinamic_obj(*item.chunk_pos, far[0], far[1], item)
+    finally:
+        gm._offscreen_now = False
+    assert moved is False, "переезд без чанка не должен считаться удавшимся"
+    assert len(gm.game_map) == before, "переезд предмета сгенерировал чанк"
+    assert item in gm.chunk(old_cxy)[1], \
+        "не переехавший предмет обязан остаться в старом чанке, иначе он потерян"
+
+
+def test_failed_chunk_move_keeps_chunk_pos():
+    """Если переезд не состоялся, объект НЕ должен считать себя в новом чанке:
+    иначе он числится там, где его нет, и переезд не повторится никогда —
+    предмет выпадает из логистики молча."""
+    game, gm, hopper, chest, loader, (px, y) = _offscreen_farm(670)
+    item = _item_at(gm, px + 5, y - 5)
+    was = item.chunk_pos
+    real = gm.move_dinamic_obj
+    gm.move_dinamic_obj = lambda *a: False      # как будто чанка нет
+    try:
+        item.rect.y += 32 * 40                  # уехал далеко вниз
+        item.update_physics(16)
+    finally:
+        del gm.move_dinamic_obj
+    assert item.chunk_pos == was, \
+        f"chunk_pos сдвинулся при неудавшемся переезде: {was} -> {item.chunk_pos}"
+    assert real is not None
+    # а когда переезд удаётся — chunk_pos обязан обновиться
+    item.update_physics(16)
+    assert item.chunk_pos != was, "после удачного переезда chunk_pos должен обновиться"
+
+
+def test_offscreen_entity_budget_bounds_the_frame():
+    """Куча лежащих предметов не должна стоить кадра. Без бюджета замер давал
+    худший кадр 9.57 мс на 150 предметах — цена снова росла с размером фермы,
+    ровно тот дефект, который бюджет чанков уже убрал у тайлов."""
+    from units.common import FPS
+    game, gm, hopper, chest, loader, (px, y) = _offscreen_farm(667)
+    for i in range(120):
+        gm.add_item_of_index(3, 1, px - 6 + (i % 14), y - 3 - (i // 14) % 4)
+    served = []
+    real = gm._tick_entities_offscreen
+
+    def counting(chunk, tact, steps):
+        n = real(chunk, tact, steps)
+        served[-1] += n
+        return n
+
+    gm._tick_entities_offscreen = counting
+    try:
+        for _ in range(60):
+            served.append(0)
+            loader.activated_tact = game.tact
+            loader.update(16)
+            gm.tick_offscreen(game.tact, game.screen_map.visible_chunks)
+            game.tact += 1
+    finally:
+        del gm._tick_entities_offscreen   # иначе замыкание на game не пикнется
+    assert max(served) <= gm.OFFSCREEN_ENTITY_BUDGET, \
+        f"за кадр продвинуто {max(served)} предметов при бюджете {gm.OFFSCREEN_ENTITY_BUDGET}"
+    assert sum(served) > 0, "предметы должны обслуживаться"
+
+
+def test_offscreen_budget_does_not_double_tick_tiles():
+    """Чанк, доигрываемый на следующем кадре из-за бюджета на предметы, не
+    должен отработать свои тайлы дважды: это была бы двойная выработка."""
+    from units.common import FPS
+    game, gm, hopper, chest, loader, (px, y) = _offscreen_farm(668)
+    for i in range(60):                         # заведомо больше бюджета
+        gm.add_item_of_index(3, 1, px - 6 + (i % 14), y - 3 - (i // 14) % 4)
+    ticks = {}
+    real = gm._tick_chunk_offscreen
+    seen_rounds = []
+
+    def counting(cxy, tact, steps, elapsed):
+        before = cxy in gm._offscreen_tiles_done
+        res = real(cxy, tact, steps, elapsed)
+        if not before:
+            ticks[cxy] = ticks.get(cxy, 0) + 1
+        seen_rounds.append(cxy)
+        return res
+
+    gm._tick_chunk_offscreen = counting
+    try:
+        # ровно один круг: пока _offscreen_pos не обнулился заново
+        for _ in range(FPS):
+            loader.activated_tact = game.tact
+            loader.update(16)
+            gm.tick_offscreen(game.tact, game.screen_map.visible_chunks)
+            game.tact += 1
+            if gm._offscreen_pos >= len(gm._offscreen_ring):
+                break
+    finally:
+        del gm._tick_chunk_offscreen
+    assert seen_rounds, "круг вообще не пошёл"
+    assert max(ticks.values()) == 1, \
+        f"тайлы чанка отработали такт дважды за круг: {ticks}"
+
+
+def test_tiles_around_is_local_and_does_not_generate():
+    """Локальная карта коллизий должна быть маленькой (десяток тайлов вместо
+    экранных двух тысяч) и не создавать мир под собой."""
+    import pygame
+    game, gm, hopper, chest, loader, (px, y) = _offscreen_farm(666)
+    item = _item_at(gm, px + 5, y - 5)
+    tiles = gm.tiles_around(item.rect)
+    assert len(tiles) <= 30, f"окрестность на {len(tiles)} тайлов — это уже не локально"
+    # далеко в неизведанном: чанка нет и появиться он не должен
+    far = pygame.Rect(9000 * 32, 8 * 32, 8, 8)
+    before = len(gm.game_map)
+    assert gm.tiles_around(far) == {}, "в несозданном чанке взялись тайлы"
+    assert len(gm.game_map) == before, "tiles_around создала чанк"

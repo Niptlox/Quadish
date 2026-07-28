@@ -1,4 +1,4 @@
-from units.Map.TileFlags import TILE_FLAGS, TileFlag
+from units.Map.TileFlags import TILE_FLAG_BITS, BIT_PHYSBODY, BIT_SEMIPHYSBODY
 from units.Tiles import DAMAGE_TILES
 from units.common import *
 
@@ -42,10 +42,12 @@ def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic
             # if not(0 <= v_x_map < game_map.map_size[0] and 0 <= v_y_map < game_map.map_size[1]):
             #     hit_static_lst.append((v_xy_map, -1))
             ttile = static_tiles.get(v_xy_map)
-            flags = TILE_FLAGS.get(ttile, TileFlag.NONE)
-            if flags & TileFlag.PHYSBODY or collide_all_tiles:
+            # обычные int, а не IntFlag: `&` у enum идёт через __call__/__new__
+            # и в профиле был дороже самой физики (см. TileFlags.TILE_FLAG_BITS)
+            flags = TILE_FLAG_BITS.get(ttile, 0)
+            if flags & BIT_PHYSBODY or collide_all_tiles:
                 hit_static_lst.append((v_xy_map, ttile))
-            elif semiphysbody and flags & TileFlag.SEMIPHYSBODY:
+            elif semiphysbody and flags & BIT_SEMIPHYSBODY:
                 semiphysbody_lst.append((v_xy_map, ttile))
     if semiphysbody:
         return hit_static_lst, hit_dynamic_lst, semiphysbody_lst
@@ -53,7 +55,8 @@ def collision_test(game_map, rect: pygame.Rect, static_tiles: dict = {}, dynamic
 
 
 class PhysicalObject(SavedObject):
-    not_save_vars = SavedObject.not_save_vars | {"game_map", "game", "sprite", "full_sprite", "inv_sprite"}
+    not_save_vars = SavedObject.not_save_vars | {"game_map", "game", "sprite", "full_sprite", "inv_sprite",
+                                                 "_collision_tiles", "_collision_dynamic"}
     class_obj = OBJ_NONE
     sprite = None
     max_lives = -1
@@ -63,6 +66,24 @@ class PhysicalObject(SavedObject):
     # может гореть в лаве — иначе адские мобы вымирали бы сами, в собственном
     # биоме, ещё до встречи с игроком.
     immune_tiles = frozenset()
+    # Откуда брать окружение для коллизий. None — из ScreenMap: кадр всё равно
+    # строит эту карту для отрисовки, и брать её бесплатно. За экраном
+    # ScreenMap про эти тайлы не знает, поэтому GameMap.tick_offscreen на время
+    # вызова подставляет здесь маленькую локальную выборку вокруг сущности.
+    # Классовые атрибуты, а не поля: пока их никто не подставил, в __dict__ их
+    # нет и в сохранение они не попадают.
+    _collision_tiles = None
+    _collision_dynamic = None
+
+    def collision_tiles(self):
+        """Словарь {(tx, ty): тип} для проверки столкновений."""
+        tiles = self._collision_tiles
+        return self.game.screen_map.static_tiles if tiles is None else tiles
+
+    def collision_dynamic(self):
+        """Список сущностей, с которыми имеет смысл сверяться."""
+        dyn = self._collision_dynamic
+        return self.game.screen_map.dynamic_tiles if dyn is None else dyn
 
     def __init__(self, game, x=0, y=0, width=0, height=0, use_physics=False, sprite=None,
                  use_collisions=False, use_gravity=False) -> None:
@@ -175,7 +196,7 @@ class PhysicalObject(SavedObject):
                 self.physical_vector.y = self.max_fall_speed
         movement = (self.physical_vector + self.movement_vector).xy
         if self.use_collisions:
-            collisions = self.move(movement, self.game.screen_map.static_tiles)
+            collisions = self.move(movement, self.collision_tiles())
             self.collisions = collisions
             if collisions['bottom']:
                 self.vertical_momentum = 0
@@ -190,9 +211,13 @@ class PhysicalObject(SavedObject):
             new_cx = self.rect.x // (TSIZE * CSIZE)
 
             if self.chunk_pos[1] != new_cy or new_cx != self.chunk_pos[0]:
-                if not (self.class_obj & OBJ_PARTICLE):
-                    self.game_map.move_dinamic_obj(*self.chunk_pos, new_cx, new_cy, self)
-                self.chunk_pos = (new_cx, new_cy)
+                if self.class_obj & OBJ_PARTICLE:
+                    self.chunk_pos = (new_cx, new_cy)   # частицы не живут в чанках
+                elif self.game_map.move_dinamic_obj(*self.chunk_pos, new_cx, new_cy, self):
+                    self.chunk_pos = (new_cx, new_cy)
+                # Иначе переезд не состоялся (за экраном мир не создаётся):
+                # chunk_pos НЕ меняем, иначе объект числился бы в чанке, где
+                # его нет, и переезд не был бы повторён никогда.
         else:
             self.not_collisions_move(movement)
         self.movement_vector.xy = (0, 0)
