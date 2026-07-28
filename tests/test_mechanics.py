@@ -3461,3 +3461,228 @@ def test_worlds_menu_relayouts_with_the_window():
         ui.draw()
     finally:
         common.apply_resize(old)
+
+
+# ===================== ИИ существ =====================
+#
+# Раньше поведение было одно на всех: шаг в случайную сторону каждые 30-205
+# тактов, а если игрок попал в коробку 19x19 тайлов — идти на него напрямую и
+# бесконечно. Корова гналась за игроком так же, как волк, никто не терял его
+# из виду, и все видели сквозь камень.
+
+def _flat_arena(game, x=70, y=8, w=40):
+    """Ровная площадка с чистым воздухом — чтобы поведение не путалось с
+    рельефом."""
+    gm = game.game_map
+    for tx in range(x - 4, x + w):
+        gm.set_static_tile(tx, y + 1, 3)
+        for dy in range(0, 7):
+            gm.set_static_tile(tx, y - dy, 0)
+    return x, y
+
+
+def _place(game, cls, tx, ty):
+    from units.common import TSIZE
+    obj = cls(game, (tx * TSIZE, ty * TSIZE))
+    game.game_map.add_dinamic_obj(*game.game_map.to_chunk_xy(tx, ty), obj)
+    return obj
+
+
+def test_peaceful_creature_runs_away_instead_of_charging():
+    """Корова не должна идти на игрока: раньше она использовала ту же логику
+    погони, что волк."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Cow, ST_FLEE
+    game = fresh_world(400)
+    x, y = _flat_arena(game)
+    cow = _place(game, Cow, x + 3, y)        # внутри радиуса испуга
+    game.player.tp_to((x * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 30)
+
+    assert cow.temperament != "aggressive"
+    assert cow.state == ST_FLEE, f"корова должна убегать, а не {cow.state}"
+    assert cow.move_direction == 1, "убегать — значит в сторону ОТ игрока"
+
+
+def test_aggressive_creature_chases_and_then_gives_up():
+    """У охоты должен быть конец: волк не терял игрока никогда."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Wolf, ST_CHASE
+    game = fresh_world(401)
+    x, y = _flat_arena(game, w=60)
+    wolf = _place(game, Wolf, x + 8, y)
+    game.player.tp_to((x * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 30)
+    assert wolf.state == ST_CHASE, f"волк должен охотиться, а не {wolf.state}"
+    assert wolf.move_direction == -1, "в сторону игрока"
+
+    # игрок ушёл далеко — память должна истечь
+    game.player.tp_to(((x + 400) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    for _ in range(wolf.memory_tacts + 30):
+        game.tact += 1
+        wolf.update(game.tact, 16)
+    assert wolf.state != ST_CHASE, "погоня обязана заканчиваться"
+
+
+def test_creatures_do_not_see_through_stone():
+    """Стая сбегалась к игроку, который копал в закрытой шахте через двадцать
+    блоков породы."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Wolf
+    game = fresh_world(402)
+    x, y = _flat_arena(game, w=30)
+    wolf = _place(game, Wolf, x + 6, y)
+    game.player.tp_to((x * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    game.elapsed_time = 16
+    game.update()
+    assert wolf.sees_player(), "на открытом месте игрок виден"
+
+    for dy in range(-3, 2):                     # стена между ними
+        for dx in range(0, 3):
+            game.game_map.set_static_tile(x + 3 + dx, y + dy, 3)
+    assert not wolf.sees_player(), "сквозь породу видеть нельзя"
+
+
+def test_hurt_peaceful_creature_flees_and_calms_down_later():
+    """Задели — убегает; но не до конца жизни мира."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Cow, ST_FLEE
+    game = fresh_world(403)
+    x, y = _flat_arena(game)
+    cow = _place(game, Cow, x + 20, y)
+    game.player.tp_to((x * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    game.elapsed_time = 16
+    game.update()
+    assert not cow.provoked
+
+    cow.damage(1)
+    assert cow.provoked and cow.alert_tacts > 0
+    cow.think(game.tact)
+    assert cow.state == ST_FLEE
+
+    game.player.tp_to(((x + 500) * TSIZE, y * TSIZE))
+    for _ in range(cow.memory_tacts + 10):
+        game.tact += 1
+        cow.think(game.tact)
+    assert not cow.provoked, "испуг должен проходить"
+
+
+def test_territorial_creature_attacks_only_when_touched():
+    """Кабан не охотится, но задень его — ответит. Раньше он гонялся за
+    игроком с полэкрана, как волк."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Boar, ST_CHASE
+    game = fresh_world(404)
+    x, y = _flat_arena(game)
+    boar = _place(game, Boar, x + 7, y)
+    game.player.tp_to((x * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 20)
+    assert boar.state != ST_CHASE, "издалека кабан не нападает"
+
+    boar.damage(1)
+    boar.think(game.tact)
+    assert boar.state == ST_CHASE, "после удара — нападает"
+
+
+def test_creatures_stand_still_sometimes():
+    """Без паузы звери бесконечно семенят из стороны в сторону — это первое,
+    что читается как «болванчик»."""
+    from units.Objects.Creatures import Cow, ST_IDLE
+    game = fresh_world(405)
+    x, y = _flat_arena(game)
+    cow = _place(game, Cow, x + 8, y)
+    game.player.tp_to((-9000 * 32, 0))       # игрока рядом нет
+    states = set()
+    for _ in range(3000):
+        game.tact += 1
+        cow.think(game.tact)
+        states.add(cow.state)
+    assert ST_IDLE in states, f"существо должно иногда стоять, состояния: {states}"
+
+
+def test_creature_jumps_over_a_gap_instead_of_turning_back():
+    """У провала существо просто разворачивалось и не могло сойти с островка,
+    на котором появилось."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Cow
+    game = fresh_world(406)
+    gm = game.game_map
+    x, y = 70, 8
+    for tx in range(x - 4, x + 20):
+        for dy in range(0, 7):
+            gm.set_static_tile(tx, y - dy, 0)
+        gm.set_static_tile(tx, y + 1, 3)
+    gm.set_static_tile(x + 4, y + 1, 0)          # провал в один тайл
+    cow = _place(game, Cow, x + 3, y)
+    # Ставим корову СТОЯЩЕЙ вплотную к провалу: пока она падает, её низ не
+    # привязан к границе тайла, и вопрос «прыгать ли» не имеет смысла.
+    # На 2 пикселя ВНУТРЬ пола: коллизия «снизу» возникает только когда
+    # существо реально въехало в блок, а стоя ровно на границе оно за кадр
+    # опускается меньше чем на пиксель и физика не считает это опорой.
+    cow.rect.bottom = (y + 1) * TSIZE + 2
+    # Игрока держим далеко и курс фиксируем: иначе корова то убегает, то
+    # разворачивается по своему таймеру, и тест проверяет случайность.
+    game.player.tp_to((x * TSIZE, (y - 40) * TSIZE))
+    game.screen_map.teleport_to_player()
+    game.elapsed_time = 16
+
+    def hold_course():
+        from units.Objects.Creatures import ST_WANDER
+        cow.state = ST_WANDER
+        cow.move_tact = 10 ** 6      # не перевыбирать направление
+        cow.move_direction = 1
+        cow.alert_tacts = 0
+
+    hold_course()
+    game.update()
+    assert cow.collisions.get("bottom"), "корова должна стоять на полу"
+    hold_course()
+    assert cow.rect.centerx // TSIZE == x + 3, "корова стоит перед провалом"
+    assert cow.can_jump_the_gap(), "за провалом есть твердь — надо прыгать"
+    cow.check_abyss()
+    assert cow.move_direction == 1, "разворачиваться не должен"
+
+    # и провал действительно преодолевается
+    start = cow.rect.centerx // TSIZE
+    for _ in range(400):
+        hold_course()
+        game.update()
+    assert cow.rect.centerx // TSIZE > x + 4, \
+        f"корова должна перебраться за провал (x={x + 4}), была на {start}, стала на {cow.rect.centerx // TSIZE}"
+
+
+def test_creature_does_not_jump_on_flat_ground():
+    """Прыжок через провал не должен срабатывать на ровном месте: с проверкой
+    «есть ли пол где-то впереди» существо прыгало непрерывно."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Cow
+    game = fresh_world(407)
+    x, y = _flat_arena(game, w=30)
+    cow = _place(game, Cow, x + 10, y)
+    game.player.tp_to((-9000 * TSIZE, 0))       # игрока рядом нет
+    game.screen_map.teleport_to_player()
+    game.elapsed_time = 16
+    for _ in range(60):
+        game.update()
+        if cow.collisions.get("bottom"):
+            break
+    cow.move_direction = 1
+    assert not cow.can_jump_the_gap(), "на ровном полу прыгать незачем"
+
+
+def test_no_creature_keeps_its_own_copy_of_chase_logic():
+    """Почти одинаковый update() был скопирован у Cow, PassiveWanderer, Wolf
+    и SlimeBigBoss — четыре копии расходятся при первой же правке."""
+    get_app()
+    import inspect
+    from units.Objects.Creatures import Cow, PassiveWanderer, Wolf, SlimeBigBoss
+    for cls in (Cow, PassiveWanderer, Wolf, SlimeBigBoss):
+        assert "update" not in cls.__dict__, f"{cls.__name__} снова завёл свой update"
+    src = inspect.getsource(Wolf)
+    assert "angry_rect" not in src, "старая коробка агра должна была уйти"

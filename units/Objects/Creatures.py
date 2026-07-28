@@ -14,6 +14,9 @@ from units.Objects.CreatureSprites import (
     create_camel_sprite, create_penguin_sprite, create_boar_sprite, create_crab_sprite,
     create_bat_sprite, create_golem_sprite, create_space_drifter_sprite,
     create_dust_swarm_sprite, create_void_sentinel_sprite)
+# PHYSBODY_TILES нужен «мозгу»: по нему считаются прямая видимость и
+# наличие тверди за провалом. units.common его не реэкспортирует.
+from units.Tiles import PHYSBODY_TILES
 from units.common import *
 
 
@@ -30,7 +33,7 @@ def checking_abyss(pos, game_map, height_of_abyss=3, convert_to_tile_pos=False):
 
 
 class Creature(PhysicalObject):
-    not_save_vars = PhysicalObject.not_save_vars | {"lives_surface", "angry_player"}
+    not_save_vars = PhysicalObject.not_save_vars | {"lives_surface"}
     bio_kingdom = KINGDOM_CREATURAE
     bio_species = "creature"
     bio_subspecies = "ordinary creature"
@@ -54,6 +57,11 @@ class Creature(PhysicalObject):
         self.death_animation = get_death_animation(self.rect.size)
 
     def update(self, tact, elapsed_time):
+        # Возвращаем True как PhysicalObject.update: наследники (см.
+        # MovingCreature.update) проверяют результат, чтобы не тратить работу
+        # на мёртвое существо, а раньше здесь не было return вообще.
+        if not self.alive:
+            return False
         self.update_physics(elapsed_time)
         self.death_animation.update(self.game.elapsed_time)
         if self.enemy:
@@ -61,6 +69,7 @@ class Creature(PhysicalObject):
                 if time() > self.punch_reload_time + self.last_punch_time:
                     self.last_punch_time = time()
                     self.game.player.damage(self.punch_damage)
+        return True
 
     def jump(self, y):
         self.physical_vector.y -= y
@@ -95,14 +104,200 @@ class Creature(PhysicalObject):
         return super(Creature, self).damage(lives)
 
 
+# Характеры. Раньше поведение было одно на всех: шаг в случайную сторону
+# каждые 30-205 тактов, а если игрок попал в коробку 19x19 тайлов — идти на
+# него напрямую и бесконечно. Из-за этого корова гналась за игроком так же,
+# как волк, никто не терял его из виду, и все видели сквозь камень.
+TEMPER_PEACEFUL = "peaceful"        # пасётся, убегает вблизи
+TEMPER_SKITTISH = "skittish"        # убегает рано и далеко
+TEMPER_AGGRESSIVE = "aggressive"    # охотится
+TEMPER_TERRITORIAL = "territorial"  # нападает, только если задели или впритык
+
+# Состояния
+ST_IDLE = "idle"
+ST_WANDER = "wander"
+ST_CHASE = "chase"
+ST_FLEE = "flee"
+
+
 class MovingCreature(Creature):
     height_of_abyss = 3
     width_of_abyss = 2
+
+    # --- поведение ---
+    temperament = TEMPER_PEACEFUL
+    sight_tiles = 12            # дальше этого игрока не видно
+    flee_tiles = 5              # с какого расстояния мирный пугается
+    touch_tiles = 2             # «впритык» для территориальных
+    memory_tacts = FPS * 3      # сколько помнит игрока, потеряв из виду
+    angry_speed_mult = 1.6
+    idle_chance = 0.4           # доля времени, которое существо просто стоит
+    # Зрение считается не каждый кадр: проверка луча — это до sight_tiles
+    # обращений к карте, а поведение от 6 кадров задержки не меняется.
+    SENSE_PERIOD = 6
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
         self.move_direction = 0
         self.move_tact = 0
+        self.state = ST_WANDER
+        self.alert_tacts = 0        # сколько ещё помним игрока
+        self.provoked = False       # нас ударили — территориальные злятся
+        self.last_seen_x = None
+
+    # ---------- восприятие ----------
+
+    def player_distance_tiles(self):
+        player = getattr(self.game, "player", None)
+        if player is None:
+            return None
+        return abs(player.rect.centerx - self.rect.centerx) / TSIZE, \
+            abs(player.rect.centery - self.rect.centery) / TSIZE
+
+    def sees_player(self):
+        """Видно ли игрока: по дальности И по прямой видимости.
+
+        Без луча существа реагировали сквозь камень — стая волков сбегалась
+        к игроку, который копал в закрытой шахте через двадцать блоков породы.
+        """
+        dist = self.player_distance_tiles()
+        if dist is None:
+            return False
+        dx, dy = dist
+        if dx > self.sight_tiles or dy > self.sight_tiles:
+            return False
+        return self._clear_line_to(self.game.player.rect.center)
+
+    def _clear_line_to(self, target):
+        x0, y0 = self.rect.center
+        x1, y1 = target
+        steps = int(max(abs(x1 - x0), abs(y1 - y0)) // TSIZE)
+        if steps <= 1:
+            return True
+        for i in range(1, steps):
+            x = x0 + (x1 - x0) * i // steps
+            y = y0 + (y1 - y0) * i // steps
+            if self._solid(x // TSIZE, y // TSIZE):
+                return False
+        return True
+
+    # ---------- решение ----------
+
+    def wants_to_chase(self):
+        if self.temperament == TEMPER_AGGRESSIVE:
+            return True
+        if self.temperament == TEMPER_TERRITORIAL:
+            dist = self.player_distance_tiles()
+            return self.provoked or (dist is not None and dist[0] <= self.touch_tiles)
+        return False
+
+    def wants_to_flee(self):
+        if self.temperament in (TEMPER_AGGRESSIVE, TEMPER_TERRITORIAL):
+            return False
+        dist = self.player_distance_tiles()
+        if dist is None:
+            return False
+        limit = self.flee_tiles * (2 if self.temperament == TEMPER_SKITTISH else 1)
+        return self.provoked or dist[0] <= limit
+
+    def think(self, tact):
+        """Обновить состояние. Вся разница между зверями — в характере и
+        числах, а не в отдельной копии update() у каждого класса."""
+        if tact % self.SENSE_PERIOD == 0 and self.sees_player():
+            self.alert_tacts = self.memory_tacts
+            self.last_seen_x = self.game.player.rect.centerx
+        elif self.alert_tacts > 0:
+            self.alert_tacts -= 1
+        else:
+            # Забыли игрока — заодно остыли. Иначе задетая один раз корова
+            # оставалась пуганой до конца жизни мира.
+            self.provoked = False
+            self.last_seen_x = None
+
+        if self.alert_tacts > 0 and self.wants_to_flee():
+            self.state = ST_FLEE
+        elif self.alert_tacts > 0 and self.wants_to_chase():
+            self.state = ST_CHASE
+        else:
+            self.move_tact -= 1
+            if self.move_tact <= 0:
+                if self.state == ST_WANDER and random.random() < self.idle_chance:
+                    # Пауза: без неё звери бесконечно семенят из стороны в
+                    # сторону, и это первое, что читается как «болванчик».
+                    self.state = ST_IDLE
+                    self.move_tact = random.randint(FPS, FPS * 4)
+                else:
+                    self.state = ST_WANDER
+                    self.move_tact = random.randint(FPS // 2, FPS * 3)
+                    self.move_direction = random.choice((-1, 1))
+
+        if self.state == ST_IDLE:
+            self.move_direction = 0
+        elif self.state == ST_CHASE and self.last_seen_x is not None:
+            self.move_direction = 1 if self.last_seen_x > self.rect.centerx else -1
+        elif self.state == ST_FLEE and self.last_seen_x is not None:
+            self.move_direction = -1 if self.last_seen_x > self.rect.centerx else 1
+
+    def current_speed(self):
+        if self.state in (ST_CHASE, ST_FLEE):
+            return self.move_speed * self.angry_speed_mult
+        return self.move_speed
+
+    def damage(self, lives):
+        # Задели — существо запоминает игрока: мирное убегает, а
+        # территориальное переходит в нападение.
+        self.provoked = True
+        self.alert_tacts = self.memory_tacts
+        self.last_seen_x = self.game.player.rect.centerx
+        return super().damage(lives)
+
+    # ---------- движение ----------
+
+    GAP_JUMP_REACH = 3      # через сколько тайлов пустоты ещё перепрыгиваем
+
+    def can_jump_the_gap(self):
+        """Впереди провал, а за ним твердь, на которую можно перескочить.
+
+        Раньше существо у провала просто разворачивалось, поэтому не могло
+        сойти с островка, на котором появилось.
+
+        Важно проверять именно ПРОВАЛ, а не «есть ли пол где-то впереди»:
+        иначе условие выполняется на ровном месте и существо прыгает
+        непрерывно. Вызывается только когда существо стоит на полу, поэтому
+        его низ ровно на границе тайла и bottom // TSIZE — это строка пола.
+        """
+        if not self.move_direction or not self.collisions.get("bottom"):
+            return False
+        floor_y = self.rect.bottom // TSIZE
+        step = self.move_direction
+        ahead = (self.rect.centerx + step * TSIZE) // TSIZE
+        if self._solid(ahead, floor_y):
+            return False                    # под носом пол — прыгать незачем
+        for d in range(1, self.GAP_JUMP_REACH + 1):
+            if self._solid(ahead + step * d, floor_y):
+                return True                 # за провалом есть куда встать
+        return False
+
+    def _solid(self, tx, ty):
+        return self.game_map.get_static_tile_type(
+            tx, ty, default=0, create_chunk=False) in PHYSBODY_TILES
+
+    def move_by_state(self):
+        """Общий шаг: идти в выбранную сторону, прыгать через стену и провал."""
+        self.movement_vector.x += self.move_direction * self.current_speed()
+        if not self.collisions.get("bottom"):
+            return
+        blocked = self.collisions.get("left") or self.collisions.get("right")
+        if blocked or self.can_jump_the_gap():
+            self.jump(self.jump_speed)
+
+    def update(self, tact, elapsed_time):
+        if not super().update(tact, elapsed_time):
+            return False
+        self.think(tact)
+        self.check_abyss()
+        self.move_by_state()
+        return True
 
     def check_abyss(self):
         x, y = self.rect.bottomleft
@@ -118,8 +313,12 @@ class MovingCreature(Creature):
                                                          convert_to_tile_pos=True)
             x += TSIZE
         if left_abyss and right_abyss:
-            pass
-        elif left_abyss:
+            return
+        # Если через провал есть куда перескочить — не разворачиваемся:
+        # иначе существо навсегда заперто на островке, где появилось.
+        if self.can_jump_the_gap():
+            return
+        if left_abyss:
             self.move_direction = 1
         elif right_abyss:
             self.move_direction = -1
@@ -216,8 +415,16 @@ class Slime(MovingCreature):
         self.sprite = self.sprites[self.i_sprite]
         self.lives_surface = pg.Surface((self.rect.width, 6)).convert_alpha()
 
+    temperament = TEMPER_AGGRESSIVE
+    sight_tiles = 8            # слизь тупая и близорукая — этим и берёт числом
+    memory_tacts = FPS * 2
+
     def update(self, tact, elapsed_time):
-        super().update(tact, elapsed_time)
+        # Своя механика прыжков (сплющивание), поэтому общий move_by_state
+        # не подходит: движение слизь получает толчком в момент прыжка.
+        if not Creature.update(self, tact, elapsed_time):
+            return False
+        self.think(tact)
         self.death_animation.set_resize(self.rect.size)
         if self.collisions["bottom"]:
             if self.jump_state == 1:
@@ -238,13 +445,8 @@ class Slime(MovingCreature):
                 self.jump_state = -1
 
         self.sprite = self.sprites[self.i_sprite]
-        if self.move_tact is not None:
-            self.move_tact -= 1
-            if self.move_tact <= 0:
-                self.move_tact = random.randint(30, 205)
-                self.move_direction = random.randint(-1, 1)
         self.check_abyss()
-        self.movement_vector.x += self.move_direction * self.move_speed
+        self.movement_vector.x += self.move_direction * self.current_speed()
         return True
 
 
@@ -258,28 +460,19 @@ class Cow(MovingCreature):
     drop_items = [(ItemsTile, (52, (1, 2)))]
     move_speed = 2
 
+    temperament = TEMPER_PEACEFUL
+    flee_tiles = 4
+    sight_tiles = 8
+
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
         self.color = random.choice(self.colors)
         self.sprite = create_cow_sprite(self.color, self.rect.size)
         self.jump_speed = 5
 
-    def update(self, tact, elapsed_time):
-        super().update(tact, elapsed_time)
-        # if self.collisions["bottom"]:
-        self.check_abyss()
-        self.movement_vector.x += self.move_direction * self.move_speed
-        if self.collisions["bottom"] and (self.collisions["left"] or self.collisions["right"]):
-            self.jump(self.jump_speed)
-        self.move_tact -= 1
-        if self.move_tact <= 0:
-            self.move_tact = random.randint(30, 205)
-            self.move_direction = random.randint(-1, 1)
-        return True
-
 
 class Wolf(MovingCreature):
-    not_save_vars = MovingCreature.not_save_vars | {"angry_player", "angry"}
+    not_save_vars = MovingCreature.not_save_vars
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "wolf"
     bio_subspecies = "gray wolf"
@@ -297,54 +490,27 @@ class Wolf(MovingCreature):
     punch_speed = 3
     punch_discard = 8
 
-    # агриться ли сейчас на игрока
-    angry_rect_size = (int(TSIZE * 19), int(TSIZE * 19))
-    move_speed_angry = 6
+    temperament = TEMPER_AGGRESSIVE
+    # Было 19 тайлов — это шире экрана: волк начинал погоню, ещё не попав в
+    # кадр, и не терял игрока никогда. Теперь есть предел зрения, луч и
+    # память, по истечении которой охота прекращается.
+    sight_tiles = 11
+    memory_tacts = FPS * 5
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
         self.sprite = create_wolf_sprite(self.color, self.rect.size)
-        self.angry_rect = pg.Rect((0, 0), self.angry_rect_size)
-        self.angry = False
 
-        self.angry_player = None
-
-    def update(self, tact, elapsed_time):
-        super().update(tact, elapsed_time)
-        self.check_abyss()
-        if self.angry:
-            self.movement_vector.x += self.move_direction * self.move_speed_angry
-        else:
-            self.movement_vector.x += self.move_direction * self.move_speed
-        if self.collisions["bottom"] and (self.collisions["left"] or self.collisions["right"]):
-            self.jump(self.jump_speed)
-
-        if self.angry:
-            if self.angry_player.rect.x > self.rect.x:
-                self.move_direction = 1
-            else:
-                self.move_direction = -1
-
-            self.angry_rect.center = self.rect.center
-            if not self.angry_rect.colliderect(self.angry_player):
-                self.angry = False
-                self.angry_player = None
-        else:
-            self.move_tact -= 1
-            if self.move_tact <= 0:
-                self.move_tact = random.randint(30, 205)
-                self.move_direction = random.randint(-1, 1)
-
-            self.angry_rect.center = self.rect.center
-            if self.angry_rect.colliderect(self.game.player.rect):
-                self.angry = True
-                self.angry_player = self.game.player
-                self.move_tact = 0
-
-        return True
+    @property
+    def angry(self):
+        """Оставлено для совместимости: сохранения и код UI спрашивали angry."""
+        return self.state == ST_CHASE
 
 
 class Snake(Wolf):
+    temperament = TEMPER_TERRITORIAL
+    sight_tiles = 7
+    touch_tiles = 3
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "snake"
     bio_subspecies = "green snake"
@@ -384,6 +550,9 @@ class Imp(Wolf):
 
 class Scorpion(Wolf):
     """Скорпион — враждебный житель пустыни, мельче и быстрее волка."""
+    temperament = TEMPER_TERRITORIAL
+    sight_tiles = 6
+    touch_tiles = 2
     not_save_vars = Wolf.not_save_vars
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "scorpion"
@@ -401,35 +570,30 @@ class Scorpion(Wolf):
     punch_speed = 4
     punch_discard = 3
 
-    angry_rect_size = (int(TSIZE * 12), int(TSIZE * 12))
-    move_speed_angry = 7
-
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
         self.sprite = create_scorpion_sprite(self.color, self.rect.size)
 
 
 class PassiveWanderer(MovingCreature):
-    """Общее поведение мирных бродячих животных (как раньше был написан
-    только для Cow): гуляют по поверхности, иногда перепрыгивают
-    препятствия, не нападают на игрока."""
-    jump_speed = 5
+    """Мирные бродячие животные: пасутся, при виде игрока убегают.
 
-    def update(self, tact, elapsed_time):
-        super().update(tact, elapsed_time)
-        self.check_abyss()
-        self.movement_vector.x += self.move_direction * self.move_speed
-        if self.collisions["bottom"] and (self.collisions["left"] or self.collisions["right"]):
-            self.jump(self.jump_speed)
-        self.move_tact -= 1
-        if self.move_tact <= 0:
-            self.move_tact = random.randint(30, 205)
-            self.move_direction = random.randint(-1, 1)
-        return True
+    Своего update() здесь больше нет: движение и решения — общий мозг
+    MovingCreature, разница только в характере и числах. Раньше почти
+    одинаковый update() был скопирован у Cow, PassiveWanderer и Wolf.
+    """
+    temperament = TEMPER_SKITTISH
+    jump_speed = 5
 
 
 class Rabbit(PassiveWanderer):
     """Заяц — мелкое мирное животное, водится почти везде."""
+    # Заяц — самый пугливый: срывается издалека и бежит быстро.
+    temperament = TEMPER_SKITTISH
+    flee_tiles = 7
+    sight_tiles = 12
+    angry_speed_mult = 2.0
+    idle_chance = 0.5
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "rabbit"
     bio_subspecies = "wild rabbit"
@@ -447,6 +611,9 @@ class Rabbit(PassiveWanderer):
 
 class Deer(PassiveWanderer):
     """Олень — крупное мирное животное лесов и тундры."""
+    temperament = TEMPER_SKITTISH
+    flee_tiles = 6
+    idle_chance = 0.45
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "deer"
     bio_subspecies = "forest deer"
@@ -464,6 +631,10 @@ class Deer(PassiveWanderer):
 
 class Fox(PassiveWanderer):
     """Лиса — мелкое мирное животное лесов, быстрая."""
+    # Лиса любопытна: держится рядом, но подойти не даёт.
+    temperament = TEMPER_SKITTISH
+    flee_tiles = 4
+    sight_tiles = 10
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "fox"
     bio_subspecies = "red fox"
@@ -481,6 +652,11 @@ class Fox(PassiveWanderer):
 
 class Camel(PassiveWanderer):
     """Верблюд — крупное мирное животное пустыни."""
+    # Верблюд флегматичен: пугается поздно и уходит нехотя.
+    temperament = TEMPER_PEACEFUL
+    flee_tiles = 3
+    idle_chance = 0.55
+    angry_speed_mult = 1.25
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "camel"
     bio_subspecies = "desert camel"
@@ -498,6 +674,9 @@ class Camel(PassiveWanderer):
 
 class Penguin(PassiveWanderer):
     """Пингвин — мирное животное тундры/тайги."""
+    temperament = TEMPER_PEACEFUL
+    flee_tiles = 4
+    idle_chance = 0.5
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "penguin"
     bio_subspecies = "arctic penguin"
@@ -514,6 +693,10 @@ class Penguin(PassiveWanderer):
 
 class Boar(Wolf):
     """Кабан — агрессивный обитатель лесов."""
+    # Кабан не охотится — но задень его, и он ответит.
+    temperament = TEMPER_TERRITORIAL
+    sight_tiles = 9
+    touch_tiles = 3
     not_save_vars = Wolf.not_save_vars
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "boar"
@@ -538,6 +721,10 @@ class Boar(Wolf):
 
 class Crab(Wolf):
     """Краб — мелкий враг у воды."""
+    # Краб защищает свой пятачок, а не гоняется по берегу.
+    temperament = TEMPER_TERRITORIAL
+    sight_tiles = 6
+    touch_tiles = 2
     not_save_vars = Wolf.not_save_vars
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "crab"
@@ -555,8 +742,6 @@ class Crab(Wolf):
     punch_speed = 3
     punch_discard = 4
 
-    angry_rect_size = (int(TSIZE * 8), int(TSIZE * 8))
-
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
         self.sprite = create_crab_sprite(self.color, self.rect.size)
@@ -564,6 +749,11 @@ class Crab(Wolf):
 
 class Bat(Wolf):
     """Летучая мышь — мелкий шустрый враг пещер."""
+    # Мышь мельтешит: часто меняет направление и почти не стоит.
+    temperament = TEMPER_AGGRESSIVE
+    sight_tiles = 8
+    idle_chance = 0.1
+    memory_tacts = FPS * 2
     not_save_vars = Wolf.not_save_vars
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "bat"
@@ -588,6 +778,13 @@ class Bat(Wolf):
 
 class StoneGolem(Wolf):
     """Каменный голем — тяжёлый неповоротливый враг глубоких пещер."""
+    # Голем не бегает за игроком по пещерам: он охраняет место, где стоит,
+    # зато не отпускает надолго.
+    temperament = TEMPER_TERRITORIAL
+    sight_tiles = 10
+    touch_tiles = 4
+    memory_tacts = FPS * 8
+    angry_speed_mult = 1.3
     not_save_vars = Wolf.not_save_vars
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "golem"
@@ -612,6 +809,8 @@ class StoneGolem(Wolf):
 
 class SpaceDrifter(Wolf):
     """Космический дрейфер — враждебный обитатель космической зоны."""
+    temperament = TEMPER_AGGRESSIVE
+    sight_tiles = 10
     not_save_vars = Wolf.not_save_vars
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "space_drifter"
@@ -641,6 +840,9 @@ class DustSwarm(Wolf):
     редок, а рой можно фармить мечом. С него и начинается космос —
     иначе пылеуловитель нечем было бы оплатить.
     """
+    temperament = TEMPER_AGGRESSIVE
+    sight_tiles = 9
+    idle_chance = 0.1
     not_save_vars = Wolf.not_save_vars
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "dust_swarm"
@@ -670,6 +872,10 @@ class VoidSentinel(Wolf):
     отдаёт. Держит верхний край сложности, чтобы космос не оказался
     безопаснее пещер только потому, что он новый.
     """
+    temperament = TEMPER_TERRITORIAL
+    sight_tiles = 12
+    touch_tiles = 5
+    memory_tacts = FPS * 8
     not_save_vars = Wolf.not_save_vars
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "void_sentinel"
@@ -693,7 +899,7 @@ class VoidSentinel(Wolf):
 
 
 class SlimeBigBoss(Slime):
-    not_save_vars = Slime.not_save_vars | {"angry", "angry_player"}
+    not_save_vars = Slime.not_save_vars
     bio_subspecies = "huge slime"
     colors = ["#ff9d00"]
     max_lives = 250
@@ -708,34 +914,13 @@ class SlimeBigBoss(Slime):
     drop_items = [(ItemsTile, (51, (20, 30))), (ItemsTile, (63, (3, 5))), (ItemsTile, (66, (2, 3))),
                   (ItemsTile, (55, (0, 1)))]
 
-    # агриться ли сейчас на игрока
-    angry = False
-    angry_rect_size = (int(TSIZE * 19), int(TSIZE * 19))
-    move_speed_angry = 6
-    angry_player = None
-
-    def __init__(self, game, pos=(0, 0)):
-        super(SlimeBigBoss, self).__init__(game, pos)
-        self.angry_rect = pg.Rect((0, 0), self.angry_rect_size)
-
-    def update(self, tact, elapsed_time):
-        super(SlimeBigBoss, self).update(tact, elapsed_time)
-        self.angry_rect.center = self.rect.center
-
-        if self.angry:
-            if self.angry_player.rect.x > self.rect.x:
-                self.move_direction = 1
-            else:
-                self.move_direction = -1
-            if not self.angry_rect.colliderect(self.angry_player):
-                self.angry = False
-                self.angry_player = None
-                self.move_tact = 0
-        else:
-            if self.angry_rect.colliderect(self.game.player.rect):
-                self.angry = True
-                self.angry_player = self.game.player
-                self.move_tact = None
+    # Босс видит дальше всех и не забывает: он для того и босс. Своей копии
+    # логики погони больше нет — только числа поверх общего мозга.
+    temperament = TEMPER_AGGRESSIVE
+    sight_tiles = 18
+    memory_tacts = FPS * 12
+    idle_chance = 0.05
+    angry_speed_mult = 1.5
 
 
 CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion,
