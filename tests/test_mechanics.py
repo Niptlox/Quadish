@@ -4406,6 +4406,273 @@ def test_story_never_crashes_on_an_old_world():
     journal_entries(game)
 
 
+# ===================== подземелья =====================
+
+def _dungeons(seed=1234, limit=30):
+    from units.Map.Dungeons import dungeon_site, in_dungeon_band
+    game = fresh_world(seed)
+    base = game.game_map.base_generation
+    out = []
+    for cx in range(14):
+        for cy in range(1, 14):
+            d = dungeon_site(cx, cy, base)
+            if d is not None and in_dungeon_band(d.y):
+                out.append(d)
+                if len(out) >= limit:
+                    return game, base, out
+    return game, base, out
+
+
+def _reachable(dungeon):
+    """Куда можно дойти от входа: воздух, лифты и плиты проходимы."""
+    from collections import deque
+    passable = {0, 234, 236, 300}
+    rx, ry, rw, rh = dungeon.room_rect(*dungeon.entrance)
+    start = (rx + 2, ry + rh - 2)
+    seen = {start}
+    queue = deque([start])
+    while queue:
+        x, y = queue.popleft()
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if (nx, ny) in seen or not dungeon.contains(nx, ny):
+                continue
+            if dungeon.tile_at(nx, ny) in passable:
+                seen.add((nx, ny))
+                queue.append((nx, ny))
+    return seen
+
+
+def test_dungeon_vault_is_always_reachable():
+    """Самая важная проверка: до сокровищницы можно дойти.
+
+    Она поймала три разных дефекта подряд, и ни один не был виден снаружи —
+    подземелье каждый раз выглядело целым:
+    1. пол комнаты перекрывал вертикальную шахту (25 из 25 непроходимы);
+    2. нижний ряд комнат связывался жребием, а в нём сокровищница (8 из 25);
+    3. рудная кладка забивала собственный дверной проём (4 из 32).
+    """
+    _, _, dungeons = _dungeons()
+    assert len(dungeons) >= 10, "мало подземелий для проверки"
+    broken = []
+    for d in dungeons:
+        seen = _reachable(d)
+        vx, vy, vw, vh = d.room_rect(*d.vault)
+        if not any((vx + i, vy + vh - 2) in seen for i in range(vw)):
+            broken.append((d.x, d.y))
+    assert not broken, f"сокровищница недостижима в {len(broken)} из {len(dungeons)}: {broken[:3]}"
+
+
+def test_dungeon_has_an_entrance_from_outside():
+    """Запечатанное подземелье — это потраченная генерация: его не найти."""
+    _, _, dungeons = _dungeons()
+    for d in dungeons[:10]:
+        seen = _reachable(d)
+        outside = [(x, y) for (x, y) in seen
+                   if x < d.x or x >= d.x + d.w]
+        assert outside, f"у подземелья на ({d.x},{d.y}) нет выхода наружу"
+
+
+def test_dungeon_layout_is_deterministic():
+    """Раскладка — чистая функция от (клетка, сид), как у озёр: иначе
+    подземелье, пересекающее границу чанков, порвалось бы пополам."""
+    from units.Map.Dungeons import dungeon_site, dungeon_tile_at
+    game = fresh_world(1235)
+    base = game.game_map.base_generation
+    a = dungeon_site(3, 2, base)
+    b = dungeon_site(3, 2, base)
+    assert (a is None) == (b is None)
+    if a is None:
+        return
+    assert (a.x, a.y, a.w, a.h, a.cols, a.rows) == (b.x, b.y, b.w, b.h, b.cols, b.rows)
+    for tx in range(a.x, a.x + min(a.w, 40)):
+        for ty in range(a.y, a.y + min(a.h, 20)):
+            assert dungeon_tile_at(tx, ty, base) == dungeon_tile_at(tx, ty, base)
+
+
+def test_dungeons_are_underground():
+    """Подземелье должно быть НАЙДЕНО, а не торчать из холма у спавна."""
+    from units.Map.Dungeons import in_dungeon_band, MIN_DEPTH
+    assert not in_dungeon_band(0)
+    assert not in_dungeon_band(MIN_DEPTH - 1)
+    assert in_dungeon_band(MIN_DEPTH + 50)
+
+
+def test_dungeon_vault_pays_for_the_trip():
+    """Награда подземелья — плотность, а не редкость: те же руды, что в мире,
+    но собранные в одном месте (docs/BALANCE_SCHEME.md)."""
+    from collections import Counter
+    _, _, dungeons = _dungeons()
+    ores = Counter()
+    for d in dungeons:
+        vx, vy, vw, vh = d.room_rect(*d.vault)
+        for ty in range(vy, vy + vh):
+            for tx in range(vx, vx + vw):
+                t = d.tile_at(tx, ty)
+                if t in (21, 23, 24, 25):
+                    ores[t] += 1
+    per = {k: v / len(dungeons) for k, v in ores.items()}
+    assert sum(per.values()) >= 8, f"в сокровищнице слишком мало руды: {per}"
+    assert per.get(23, 0) >= 1, "золото должно встречаться — ради него и идут"
+    assert per.get(23, 0) < sum(per.values()) / 2, \
+        f"золота не должно быть больше всей остальной руды: {per}"
+
+
+def test_dungeon_appears_in_a_generated_chunk():
+    """Подземелье должно попадать в настоящую генерацию, а не только в
+    собственную функцию."""
+    from units.common import CHUNK_SIZE
+    game, base, dungeons = _dungeons(limit=6)
+    gm = game.game_map
+    d = dungeons[0]
+    cx, cy = d.x // CHUNK_SIZE, (d.y + 3) // CHUNK_SIZE
+    gm.game_map.pop((cx, cy), None)
+    gm.generate_chunk(cx, cy)
+    walls = sum(1 for i in range(0, gm.chunk_arr_size, gm.tile_data_size)
+                if gm.chunk((cx, cy))[0][i] in (31, 32, 33))
+    assert walls > 20, f"кладки подземелья в чанке нет: {walls} тайлов"
+
+
+def test_dungeon_guards_do_not_double_on_regeneration():
+    """Стражи — функция сида: чанк, созданный дважды, даёт тех же, а не толпу.
+    Мир выгружает и пересоздаёт чанки на ходу (dynamic_dump)."""
+    _, _, dungeons = _dungeons(limit=8)
+    from units.common import CHUNK_SIZE
+    d = dungeons[0]
+    cx, cy = d.x // CHUNK_SIZE, d.y // CHUNK_SIZE
+    first = d.guard_spots(cx, cy, CHUNK_SIZE)
+    second = d.guard_spots(cx, cy, CHUNK_SIZE)
+    assert first == second, "раскладка стражей должна быть детерминированной"
+
+
+def test_dungeon_kinds_differ_by_zone():
+    """Каждой зоне свой вид: склеп в пещерах, кузня в аду, станция в космосе."""
+    from units.Map.Dungeons import kind_for_depth, KINDS
+    from units.common import START_HELL_Y, START_SPACE_Y
+    assert kind_for_depth(500) == "crypt"
+    assert kind_for_depth(START_HELL_Y + 50) == "forge"
+    assert kind_for_depth(START_SPACE_Y) == "station"
+    assert len({k.wall for k in KINDS.values()}) >= 2, "виды должны отличаться кладкой"
+
+
+# ===================== события: расширенный набор =====================
+
+def test_seven_events_cover_the_zones():
+    """События должны покрывать разные места и время, а не быть семью
+    вариантами одного налёта."""
+    from units.Events import EventDirector
+    director = EventDirector()
+    assert len(director.events) >= 7, f"событий всего {len(director.events)}"
+    names = {e.name for e in director.events}
+    assert len(names) == len(director.events), "имена событий должны различаться"
+
+
+def test_not_every_event_is_an_attack():
+    """Если КАЖДОЕ событие бьёт, они сливаются в ровный стресс, и игрок
+    пережидает их все одинаково — в яме. Миграция не угроза вообще."""
+    from units.common import TSIZE, DAY_LENGTH
+    from units.Events import Migration
+    from units.Objects.Creatures import TEMPER_AGGRESSIVE
+    game = fresh_world(930)
+    x, y = _flat_arena(game, w=40)
+    game.player.tp_to((x * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    event = Migration()
+    assert event.can_start(game, 0), "миграция идёт днём"
+    assert not event.can_start(game, int(DAY_LENGTH * 0.8)), "и не ночью"
+    event.started_at = 0          # обычно ставит tick(), тут дёргаем напрямую
+    event.on_start(game)
+    gm = game.game_map
+    # Ловим ровно тех, кого добавило СОБЫТИЕ. Считать по округе нельзя:
+    # событие попутно создаёт чанки, а свежий чанк приходит со своими
+    # существами, среди которых бывают и агрессивные.
+    arrived = []
+    real_add = gm.add_dinamic_obj
+
+    def catching(cx, cy, obj, create_chunk=True):
+        from units.common import OBJ_CREATURE
+        if obj.class_obj & OBJ_CREATURE:
+            arrived.append(obj)
+        return real_add(cx, cy, obj, create_chunk)
+
+    gm.add_dinamic_obj = catching
+    try:
+        for i in range(1, event.STEP * (event.HERD + 1)):
+            event.on_tick(game, i)
+    finally:
+        del gm.add_dinamic_obj
+    assert arrived, "стадо должно появиться"
+    for creature in arrived:
+        assert creature.temperament != TEMPER_AGGRESSIVE, \
+            f"{type(creature).__name__} в миграции агрессивен — это уже налёт"
+
+
+def _creatures(gm, tx, ty, radius=3):
+    from units.common import OBJ_CREATURE
+    cx0, cy0 = gm.to_chunk_xy(tx, ty)
+    out = []
+    for cx in range(cx0 - radius, cx0 + radius + 1):
+        for cy in range(cy0 - radius, cy0 + radius + 1):
+            chunk = gm.chunk((cx, cy))
+            if chunk:
+                out += [o for o in chunk[1] if o.class_obj & OBJ_CREATURE and o.alive]
+    return out
+
+
+def _count_creatures(gm, tx, ty, radius=3):
+    return len(_creatures(gm, tx, ty, radius))
+
+
+def test_meteor_shower_leaves_a_prize():
+    """Событие-награда: дождь оставляет космическую пыль на поверхности —
+    единственный способ увидеть материал верхней зоны, не добравшись до неё."""
+    from units.common import TSIZE, DAY_LENGTH, OBJ_ITEM
+    from units.Events import MeteorShower
+    game = fresh_world(931)
+    x, y = _flat_arena(game, w=60)
+    game.player.tp_to((x * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    event = MeteorShower()
+    assert event.can_start(game, int(DAY_LENGTH * 0.8)), "дождь идёт ночью"
+    assert not event.can_start(game, 0), "и не днём"
+    gm = game.game_map
+    for _ in range(12):
+        event.drop_one(game)
+    prizes = [o for o in _items_around(gm, x, y) if o.index in (408, 66)]
+    assert prizes, "после дождя должна остаться добыча"
+
+
+def _items_around(gm, tx, ty, radius=3):
+    from units.common import OBJ_ITEM
+    cx0, cy0 = gm.to_chunk_xy(tx, ty)
+    out = []
+    for cx in range(cx0 - radius, cx0 + radius + 1):
+        for cy in range(cy0 - radius, cy0 + radius + 1):
+            chunk = gm.chunk((cx, cy))
+            if chunk:
+                out += [o for o in chunk[1] if o.class_obj & OBJ_ITEM and o.alive]
+    return out
+
+
+def test_events_are_tied_to_places():
+    """Каждое событие обязано иметь своё место: событие «везде» неотличимо от
+    обычного спавна и не даёт месту характера."""
+    from units.common import TSIZE, DAY_LENGTH, START_SPACE_Y
+    from units.Events import EventDirector
+    game = fresh_world(932)
+    director = EventDirector()
+    night = int(DAY_LENGTH * 0.8)
+    places = {"поверхность": 8, "пещеры": 700, "космос": START_SPACE_Y - 300}
+    fired = {}
+    for name, ty in places.items():
+        game.player.tp_to((0, ty * TSIZE))
+        fired[name] = {e.name for e in director.events
+                       if e.can_start(game, night) or e.can_start(game, 0)}
+    assert fired["поверхность"] != fired["пещеры"], "поверхность и пещеры должны отличаться"
+    assert fired["космос"] != fired["поверхность"], "космос должен отличаться"
+    for name, evs in fired.items():
+        assert evs, f"в месте «{name}» не может произойти вообще ничего"
+
+
 def test_creatures_do_not_see_through_stone():
     """Стая сбегалась к игроку, который копал в закрытой шахте через двадцать
     блоков породы."""

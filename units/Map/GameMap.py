@@ -17,6 +17,8 @@ from units.Map import WorldStorage
 from units.Trees import grow_tree
 from units.biomes import biome_of_pos
 from units.Map.Structures import Structures_chance, Structures, Structures_all, structure_start
+from units.Map.Dungeons import (dungeon_tile_at, chunk_touches_dungeon, dungeon_at,
+                                DUNGEON_CELL_W, DUNGEON_CELL_H)
 from units.Tiles import *
 from units.sound import sound_gate
 from units.Updater import parse_version
@@ -25,7 +27,7 @@ from units.Updater import parse_version
 class GameMap(SavedObject):
     not_save_vars = SavedObject.not_save_vars | {"gate", "particles", "world_id", "world_meta",
                                                  "dynamic_dump", "dump_keep_radius", "signal_receivers",
-                                                 "portals", "lake_sites", "active_tiles",
+                                                 "portals", "lake_sites", "dungeon_sites", "active_tiles",
                                                  "_offscreen_ring", "_offscreen_ring_set",
                                                  "_offscreen_pos", "_offscreen_round_tact",
                                                  "_offscreen_steps", "_forced_cache",
@@ -89,6 +91,7 @@ class GameMap(SavedObject):
         # КАЖДОГО чанка: замер давал +61% к стоимости генерации чанка. Кэш
         # выводится из сида, поэтому в сейв не идёт.
         self.lake_sites = {}
+        self.dungeon_sites = {}
         # Индекс «живых» тайлов по чанкам: {cxy: {индекс_в_массиве}}. Тик за
         # экраном раньше просматривал ВСЮ площадь чанка — замер дал 16384
         # просмотренных слота на 30 активных тайлов (0.18%). Лежит на карте, а
@@ -1225,6 +1228,11 @@ class GameMap(SavedObject):
         # чанк, а не на каждый из 1024 тайлов: озёра редки, и подавляющее
         # большинство чанков не должно платить за них вообще.
         chunk_has_lake = self._chunk_touches_lake(base_x, base_y)
+        # То же самое для подземелий (units/Map/Dungeons.py): дешёвая проверка
+        # на чанк вместо раскладки на каждый из 1024 тайлов.
+        _dungeon_cache = self.dungeon_sites
+        chunk_has_dungeon = chunk_touches_dungeon(base_x, base_y, CHUNK_SIZE,
+                                                  base, _dungeon_cache)
 
         def standart_noise2_bool(tx, ty):
             # кэш по тайлу: одна и та же проверка нужна нескольким соседям
@@ -1250,6 +1258,12 @@ class GameMap(SavedObject):
                 # ветки «порода / пустота»: чаша выедает и породу тоже.
                 if chunk_has_lake and tile_type is None and biome_info[i][0] != 9:
                     tile_type = lake_tile_at(tile_x, tile_y, base, _lake_cache)
+                # Подземелье кладётся ПОВЕРХ рельефа и озера: это постройка,
+                # она вытесняет и породу, и воду, иначе комнату затопило бы.
+                if chunk_has_dungeon:
+                    dtile = dungeon_tile_at(tile_x, tile_y, base, _dungeon_cache)
+                    if dtile is not None:
+                        tile_type = dtile
                 if standart_noise2_bool(tile_x, tile_y) and tile_type is None:
                     if standart_noise2_bool(tile_x, tile_y - 2 - random.randint(0, 1)):
                         tile_type = 3  # stone
@@ -1370,7 +1384,31 @@ class GameMap(SavedObject):
                 i += 1
             tile_y += 1
         creature_cash[1] = cnt_creatures
+        if chunk_has_dungeon:
+            self._place_dungeon_guards(res, x, y, base, _dungeon_cache)
         return res
+
+    def _place_dungeon_guards(self, chunk, chunk_x, chunk_y, base, cache):
+        """Поставить стражей подземелья в только что созданный чанк.
+
+        Именно при генерации, а не по входу игрока: раскладка стражей —
+        функция сида (Dungeon.guard_spots), поэтому чанк, созданный дважды,
+        даёт тех же стражей, а не удваивает толпу.
+        """
+        import units.Objects.Creatures as C
+        seen = set()
+        for dx in (0, CHUNK_SIZE - 1):
+            for dy in (0, CHUNK_SIZE - 1):
+                site = dungeon_at(chunk_x * CHUNK_SIZE + dx, chunk_y * CHUNK_SIZE + dy, base, cache)
+                if site is None or id(site) in seen:
+                    continue
+                seen.add(id(site))
+                for name, tx, ty in site.guard_spots(chunk_x, chunk_y, CHUNK_SIZE):
+                    cls = getattr(C, name, None)
+                    if cls is None:
+                        continue
+                    chunk[1].append(spawn_creature(cls, self.game, tx, ty))
+                    chunk[3][1] += 1
 
     def save_current_game_map(self):
         if self.world_id is None:

@@ -211,6 +211,215 @@ class BloreRift(WorldEvent):
         self.message(game, "Разлом затянулся")
 
 
+class MeteorShower(WorldEvent):
+    """Метеоритный дождь: с неба падает то, за чем иначе надо лететь в космос.
+
+    Событие-награда, а не только угроза, и это осознанно. Если КАЖДОЕ событие
+    бьёт, они сливаются в один ровный стресс, и игрок начинает пережидать их
+    все одинаково — в яме. Дождь опасен только там, куда падает, зато
+    оставляет космическую пыль на поверхности: единственный способ увидеть
+    материал верхней зоны, ещё не добравшись до неё.
+    """
+    name = "метеоритный дождь"
+    announce = "Небо чертят полосы"
+    duration = FPS * 45
+    cooldown = FPS * 60 * 14
+    STEP = FPS * 4
+    SPREAD = 26            # в скольких тайлах вокруг игрока падают
+    CRATER = 2             # радиус воронки
+
+    def can_start(self, game, world_time):
+        player = getattr(game, "player", None)
+        if player is None or not player.alive:
+            return False
+        if not is_night(world_time):
+            return False
+        ty = player.rect.centery // TSIZE
+        return TOP_MIDDLE_WORLD < ty < 60
+
+    def on_start(self, game):
+        self.message(game, "Метеоритный дождь")
+
+    def on_tick(self, game, world_time):
+        if (world_time - self.started_at) % self.STEP:
+            return
+        self.drop_one(game)
+
+    def drop_one(self, game):
+        gm, player = game.game_map, game.player
+        tx = player.rect.centerx // TSIZE + random.randint(-self.SPREAD, self.SPREAD)
+        ty = gm.surface_top_at(tx, player.rect.centery // TSIZE)
+        if ty is None:
+            return
+        r = self.CRATER
+        for dx in range(-r, r + 1):
+            for dy in range(-r, r + 1):
+                if dx * dx + dy * dy > r * r:
+                    continue
+                # create_chunk=False: событие не должно создавать мир —
+                # то же правило, что и у обслуживания за экраном
+                if gm.get_static_tile_type(tx + dx, ty + dy, 0, create_chunk=False):
+                    gm.set_static_tile(tx + dx, ty + dy, 0, create_chunk=False)
+        # На дне воронки — то, ради чего это стоит пережидать не в яме
+        prize = 408 if random.random() < 0.7 else 66        # пыль или рубин
+        gm.add_item_of_index(prize, random.randint(1, 2), tx, ty)
+
+
+class Migration(WorldEvent):
+    """Миграция: мимо проходит стадо. Не угроза вообще.
+
+    Нужна ровно затем, чтобы «событие» не стало синонимом «нападение». Игра,
+    в которой мир подаёт голос только чтобы ударить, читается как враждебная
+    целиком; здесь мир иногда просто идёт мимо, и это даёт передышку и еду.
+    """
+    name = "миграция"
+    announce = "Издалека слышен топот"
+    duration = FPS * 40
+    cooldown = FPS * 60 * 10
+    STEP = FPS * 3
+    HERD = 8
+
+    def can_start(self, game, world_time):
+        player = getattr(game, "player", None)
+        if player is None or not player.alive:
+            return False
+        if is_night(world_time):
+            return False                    # днём: это не ночное явление
+        ty = player.rect.centery // TSIZE
+        return TOP_MIDDLE_WORLD < ty < 60
+
+    def on_start(self, game):
+        self.message(game, "Мимо идёт стадо")
+        self.sent = 0
+        self.side = random.choice((-1, 1))
+
+    def on_tick(self, game, world_time):
+        if (world_time - self.started_at) % self.STEP:
+            return
+        if getattr(self, "sent", 0) >= self.HERD:
+            return
+        self.sent = getattr(self, "sent", 0) + 1
+        from units.Map.GameMap import spawn_creature
+        from units.Objects.Creatures import Cow, Deer, Boar, Rabbit
+        gm, player = game.game_map, game.player
+        tx = player.rect.centerx // TSIZE + self.side * random.randint(20, 30)
+        ty = gm.surface_top_at(tx, player.rect.centery // TSIZE)
+        if ty is None:
+            return
+        creature = spawn_creature(random.choice((Cow, Deer, Boar, Rabbit)), game, tx, ty)
+        gm.add_dinamic_obj(*gm.to_chunk_xy(tx, ty), creature)
+
+
+class GolemAwakening(WorldEvent):
+    """Гон големов: в глубоких пещерах порода начинает шевелиться.
+
+    Событие места, а не времени: оно бывает только там, куда игрок полез сам.
+    И оно выгодное — лут существ считается с поправкой на опасность места
+    (docs/BALANCE_SCHEME.md), так что глубокий голем стоит боя.
+    """
+    name = "гон големов"
+    announce = "Камень вокруг гудит"
+    duration = FPS * 45
+    cooldown = FPS * 60 * 16
+    DEPTH = 600
+
+    def can_start(self, game, world_time):
+        player = getattr(game, "player", None)
+        if player is None or not player.alive:
+            return False
+        ty = player.rect.centery // TSIZE
+        return self.DEPTH < ty < START_HELL_Y
+
+    def on_start(self, game):
+        self.message(game, "Големы просыпаются")
+        self.sent = 0
+
+    def on_tick(self, game, world_time):
+        if (world_time - self.started_at) % (FPS * 12):
+            return
+        if getattr(self, "sent", 0) >= 3:
+            return
+        self.sent = getattr(self, "sent", 0) + 1
+        _spawn_near(game, "StoneGolem", 14, 22)
+
+    def on_end(self, game):
+        self.message(game, "Порода затихла")
+
+
+class SolarFlare(WorldEvent):
+    """Солнечная вспышка: в космосе прилетает волна.
+
+    В вакууме прятаться негде — там нет ни рельефа, ни ночи. Поэтому у
+    космоса своё событие: единственная защита от него это уйти в тень
+    астероида, то есть место, а не постройка.
+    """
+    name = "вспышка"
+    announce = "Приборы слепнут: идёт вспышка"
+    duration = FPS * 35
+    cooldown = FPS * 60 * 13
+
+    def can_start(self, game, world_time):
+        player = getattr(game, "player", None)
+        if player is None or not player.alive:
+            return False
+        return player.rect.centery // TSIZE <= START_ATMO_Y
+
+    def on_start(self, game):
+        self.message(game, "Вспышка")
+        self.sent = 0
+
+    def on_tick(self, game, world_time):
+        if (world_time - self.started_at) % (FPS * 7):
+            return
+        if getattr(self, "sent", 0) >= 4:
+            return
+        self.sent = getattr(self, "sent", 0) + 1
+        _spawn_near(game, "DustSwarm", 16, 26)
+
+
+class VoidTide(WorldEvent):
+    """Прилив пустоты: в глубоком космосе приходит Страж.
+
+    Босс по месту, а не по расписанию: Страж пустоты — самое сильное, что
+    есть в верхней зоне, и встретить его можно только забравшись туда, где
+    он и живёт. Один, а не волна: это встреча, а не осада.
+    """
+    name = "прилив пустоты"
+    announce = "Пустота уплотняется"
+    duration = FPS * 30
+    cooldown = FPS * 60 * 20
+
+    def can_start(self, game, world_time):
+        player = getattr(game, "player", None)
+        if player is None or not player.alive:
+            return False
+        return player.rect.centery // TSIZE <= START_SPACE_Y - 200
+
+    def on_start(self, game):
+        self.message(game, "Страж пустоты близко")
+        _spawn_near(game, "VoidSentinel", 18, 24)
+
+
+def _spawn_near(game, creature_name, near, far):
+    """Породить существо в стороне от игрока, но не в породе и не на свету."""
+    import units.Objects.Creatures as C
+    from units.Map.GameMap import spawn_creature
+    cls = getattr(C, creature_name, None)
+    if cls is None:
+        return None
+    gm, player = game.game_map, game.player
+    tx = player.rect.centerx // TSIZE + random.choice((-1, 1)) * random.randint(near, far)
+    ty = player.rect.centery // TSIZE + random.randint(-4, 4)
+    if gm.get_static_tile_type(tx, ty, default=0, create_chunk=False):
+        return None                          # в камне не рождаем
+    if gm.lit_by_lamp(tx, ty):
+        return None                          # свет отгоняет и здесь
+    creature = spawn_creature(cls, game, tx, ty)
+    creature.provoked = True
+    gm.add_dinamic_obj(*gm.to_chunk_xy(tx, ty), creature)
+    return creature
+
+
 class EventDirector:
     """Кто решает, какое событие запускать. Одно за раз.
 
@@ -219,7 +428,10 @@ class EventDirector:
     """
 
     def __init__(self):
-        self.events = [NightRaid(), BloreRift()]
+        # Порядок важен только для разрешения одновременности: первое
+        # готовое и запускается. Ставим редкие и «крупные» раньше.
+        self.events = [VoidTide(), SolarFlare(), GolemAwakening(),
+                       NightRaid(), MeteorShower(), BloreRift(), Migration()]
 
     def current(self):
         for e in self.events:
