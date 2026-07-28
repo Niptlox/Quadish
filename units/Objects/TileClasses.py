@@ -8,7 +8,7 @@ from units.Tiles import (WOOD_TILES, furnace_imgs, ACTIVATE_TILES, SIGNAL_TILES,
                          lever_on_img, lever_off_img, lamp_on_img, lamp_off_img,
                          chunk_loader_on_img, chunk_loader_off_img,
                          music_block_img, music_block_flash_img,
-                         receiver_img, transmitter_img, conveyor_imgs,
+                         receiver_img, transmitter_img, conveyor_imgs, blore_track_imgs,
                          item_of_break_tile,
                          engine_fuel_on_img, engine_fuel_off_img, engine_creative_img,
                          engine_space_on_img, engine_space_off_img,
@@ -1181,10 +1181,50 @@ class DustCollector(SignalTile):
         return dust_collector_on_img
 
 
+class BloreTrack(ItemMover):
+    """Блоровая дорожка: горизонталь для игрока и для лежащих предметов.
+
+    Одна идея на весь транспорт: блор — вещество перемещения (docs/STORY.md),
+    и он несёт всё, что в нём стоит. Поэтому дорожка не «рельс отдельно,
+    конвейер отдельно», а один блок: игрока разгоняет Player.update_physics
+    (по типу тайла, как у блоровых столбов), предметы двигает этот класс.
+
+    Направление переключается правым кликом — так же, как у конвейера, чтобы
+    не заводить два блока на одно и то же и не изобретать второй жест.
+    """
+    index = 238
+    PERIOD = max(1, FPS // 10)
+    PUSH = max(2, TSIZE // 6)      # предметы чуть быстрее, чем на конвейере
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.timer = 0
+
+    def direction(self):
+        tile = self.game_map.get_static_tile(self.tx, self.ty)
+        return -1 if (tile and tile[2]) else 1
+
+    def right_click(self, mouse_local_pos):
+        tile = self.game_map.get_static_tile(self.tx, self.ty)
+        if tile:
+            self.game_map.set_static_tile_state_img(self.tx, self.ty, 0 if tile[2] else 1)
+
+    def update(self, elapsed_time):
+        self.timer += self.steps
+        if self.timer < self.PERIOD:
+            return blore_track_imgs[0 if self.direction() > 0 else 1]
+        self.timer = 0
+        dx = self.direction() * self.PUSH
+        # предметы едут по ВЕРХУ дорожки — как и на конвейере
+        for item in self.items_in_tile(self.tx, self.ty - 1):
+            item.rect.x += dx
+        return blore_track_imgs[0 if self.direction() > 0 else 1]
+
+
 classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate,
           Wire, Lever, Lamp, NotGate, AndGate, OrGate, DelayBlock, ChunkLoader, MusicBlock,
           Receiver, Transmitter, LoreTablet,
           Hopper, Conveyor, Dropper, Chopper,
           FuelEngine, CreativeEngine, SpaceEngine, HellEngine, Portal, GolemNest,
-          DustCollector}
+          DustCollector, BloreTrack}
 tiles_class = {cls.index: cls for cls in classes}

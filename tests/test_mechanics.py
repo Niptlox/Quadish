@@ -32,6 +32,13 @@ def fresh_world(seed=12345):
     app = get_app()
     random.seed(42)
     app.game_scene.game_map.new_world(base_generation=seed)
+    # Игра одна на весь прогон, поэтому флаги игрока обязаны сбрасываться:
+    # тест, включивший player.active, менял поведение всех следующих тестов
+    # (игрок начинал двигаться в их кадрах) — и падал не он, а они.
+    player = app.game_scene.player
+    player.active = False
+    player.moving_left = player.moving_right = False
+    player.track_speed = 0
     return app.game_scene
 
 
@@ -3553,11 +3560,24 @@ def test_peaceful_creature_runs_away_instead_of_charging():
     cow = _place(game, Cow, x + 3, y)        # внутри радиуса испуга
     game.player.tp_to((x * TSIZE, y * TSIZE))
     game.screen_map.teleport_to_player()
-    _run_frames(game, 30)
+
+    # Состояние проверяем ПО ХОДУ, а не в конце: убегая, корова выходит за
+    # радиус испуга (5 тайлов) и законно возвращается в wander. Проверка
+    # «в конце ровно ST_FLEE» держалась на том, что за 30 кадров корова не
+    # успевала отойти — то есть на фазе кадра, а не на поведении: сдвиг
+    # game.tact соседними тестами её ронял.
+    started = abs(cow.rect.centerx - game.player.rect.centerx)
+    fled = False
+    for _ in range(30):
+        _run_frames(game, 1)
+        if cow.state == ST_FLEE:
+            fled = True
+            assert cow.move_direction == 1, "убегать — значит в сторону ОТ игрока"
 
     assert cow.temperament != "aggressive"
-    assert cow.state == ST_FLEE, f"корова должна убегать, а не {cow.state}"
-    assert cow.move_direction == 1, "убегать — значит в сторону ОТ игрока"
+    assert fled, f"корова обязана испугаться, а не {cow.state}"
+    assert abs(cow.rect.centerx - game.player.rect.centerx) > started, \
+        "корова должна оказаться дальше от игрока, а не ближе"
 
 
 def test_aggressive_creature_chases_and_then_gives_up():
@@ -3680,6 +3700,187 @@ def test_turn_at_cliff_is_committed_for_a_while():
     # и следующий кадр это решение не отменяет
     cow.update(game.tact + 1, 16)
     assert cow.move_direction == -1, "разворот отменён на следующем же кадре"
+
+
+# ===================== транспорт =====================
+#
+# Одна идея на всю лестницу: блок, который несёт того, кто в нём стоит.
+# Батут (237) — вертикаль для новичка, блоровая дорожка (238) — горизонталь,
+# блоровые столбы (234/236) — шахты, портал (232) — мгновенно и дорого.
+# См. docs/TRANSPORT.md.
+
+def _drop_player_onto(game, tile_type, height=6):
+    """Уронить игрока с высоты на указанный блок и вернуть его."""
+    from units.common import TSIZE
+    gm = game.game_map
+    x, y = _flat_arena(game, w=20)
+    gm.set_static_tile(x + 5, y + 1, tile_type)
+    game.player.active = True        # в свежем тестовом мире игрок не обновляется
+    game.player.tp_to(((x + 5) * TSIZE + 2, (y - height) * TSIZE))
+    game.player.first_fall = False
+    game.screen_map.teleport_to_player()
+    game.elapsed_time = 16
+    return game.player, (x + 5, y)
+
+
+def test_trampoline_throws_the_player_up():
+    """Батут — самый ранний транспорт: он должен реально подбрасывать."""
+    game = fresh_world(500)
+    player, _ = _drop_player_onto(game, 237)
+    bounced = False
+    for _ in range(90):
+        _run_frames(game, 1)
+        if player.vertical_momentum < -0.3:      # летит вверх
+            bounced = True
+            break
+    assert bounced, "батут не подбросил игрока"
+
+
+def test_trampoline_cancels_fall_damage():
+    """И гасит удар: в этом половина смысла раннего транспорта — вертикальный
+    мир перестаёт наказывать за спуск ещё до блора на столбы."""
+    game = fresh_world(501)
+    player, _ = _drop_player_onto(game, 237, height=40)
+    lives = player.lives
+    _run_frames(game, 120)
+    assert player.lives == lives, f"батут не спас от урона: {lives} -> {player.lives}"
+
+
+def test_falling_on_stone_still_hurts():
+    """Контроль: без батута падение с той же высоты обязано бить, иначе
+    предыдущий тест ничего не проверяет."""
+    game = fresh_world(502)
+    player, _ = _drop_player_onto(game, 3, height=40)
+    lives = player.lives
+    _run_frames(game, 120)
+    assert player.lives < lives, "падение с 40 блоков должно наносить урон"
+
+
+def test_blore_track_carries_the_player():
+    """Дорожка несёт игрока без нажатых клавиш — направление задаёт сама
+    дорожка, как у конвейера и у блоровых столбов."""
+    from units.common import TSIZE
+    game = fresh_world(503)
+    gm = game.game_map
+    x, y = _flat_arena(game, w=30)
+    for tx in range(x, x + 20):
+        gm.set_static_tile(tx, y + 1, 238)
+    game.player.active = True
+    game.player.tp_to((x * TSIZE + 2, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    game.player.moving_left = game.player.moving_right = False
+    start = game.player.rect.x
+    _run_frames(game, 40)
+    assert game.player.rect.x > start + TSIZE, \
+        f"дорожка не понесла игрока: {start} -> {game.player.rect.x}"
+
+
+def _distance_over(game, tile_type, frames=60, running=False):
+    from units.common import TSIZE
+    gm = game.game_map
+    x, y = _flat_arena(game, w=80)
+    for tx in range(x, x + 70):
+        gm.set_static_tile(tx, y + 1, tile_type)
+    p = game.player
+    p.active = True
+    p.tp_to((x * TSIZE + 2, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    game.elapsed_time = 16
+    p.moving_right, p.moving_left = running, False
+    start = p.rect.x
+    _run_frames(game, frames)
+    return (p.rect.x - start) / TSIZE
+
+
+def test_blore_track_is_faster_than_walking():
+    """Транспорт обязан быть быстрее ходьбы — иначе он не транспорт.
+
+    Первая версия читала дорожку из collisions['bottom'] и была МЕДЛЕННЕЕ
+    бега: стоя на месте, игрок падает на доли пикселя, rect.y округляется до
+    нуля, и столкновение с полом в этом кадре не регистрируется — разгон
+    получался рваным (замер: 4.8 блока против 9.1 у бега).
+    """
+    track = _distance_over(fresh_world(506), 238)
+    walk = _distance_over(fresh_world(506), 3, running=True)
+    assert track > walk * 1.3, \
+        f"дорожка ({track:.1f} блока) должна быть заметно быстрее бега ({walk:.1f})"
+
+
+def test_blore_track_direction_flips():
+    """Правый клик разворачивает дорожку — тот же жест, что у конвейера."""
+    from units.common import TSIZE
+    game = fresh_world(504)
+    gm = game.game_map
+    x, y = _flat_arena(game, w=30)
+    for tx in range(x, x + 20):
+        gm.set_static_tile(tx, y + 1, 238)
+    track = gm.get_tile_obj(*gm.to_chunk_xy(x + 10, y + 1), gm.get_static_tile(x + 10, y + 1)[3])
+    assert track.direction() == 1
+    track.right_click((0, 0))
+    assert track.direction() == -1, "разворот дорожки не сработал"
+    # и игрока теперь несёт в другую сторону
+    for tx in range(x, x + 20):
+        gm.set_static_tile_state_img(tx, y + 1, 1)
+    game.player.active = True
+    game.player.tp_to(((x + 15) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    game.player.moving_left = game.player.moving_right = False
+    start = game.player.rect.x
+    _run_frames(game, 40)
+    assert game.player.rect.x < start - TSIZE, \
+        f"развёрнутая дорожка должна нести влево: {start} -> {game.player.rect.x}"
+
+
+def test_blore_track_also_moves_items():
+    """Блор несёт ВСЁ, что в нём стоит: дорожка это и транспорт, и логистика.
+    Отдельный «рельс» и отдельный «конвейер» были бы двумя блоками про одно."""
+    from units.common import TSIZE
+    game = fresh_world(505)
+    gm = game.game_map
+    x, y = _flat_arena(game, w=30)
+    for tx in range(x, x + 20):
+        gm.set_static_tile(tx, y + 1, 238)
+    track = gm.get_tile_obj(*gm.to_chunk_xy(x + 5, y + 1), gm.get_static_tile(x + 5, y + 1)[3])
+    gm.add_item_of_index(3, 1, x + 5, y)
+    item = gm.chunk(gm.to_chunk_xy(x + 5, y))[1][-1]
+    start = item.rect.x
+    for _ in range(20):
+        track.tick(1, 16)
+    assert item.rect.x > start, f"дорожка не двигает предметы: {start} -> {item.rect.x}"
+
+
+def test_early_transport_is_reachable_without_iron():
+    """Транспорт обязан быть доступен в первые минуты. Батут специально не
+    требует ни печки, ни стола: доски — с первого дерева, слизь — с первого
+    слизня."""
+    from units.creating_items import RECIPES
+    recipe = next((r for r in RECIPES if r[0][0] == 237), None)
+    assert recipe is not None, "у батута нет рецепта"
+    out, ingredients = recipe
+    ids = {i[0] for i in ingredients}
+    assert ids <= {11, 51}, f"ранний транспорт не должен требовать {ids - {11, 51}}"
+    assert 121 not in ids, "батут не должен требовать стол"
+    assert out[1] >= 2, "за один крафт должно получаться несколько батутов"
+
+
+def test_transport_ladder_is_ordered_by_materials():
+    """Порядок ступеней транспорта держится на материалах, а не на словах:
+    правило из docs/BALANCE.md — рецепт содержит ресурс той зоны, для которой
+    блок нужен. Считать «сумму штук» бессмысленно: 4 доски и 2 блоровой руды
+    это разные по цене четвёрки и двойки."""
+    from units.creating_items import RECIPES
+    by_out = {r[0][0]: r for r in RECIPES}
+    def ids(idx):
+        return {i[0] for i in by_out[idx][1] if i[1] > 0}
+
+    surface = {11, 51, 801, 12, 3}          # то, что есть в первые минуты
+    assert ids(237) <= surface, f"батут требует не стартовые ресурсы: {ids(237) - surface}"
+    # Блор — то, что удерживает порядок: без спуска в пещеры дорожку не собрать
+    assert 61 in ids(238), "дорожка должна стоить блора"
+    assert 61 in ids(234), "восходящий столб уже стоит блора — дорожка ему ровня"
+    assert 61 not in ids(237), "батут не должен требовать блора"
+    # Портал — верх лестницы: дороже по числу разных материалов
+    assert len(ids(232)) >= len(ids(238)), "портал должен требовать не меньше видов ресурсов"
 
 
 def test_creatures_do_not_see_through_stone():

@@ -94,6 +94,8 @@ class Player(PhysicalObject):
         self.flying = False
         self.on_up = False
         self.on_down = False
+        # Разгон от блоровой дорожки под ногами (см. docs/TRANSPORT.md)
+        self.track_speed = 0
 
         self.achievements = Achievements(self)
         self.killer = ""
@@ -363,7 +365,11 @@ class Player(PhysicalObject):
         else:
             self.speed //= 2
             if self.speed == -1: self.speed = 0
-        player_movement[0] += self.speed * elapsed_time
+        # Разгон блоровой дорожки — отдельным слагаемым, а не через self.speed:
+        # self.speed каждый кадр пересчитывается от ввода (и гасится делением
+        # при отсутствии ввода), так что записанный в него разгон умирал бы на
+        # следующем же кадре.
+        player_movement[0] += (self.speed + self.track_speed) * elapsed_time
         player_movement[1] += self.vertical_momentum * elapsed_time
         if self.flying:
             if self.on_up:
@@ -403,19 +409,42 @@ class Player(PhysicalObject):
             self.air_timer = 0
             self.jump_count = 0
 
+        # Блоровая дорожка (238) — горизонтальный близнец столбов: несёт того,
+        # кто на ней стоит. Направление задаёт сама дорожка (кадр тайла), а не
+        # клавиша, — как у конвейера и по той же причине: видно, куда везёт.
+        # Тайл под ногами читаем напрямую, а не из collisions['bottom']: стоя
+        # на месте, игрок падает на доли пикселя, rect.y округляется вниз до
+        # нуля, и столкновение с полом в этом кадре не регистрируется вовсе.
+        # По коллизиям разгон получался рваным — замер давал 4.8 блока за 60
+        # кадров против 9.1 у обычного бега, то есть «транспорт» был медленнее
+        # ходьбы.
+        foot = self.game_map.get_static_tile(self.rect.centerx // TSIZE,
+                                             (self.rect.bottom + 1) // TSIZE,
+                                             create_chunk=False)
+        if foot and foot[0] == 238:
+            self.track_speed = -BLORE_TRACK_SPEED if foot[2] else BLORE_TRACK_SPEED
+        else:
+            self.track_speed = 0
+
         # if self.game.blocks_ui_manager.opened:
         #     dist2 = (Vector2(self.game.blocks_ui_manager.opened.rect.center) - Vector2(self.rect.center)).length_squared()
         #     if dist2 > TSIZE * 16:
         #         self.game.blocks_ui_manager.close()
         #         self.inventory.ui.open()
         if collisions['bottom']:
-            if not self.first_fall and self.vertical_momentum > 0.75:
+            # Слизневый батут (237): подбрасывает и гасит удар. Проверяется ДО
+            # урона от падения — в этом и смысл самого раннего транспорта:
+            # вертикальный мир перестаёт наказывать за спуск ещё до того, как
+            # игрок доберётся до блора на столбы.
+            on_trampoline = 237 in self.collisions_ttile
+            if not on_trampoline and not self.first_fall and self.vertical_momentum > 0.75:
                 self.damage(int(self.vertical_momentum * 2) ** 2)
             self.air_timer = 0
             self.jump_count = 0
-            self.vertical_momentum = 0
+            self.vertical_momentum = -TRAMPOLINE_SPEED if on_trampoline else 0
             self.first_fall = False
-            if abs(self.speed) > 0 and self.state_step_sound == 0 or self.air_timer > FPS // 2:
+            if not on_trampoline and (abs(self.speed) > 0 and self.state_step_sound == 0
+                                      or self.air_timer > FPS // 2):
                 if 104 in self.collisions_ttile or collisions['bottom'][0][1] == 1:
                     step_sound = get_random_sound_of(sounds_step_dry).play()
                 else:
