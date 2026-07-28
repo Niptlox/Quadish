@@ -165,8 +165,32 @@ class GameUI(UI):
 
         self.sys_message.draw(self.screen)
         self.achievement_message.draw(self.screen)
+        self.draw_goal()
         self.redraw_playerui()
         self.playerui.draw(self.screen)
+
+    # Текущая цель — одна строка в углу. Не окно и не подсказка с кнопкой:
+    # песочнице нужен ответ на «а что делать?», а не сопровождающий.
+    goal_font = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 16)
+
+    def draw_goal(self):
+        if not config.GameSettings.show_goal:
+            return
+        from units.Story import current_goal
+        goal = current_goal(self.scene)
+        if not goal:
+            return
+        if goal != getattr(self, "_goal_text", None):
+            self._goal_text = goal
+            surf = self.goal_font.render(goal, True, (228, 228, 231))
+            shadow = self.goal_font.render(goal, True, (12, 12, 16))
+            box = pygame.Surface((surf.get_width() + 14, surf.get_height() + 8),
+                                 pygame.SRCALPHA, 32)
+            box.fill((24, 24, 27, 140))
+            box.blit(shadow, (8, 5))
+            box.blit(surf, (7, 4))
+            self._goal_surface = box
+        self.screen.blit(self._goal_surface, (10, 10))
 
     def flip(self):
         pygame.display.flip()
@@ -1197,6 +1221,88 @@ class AchievementsUI(UI):
 
         self.screen.blit(self.surface, self.rect)
         pg.display.flip()
+
+
+class JournalUI(UI):
+    """Журнал: акты сюжета и прочитанные надписи.
+
+    До него `GameMap.read_inscriptions` копил прочитанное вхолостую — поле
+    было, сохранялось, а читателя у него не было ни одного. Игрок находил
+    плиту, читал строчку, и она уходила в никуда.
+    """
+    bg = (39, 39, 42)
+    font_title = pygame.font.Font(MAIN_FONT_PATH, 28)
+    font_act = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 20)
+    font_goal = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 16)
+    font_note = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 15)
+    done_color = "#84CC16"
+    todo_color = "#FDE047"
+    text_color = "#E4E4E7"
+    dim_color = "#A1A1AA"
+
+    def __init__(self, scene):
+        super().__init__(scene)
+        self.scroll = 0
+        self.relayout()
+
+    def relayout(self):
+        w, h = self.screen.get_size()
+        self.rect = pg.Rect(0, 0, min(760, w - 40), min(560, h - 40))
+        self.rect.center = w // 2, h // 2
+        self.surface = pg.Surface(self.rect.size).convert_alpha()
+
+    def _game(self):
+        return self.scene.app.game_scene
+
+    def lines(self):
+        """Плоский список строк (текст, шрифт, цвет) — так проще прокручивать
+        и не надо считать высоту блоков дважды."""
+        from units.Story import journal_entries
+        acts, notes = journal_entries(self._game())
+        out = []
+        for title, goal, done in acts:
+            mark = "✓" if done else "•"
+            out.append((f"{mark} {title}", self.font_act,
+                        self.done_color if done else self.todo_color))
+            out.append(("   " + goal, self.font_goal, self.dim_color))
+            out.append(("", self.font_goal, self.text_color))
+        out.append((get_translated_text("Найденные записи"), self.font_act, self.todo_color))
+        if not notes:
+            out.append((get_translated_text("Пока ничего не прочитано"),
+                        self.font_note, self.dim_color))
+        for heading, body in notes:
+            out.append(("  " + heading, self.font_goal, self.text_color))
+            for line in body:
+                out.append(("    " + line, self.font_note, self.dim_color))
+            out.append(("", self.font_note, self.text_color))
+        return out
+
+    def draw(self):
+        self.draw_world_background()
+        self.surface.fill(self.bg)
+        title = self.font_title.render(get_translated_text("Журнал"), True, "#FFFFFF")
+        self.surface.blit(title, (16, 12))
+        pg.draw.line(self.surface, "#52525B", (16, 50), (self.rect.w - 16, 50), 2)
+
+        y = 60 - self.scroll
+        for text, font, color in self.lines():
+            if text and -30 < y < self.rect.h:
+                self.surface.blit(font.render(text, True, color), (18, y))
+            y += font.get_height() + 2
+        self._content_height = y + self.scroll
+
+        hint = self.font_note.render(get_translated_text("Esc — закрыть"), True, self.dim_color)
+        self.surface.blit(hint, (self.rect.w - hint.get_width() - 14, self.rect.h - 22))
+        self.screen.blit(self.surface, self.rect)
+        pg.display.flip()
+
+    def pg_event(self, event: pg.event.Event):
+        if event.type == pg.MOUSEWHEEL:
+            self.scroll = max(0, self.scroll - event.y * 40)
+            return True
+        if event.type == pg.KEYDOWN and event.key in (pg.K_DOWN, pg.K_UP):
+            self.scroll = max(0, self.scroll + (40 if event.key == pg.K_DOWN else -40))
+            return True
 
 
 class HelpUI(UI):

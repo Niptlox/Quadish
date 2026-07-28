@@ -1,7 +1,7 @@
 import webbrowser
 
 from units.App.App import *
-from units.UI.UI import (WorldListUI, EndUI, PauseUI, AchievementsUI, TitleUI, MainSettingsUI,
+from units.UI.UI import (WorldListUI, EndUI, PauseUI, AchievementsUI, JournalUI, TitleUI, MainSettingsUI,
                          SoundSettingsUI, HelpUI, ScreenSettingsUI, GraphicsSettingsUI,
                          WorldSettingsUI, ModsSettingsUI)
 
@@ -145,6 +145,12 @@ class AchievementsSceneUI(ScenePopupMenu):
     def __init__(self, app: App) -> None:
         self.game = app.game_scene
         super().__init__(app, lambda app: AchievementsUI(app, self.game.player.achievements))
+
+
+class JournalSceneUI(ScenePopupMenu):
+    """Журнал сюжета — по клавише J из игры."""
+    def __init__(self, app: App) -> None:
+        super().__init__(app, JournalUI)
 
 
 class HelpSceneUI(ScenePopupMenu):

@@ -115,6 +115,9 @@ class GameSettings(__Settings):
     max_fps = config.getint(section, 'max_fps', fallback=60)
     dynamic_dump = config.getboolean(section, 'dynamic_dump', fallback=True)
     vsync = config.getboolean(section, 'vsync', fallback=True)
+    # Текущая цель сюжета одной строкой в углу экрана (units/Story.py).
+    # Отключаемо: кому-то песочница нужна без единой подсказки.
+    show_goal = config.getboolean(section, 'show_goal', fallback=True)
     # вид курсора: arrow/cross/cross_dot/corners/circle/system
     # (см. units/Graphics/Cursor.py CURSOR_KINDS)
     cursor = config.get(section, 'cursor', fallback='arrow')

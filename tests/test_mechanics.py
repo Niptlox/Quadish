@@ -4223,6 +4223,189 @@ def test_vehicle_recipes_are_gated_by_zone():
     assert ids(611) <= early, f"плот не должен требовать {ids(611) - early}"
 
 
+# ===================== сутки, события, сюжет =====================
+#
+# До этого в игре не происходило ничего: мир был неподвижен во времени, никто
+# не угрожал, никто ничего не просил, а сюжет лежал в docs/STORY.md и в поле
+# read_inscriptions, у которого не было ни одного читателя.
+
+def test_new_world_starts_in_daylight():
+    """Сутки начинаются ДНЁМ. При порядке «сначала рассвет» world_time == 0
+    попадал на темноту, и первое, что видел игрок в новом мире, — ночь."""
+    from units.common import daylight, is_night
+    game = fresh_world(910)
+    assert game.game_map.world_time == 0
+    assert daylight(0) == 1.0, "новый мир должен начинаться при полном свете"
+    assert not is_night(0)
+
+
+def test_day_night_cycle_is_a_full_circle():
+    """Свет обязан пройти полный круг: день → закат → ночь → рассвет → день."""
+    from units.common import DAY_LENGTH, daylight, is_night
+    seen_day = seen_night = seen_twilight = False
+    for i in range(200):
+        t = int(DAY_LENGTH * i / 200)
+        light = daylight(t)
+        if light == 1.0:
+            seen_day = True
+        elif light <= 0.3:
+            seen_night = True
+        else:
+            seen_twilight = True
+    assert seen_day and seen_night and seen_twilight, "в сутках должны быть все фазы"
+    assert daylight(0) == daylight(DAY_LENGTH), "цикл должен замыкаться"
+    assert is_night(int(DAY_LENGTH * 0.8)), "середина ночи обязана быть ночью"
+
+
+def test_underground_does_not_blink_with_the_night():
+    """Под землёй смена суток ничего не значит: там свой свет, и мигающая с
+    ночью пещера читалась бы как баг."""
+    from units.common import DAY_LENGTH, surface_daylight, BOTTOM_MIDDLE_WORLD
+    night = int(DAY_LENGTH * 0.8)
+    assert surface_daylight(night, 0) < 0.5, "на поверхности ночью темно"
+    assert surface_daylight(night, BOTTOM_MIDDLE_WORLD) == 1.0, "внизу ночи нет"
+    assert surface_daylight(night, 200) > surface_daylight(night, 0), "глубже — меньше влияния"
+
+
+def test_world_time_survives_save_and_load():
+    """Время суток живёт в мире, а не в запуске: иначе каждая загрузка
+    выбрасывала бы игрока в один и тот же час."""
+    game = fresh_world(911)
+    gm = game.game_map
+    gm.world_time = 12345
+    gm.save_current_game_map()
+    wid = gm.world_id
+    fresh_world(912)
+    assert gm.open_game_map(game, wid)
+    assert gm.world_time == 12345, f"часы мира сбросились: {gm.world_time}"
+
+
+def test_lit_lamp_keeps_creatures_away():
+    """Свет отгоняет тварей — и это первая причина тянуть провода не из
+    любопытства, а чтобы ночью не съели.
+
+    Проверяется именно ПИТАНИЕ, а не наличие блока: лампа без сигнала это
+    просто стекляшка.
+    """
+    game = fresh_world(913)
+    gm = game.game_map
+    x, y = _flat_arena(game, w=30)
+    lamp = _place_block(gm, x + 10, y, 215)
+    assert lamp is not None
+    assert not gm.lit_by_lamp(x + 10, y), "негорящая лампа не должна защищать"
+    lamp.activated_tact = game.tact          # подали сигнал
+    assert gm.lit_by_lamp(x + 10, y), "горящая лампа должна отгонять"
+    assert gm.lit_by_lamp(x + 10 + gm.LAMP_SAFE_RADIUS, y), "на границе радиуса — ещё защищает"
+    assert not gm.lit_by_lamp(x + 10 + gm.LAMP_SAFE_RADIUS + 3, y), "дальше радиуса — уже нет"
+
+
+def test_night_raid_only_at_night_and_on_the_surface():
+    """Налёт — событие, а не расписание: он не идёт днём и не идёт под землёй,
+    где случайный спавн от него не отличить."""
+    from units.common import TSIZE, DAY_LENGTH
+    from units.Events import NightRaid
+    game = fresh_world(914)
+    raid = NightRaid()
+    game.player.tp_to((0, 8 * TSIZE))
+    assert not raid.can_start(game, 0), "днём налёта быть не должно"
+    night = int(DAY_LENGTH * 0.8)
+    assert raid.can_start(game, night), "ночью на поверхности налёт возможен"
+    game.player.tp_to((0, 600 * TSIZE))                # глубоко под землёй
+    assert not raid.can_start(game, night), "под землёй налёта быть не должно"
+
+
+def test_event_warns_before_it_starts():
+    """Событие предупреждает о себе: внезапная смерть из ниоткуда — это не
+    сложность, а несправедливость."""
+    from units.common import TSIZE, DAY_LENGTH
+    from units.Events import NightRaid
+    game = fresh_world(915)
+    raid = NightRaid()
+    game.player.tp_to((0, 8 * TSIZE))
+    t = int(DAY_LENGTH * 0.8)
+    raid.tick(game, t)
+    assert raid.warned_at == t, "первым делом событие обязано предупредить"
+    assert not raid.active(), "и не начинаться в тот же такт"
+    raid.tick(game, t + raid.warning)
+    assert raid.active(), "после предупреждения событие должно начаться"
+
+
+def test_only_one_event_at_a_time():
+    """Два наложившихся события игрок читает как «игра сломалась»."""
+    from units.common import TSIZE, DAY_LENGTH
+    from units.Events import EventDirector
+    game = fresh_world(916)
+    director = EventDirector()
+    game.player.tp_to((0, 8 * TSIZE))
+    game.game_map.world_time = int(DAY_LENGTH * 0.8)
+    for _ in range(400):
+        game.game_map.world_time += 10
+        director.update(game)
+    assert sum(1 for e in director.events if e.active()) <= 1
+
+
+def test_story_goal_advances_with_the_world():
+    """Цель проверяется по состоянию мира, а не по скрипту: прочитал плиту —
+    акт закрылся сам."""
+    from units.Story import current_goal, update_story
+    game = fresh_world(917)
+    first = current_goal(game)
+    assert first, "у нового мира должна быть цель"
+    game.game_map.read_inscriptions = ["altar"]
+    closed = update_story(game)
+    assert closed is not None and closed.id == "arrival"
+    assert current_goal(game) != first, "цель должна смениться"
+
+
+def test_story_progress_is_irreversible():
+    """Выполненный акт остаётся выполненным: иначе цель прыгала бы назад."""
+    from units.Story import update_story, current_act
+    game = fresh_world(918)
+    game.game_map.read_inscriptions = ["altar"]
+    update_story(game)
+    game.game_map.read_inscriptions = []      # условие пропало
+    update_story(game)
+    assert "arrival" in game.game_map.story_done, "прогресс не должен откатываться"
+    assert current_act(game).id != "arrival"
+
+
+def test_story_survives_save_and_load():
+    from units.Story import update_story
+    game = fresh_world(919)
+    game.game_map.read_inscriptions = ["altar"]
+    update_story(game)
+    gm = game.game_map
+    gm.save_current_game_map()
+    wid = gm.world_id
+    fresh_world(920)
+    assert gm.open_game_map(game, wid)
+    assert "arrival" in gm.story_done, "сюжет должен сохраняться вместе с миром"
+
+
+def test_journal_shows_acts_and_read_notes():
+    """Журнал — тот самый читатель, которого у read_inscriptions не было."""
+    from units.Story import journal_entries, ACTS
+    game = fresh_world(921)
+    game.game_map.read_inscriptions = ["altar"]
+    acts, notes = journal_entries(game)
+    assert len(acts) == len(ACTS)
+    assert notes and "алтар" in notes[0][0].lower(), f"надпись не попала в журнал: {notes}"
+
+
+def test_story_never_crashes_on_an_old_world():
+    """Мир мог быть создан версией без сюжетных полей — сюжет обязан это
+    пережить, а не уронить игру."""
+    from units.Story import update_story, current_goal, journal_entries
+    game = fresh_world(922)
+    gm = game.game_map
+    for field in ("story_done", "story_flags", "read_inscriptions", "world_time"):
+        if hasattr(gm, field):
+            delattr(gm, field)
+    update_story(game)
+    assert current_goal(game)
+    journal_entries(game)
+
+
 def test_creatures_do_not_see_through_stone():
     """Стая сбегалась к игроку, который копал в закрытой шахте через двадцать
     блоков породы."""

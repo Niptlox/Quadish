@@ -45,6 +45,16 @@ class ScreenMap:
                                                self.edges[3] - int(height * 0.3) + display.get_height()) * PARALLAX])
         print("CLOUDS:", area // 1200000)
 
+        # Ночные звёзды — отдельный слой от космических (self.sky_stars): те
+        # живут высоко над атмосферой и с поверхности не видны вовсе. Без них
+        # ночь читалась бы не как ночь, а как «экран потемнел».
+        self.night_stars = []
+        for i in range(max(200, int(area // 900000))):
+            self.night_stars.append([
+                (self.edges[0] + random.random() * (width + display.get_width())) * PARALLAX,
+                random.randint(self.edges[2], self.edges[3]) * PARALLAX,
+                random.randint(1, 2)])
+
         self.edges_for_stars = [-20000, 20000, START_SPACE_Y * TSIZE - 15000, TOP_MIDDLE_WORLD * TSIZE]
         width = self.edges_for_stars[1] - self.edges_for_stars[0]
         height = self.edges_for_stars[3] - self.edges_for_stars[2]
@@ -68,11 +78,24 @@ class ScreenMap:
         self.true_scroll[0] = self.player.rect.x - WSIZE[0] // 2
         self.true_scroll[1] = self.player.rect.y - WSIZE[1] // 2
 
+    def world_time(self):
+        return getattr(self.game_map, "world_time", 0)
+
+    def sky_light(self):
+        """Освещённость неба здесь и сейчас: 1 — день, меньше — ночь.
+
+        Считается от глубины: под землёй смена суток ничего не значит, там
+        свой свет, и мигающая с ночью пещера читалась бы как баг."""
+        return surface_daylight(self.world_time(), self.player.rect.y // TSIZE)
+
     def draw_sky(self):
         sky_cosmos = (5, 7, 14, 255)
         sky_atmo = (10, 15, 28, 255)
         sky_center = (165, 243, 252, 255)
         sky_red = (135, 0, 0, 255)
+        # Ночное небо не просто «тёмно-голубое»: холодный синий читается как
+        # ночь, а затемнённый дневной — как пасмурный день.
+        sky_night = (12, 18, 44, 255)
         i = self.player.rect.y
         if i > TSIZE * BOTTOM_MIDDLE_WORLD:
             # ад
@@ -90,6 +113,12 @@ class ScreenMap:
         else:
             color = sky_center
         # print("COLOR SKY", color)
+        light = self.sky_light()
+        if light < 1.0:
+            # Ведём цвет к ночному, а не просто умножаем на яркость: умножение
+            # даёт «выключенный монитор», а не ночь.
+            k = (1.0 - light) / (1.0 - NIGHT_LIGHT)
+            color = tuple(int(c + (n - c) * k) for c, n in zip(color[:3], sky_night[:3])) + (255,)
         self.display.fill(color)
 
     def update(self, tact, elapsed_time):
@@ -149,6 +178,19 @@ class ScreenMap:
                     y = star[2] - off_y
                     if -m < y < sh:
                         blit(star_images[star[0]], (x, y))
+        # Ночные звёзды — до облаков, чтобы облака шли поверх них
+        night_light = self.sky_light()
+        if GameSettings.stars and night_light < 0.95:
+            alpha = int(255 * min(1.0, (1.0 - night_light) / (1.0 - NIGHT_LIGHT)))
+            off_x = scroll[0] * PARALLAX
+            off_y = scroll[1] * PARALLAX
+            surf = self.display
+            for sx, sy, size in self.night_stars:
+                x = sx - off_x
+                if 0 <= x < sw:
+                    y = sy - off_y
+                    if 0 <= y < sh:
+                        pg.draw.rect(surf, (230, 240, 255, alpha), (x, y, size, size))
         if GameSettings.clouds:
             m = self.cloud_margin
             off_x = scroll[0] * PARALLAX

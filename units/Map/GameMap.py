@@ -63,6 +63,10 @@ class GameMap(SavedObject):
         self.story_stage = 0      # номер акта, 0 = ещё ничего не начато
         self.story_state = {}     # что найдено/сделано по сюжету
         self.read_inscriptions = []  # id прочитанных надписей = журнал
+        # Сюжет (units/Story.py): закрытые акты и необратимые отметки.
+        # Живут в мире, а не в игроке: это состояние ЭТОГО мира.
+        self.story_done = []
+        self.story_flags = []
         # Динамическая выгрузка карты: дальние немодифицированные чанки
         # удаляются из памяти и детерминированно регенерируются при возврате.
         # modified_chunks — чанки с правками игрока/структурами, их не трогаем.
@@ -108,6 +112,10 @@ class GameMap(SavedObject):
         # чанки, тайлы которых уже отработали такт в текущем круге
         self._offscreen_tiles_done = set()
         self._offscreen_entity_left = 0
+        # Часы мира: отдельно от game.tact, потому что tact живёт только в
+        # текущем запуске, а время суток должно сохраняться вместе с миром —
+        # иначе каждая загрузка выбрасывала бы игрока в рассвет.
+        self.world_time = 0
         if self.base_generation is None:
             self.new_base_generation()
 
@@ -179,6 +187,33 @@ class GameMap(SavedObject):
         px, py = player.rect.centerx // TSIZE, player.rect.centery // TSIZE
         return abs(tile_x - px) <= half_w and abs(tile_y - py) <= half_h
 
+    # Радиус, в котором горящая лампа не даёт существу родиться. Это единственный
+    # способ сделать базу по-настоящему безопасной — и заодно первая причина
+    # тянуть провода не «чтобы красиво», а чтобы ночью не съели.
+    LAMP_SAFE_RADIUS = 8
+    LAMP_TILE = 215
+
+    def lit_by_lamp(self, tile_x, tile_y):
+        """Есть ли рядом ГОРЯЩАЯ лампа.
+
+        Проверяем не наличие блока, а поданный на него сигнал: лампа без
+        питания — просто стекляшка, и защищать она не должна. Так ночь даёт
+        сигнальной сети первое применение, ради которого её строят не из
+        любопытства.
+        """
+        r = self.LAMP_SAFE_RADIUS
+        for cxy in {self.to_chunk_xy(tile_x + dx, tile_y + dy)
+                    for dx in (-r, 0, r) for dy in (-r, 0, r)}:
+            chunk = self.game_map.get(cxy)
+            if chunk is None:
+                continue
+            for obj in chunk[2].values():
+                if getattr(obj, "index", None) != self.LAMP_TILE:
+                    continue
+                if abs(obj.tx - tile_x) <= r and abs(obj.ty - tile_y) <= r and obj.is_active():
+                    return True
+        return False
+
     def update_chunk(self, chunk):
         if config.GameSettings.creatures:
             crt_cash = chunk[3]
@@ -188,9 +223,17 @@ class GameMap(SavedObject):
                     dynamic_tiles = chunk[1]
                     crt_cnt = min(len(crt_cash[0]), random.randint(0, CHUNK_CREATURE_LIMIT - crt_cash[1]))
                     tiles_xy = random.choices(tuple(crt_cash[0]), k=crt_cnt)
+                    if is_night(getattr(self, "world_time", 0)):
+                        # Ночью мир населяется гуще — иначе ночь это просто
+                        # тёмный экран, а не время, когда лучше не выходить.
+                        crt_cnt = min(len(crt_cash[0]),
+                                      int(crt_cnt * NIGHT_SPAWN_MULT) + 1)
+                        tiles_xy = random.choices(tuple(crt_cash[0]), k=crt_cnt)
                     for tile_xy in tiles_xy:
                         if self.spawn_is_visible(*tile_xy):
                             continue        # не рождаем существо на глазах
+                        if self.lit_by_lamp(*tile_xy):
+                            continue        # свет отгоняет — см. lit_by_lamp
                         biome = biome_of_pos(tile_xy[0], tile_xy[1])[0]
                         Crt = random_creature_selection(tile_xy[1], biome, tile_xy[0])
                         if Crt is not None:
@@ -1436,6 +1479,10 @@ class GameMap(SavedObject):
         self.world_id = self.world_meta["id"]
         self.set_structure((-10, -13), structure_start)
         self.game.reinit_player()
+        # У нового мира нет незакрытых событий: директор помнит
+        # кулдауны и незавершённый налёт, а они относились к прошлому миру.
+        if hasattr(self.game, 'events'):
+            self.game.events.__init__()
         self.game.player.tp_to(config.GameSettings.start_pos)
         self.spawn_gate()
         self._place_altar_tablet()

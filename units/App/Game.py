@@ -8,7 +8,7 @@ from units.UI.UI import GameUI
 from units.Map.GameMap import GameMap
 from units.Map.ScreenMap import ScreenMap
 from units.App.Scenes import TitleScene, WorldsScenePopupMenu, PauseScenePopupMenu, EndSceneUI, \
-    AchievementsSceneUI, HelpSceneUI
+    AchievementsSceneUI, HelpSceneUI, JournalSceneUI
 from units.Map import WorldStorage
 from units.Tutorial import TutorialHints
 
@@ -30,6 +30,7 @@ class GameApp(App):
         self.pause_scene = PauseScenePopupMenu(self)
         self.end_scene = EndSceneUI(self)
         self.achievements_scene = AchievementsSceneUI(self)
+        self.journal_scene = JournalSceneUI(self)
         self.help_scene = HelpSceneUI(self)
         if GameSettings.debug_open_map:
             super().__init__(self.game_scene)
@@ -53,6 +54,9 @@ class GameScene(Scene):
         self.first_start = False
         self.hided_ui = False
         self.tutorial = TutorialHints(self)
+        # События мира: то, что происходит С игроком (units/Events.py)
+        from units.Events import EventDirector
+        self.events = EventDirector()
         self.background_sound = get_random_sound_of(sounds_background).play(loops=-1, )
         if GameSettings.debug_open_map:
             worlds = WorldStorage.list_worlds()
@@ -97,6 +101,10 @@ class GameScene(Scene):
                         self.player.inventory.ui.open()
                     return True
 
+                elif event.key == pg.K_j and not pg.key.get_mods():
+                    # Журнал сюжета. Без модификаторов: Alt+J это смена режима
+                    self.set_scene(self.app.journal_scene)
+                    return True
                 elif event.key == K_g and pg.key.get_mods() & KMOD_CTRL:
                     global choice_pos1, choice_pos2
                     print("Choice of world")
@@ -151,11 +159,20 @@ class GameScene(Scene):
             self.tutorial.draw_hud(self.screen)
         self.ui.flip()
         self.tact += 1
+        # Часы мира идут отдельно от tact: они сохраняются вместе с миром
+        self.game_map.world_time = getattr(self.game_map, "world_time", 0) + 1
         if self.tact % 30 == 0:
             self.tutorial.update()
         # Автоматика под прогрузчиком должна работать и когда игрок ушёл:
         # ScreenMap обновляет только видимые тайлы.
         self.game_map.tick_offscreen(self.tact, self.screen_map.visible_chunks)
+        self.events.update(self)
+        if self.tact % FPS == 0:
+            # Сюжет смотрит в инвентарь и координаты — раз в секунду хватает
+            from units.Story import update_story
+            closed = update_story(self)
+            if closed is not None:
+                self.ui.new_sys_message(f"{closed.title}: выполнено")
         if self.tact % (FPS * 5) == 0:
             self.game_map.unload_far_chunks()
         if self.tact % AUTOSAVE_PERIOD_TACTS == 0 and self.game_map.world_id is not None:
