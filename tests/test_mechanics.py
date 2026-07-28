@@ -2346,36 +2346,58 @@ def test_portal_code_changes_reindex_pairing():
     assert b.pair() is None, "и обратная связь тоже"
 
 
-def test_elevator_carries_player_up_and_down():
-    """Лифт: расстояния до ада и космоса — тысячи блоков по вертикали,
-    пешком их не пройти. Спуск медленнее подъёма и ниже порога урона от
-    падения, иначе приезд на дно бил бы игрока."""
+def _stand_in_shaft(game, tile_id, x=50, y=20):
+    """Поставить игрока внутрь вертикальной шахты из заданного блока."""
+    from units.common import TSIZE
+    gm = game.game_map
+    for dy in range(-6, 7):
+        gm.set_static_tile(x, y + dy, tile_id)
+    game.player.tp_to((x * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    game.elapsed_time = 16
+    game.update()                           # кадр заполняет static_tiles
+    game.player.tp_to((x * TSIZE, y * TSIZE))
+    game.player.moving(16)
+    return game.player
+
+
+def test_blore_columns_move_player_by_direction_of_the_shaft():
+    """Два отдельных блока вместо одного «универсального лифта»: направление
+    задаёт сама шахта, а не зажатая клавиша. Так видно, куда шахта везёт, и
+    собирается нормальный двухполосный подъёмник — вверх слева, вниз справа.
+
+    Спуск медленнее подъёма и держится ниже порога урона от падения, иначе
+    приезд на дно шахты бил бы игрока.
+    """
     from units.common import ELEVATOR_UP_SPEED, ELEVATOR_DOWN_SPEED
     assert ELEVATOR_DOWN_SPEED < 0.75, "спуск не должен наносить урон при приземлении"
     assert ELEVATOR_DOWN_SPEED < ELEVATOR_UP_SPEED
 
-    from units.common import TSIZE
-    game = fresh_world(75)
-    gm = game.game_map
-    x, y = 50, 20
-    for dy in range(-6, 7):                 # шахта лифта
-        gm.set_static_tile(x, y + dy, 234)
-    player = game.player
-    player.tp_to((x * TSIZE, y * TSIZE))
-    game.screen_map.teleport_to_player()
-    game.elapsed_time = 16
-    game.update()                           # кадр заполняет static_tiles
-    player.tp_to((x * TSIZE, y * TSIZE))
+    up = _stand_in_shaft(fresh_world(75), 234)
+    assert 234 in up.collisions_ttile, "игрок должен стоять в шахте"
+    assert up.vertical_momentum == -ELEVATOR_UP_SPEED, "восходящий столб тянет вверх"
+    assert up.jump_count == 0, "столб не должен съедать прыжки"
 
-    player.on_down = False
-    player.moving(16)
-    assert 234 in player.collisions_ttile, "игрок должен стоять в шахте"
-    assert player.vertical_momentum == -ELEVATOR_UP_SPEED, "в шахте игрока тянет вверх"
-    assert player.jump_count == 0, "лифт не должен съедать прыжки"
+    # клавиша «вниз» на подъём не влияет: направление у блока, не у игрока
+    up.on_down = True
+    up.moving(16)
+    assert up.vertical_momentum == -ELEVATOR_UP_SPEED
 
-    player.on_down = True
-    player.moving(16)
-    assert player.vertical_momentum == ELEVATOR_DOWN_SPEED, "присед опускает"
+    down = _stand_in_shaft(fresh_world(76), 236)
+    assert 236 in down.collisions_ttile
+    assert down.vertical_momentum == ELEVATOR_DOWN_SPEED, "нисходящий столб опускает"
+
+
+def test_blore_columns_cost_blore():
+    """Столбы завязаны на блор: по сюжету именно блор держит перемещение.
+    Подъём дороже спуска — падать планета помогает и так."""
+    get_app()
+    from units.creating_items import RECIPES
+    recipes = {rec[0][0]: dict(rec[1]) for rec in RECIPES if rec[0][0] in (234, 236)}
+    assert 234 in recipes and 236 in recipes, "у обоих столбов должен быть рецепт"
+    assert recipes[234].get(61), "восходящий столб должен стоить блоровой руды"
+    assert recipes[236].get(61), "нисходящий тоже"
+    assert recipes[234][61] > recipes[236][61], "подъём должен быть дороже спуска"
 
 
 def test_golem_nest_spawns_golem_for_stone_under_signal():
@@ -3150,3 +3172,102 @@ def test_gate_does_not_latch_itself_on():
     _tick(game, objs, 6)
     assert not gate.is_active(), "вентиль обязан погаснуть вслед за рычагом"
     assert not lamp.is_active(), "и отпустить сеть за собой"
+
+
+# ===================== озёра =====================
+
+def _find_lake(gm, cells=range(-10, 11)):
+    from units.Map.GameMap import lake_site
+    for cell in cells:
+        site = lake_site(cell, gm.base_generation)
+        if site is not None:
+            return site
+    return None
+
+
+def test_lakes_are_generated_as_flat_basins():
+    """Вода в игре была, но ставилась как «растение» с шансом 0.05 — то есть
+    одиночными тайлами на склонах. Озеро — это ровное зеркало и чашеобразное
+    дно, а не мазок воды по холму."""
+    from units.common import LAKE_MAX_DEPTH
+    for seed in (1, 7, 21):
+        game = fresh_world(seed)
+        gm = game.game_map
+        site = _find_lake(gm)
+        assert site is not None, f"сид {seed}: озёр не нашлось вообще"
+        center, r, level = site
+
+        widths = {}
+        for tx in range(center - r, center + r + 1):
+            col = [ty for ty in range(level - 10, level + LAKE_MAX_DEPTH + 3)
+                   if gm.get_static_tile_type(tx, ty, default=0, create_chunk=True) == 120]
+            if col:
+                widths[tx] = (min(col), max(col))
+        assert len(widths) >= 8, f"сид {seed}: озеро шириной {len(widths)} — это лужа"
+        # Зеркало ровное: верхняя вода во всех колонках на одном уровне.
+        tops = {v[0] for v in widths.values()}
+        assert len(tops) == 1, f"сид {seed}: зеркало неровное, уровни {sorted(tops)}"
+        # Дно — чаша: в середине глубже, чем у берега.
+        mid_depth = max(v[1] for v in widths.values()) - level
+        edge = min(widths), max(widths)
+        edge_depth = max(widths[edge[0]][1], widths[edge[1]][1]) - level
+        assert mid_depth > edge_depth, f"сид {seed}: дно плоское, это не чаша"
+        assert mid_depth <= LAKE_MAX_DEPTH, "озеро не должно быть колодцем"
+
+
+def test_lake_has_open_sky_above_the_water():
+    """Над озером вырезается берег: без этого озеро, вписанное в склон,
+    вырождалось в узкую шахту — замер давал полосу в 5 тайлов при радиусе 20."""
+    game = fresh_world(21)
+    gm = game.game_map
+    site = _find_lake(gm)
+    assert site is not None
+    center, r, level = site
+    for dy in range(1, 4):
+        t = gm.get_static_tile_type(center, level - dy, default=0, create_chunk=True)
+        assert t in (0, 104, 101, 102), f"над зеркалом должно быть открыто, а не {t}"
+
+
+def test_lakes_are_only_in_the_middle_world():
+    """В аду лава, в космосе вакуум — воде там не место."""
+    get_app()
+    from units.Map.GameMap import lake_tile_at
+    from units.common import START_HELL_Y, START_SPACE_Y, BOTTOM_MIDDLE_WORLD, TOP_MIDDLE_WORLD
+    base = 12345
+    for ty in (START_HELL_Y + 50, BOTTOM_MIDDLE_WORLD + 10,
+               START_SPACE_Y - 50, TOP_MIDDLE_WORLD - 10):
+        for tx in range(0, 600, 37):
+            assert lake_tile_at(tx, ty, base) is None, f"вода на y={ty}"
+
+
+def test_lake_lookup_is_a_pure_function_of_seed():
+    """Как и terrain_is_solid: озеро можно узнать заранее, без генерации
+    чанка, — иначе генератор и проба однажды разъедутся."""
+    game = fresh_world(7)
+    gm = game.game_map
+    from units.Map.GameMap import lake_tile_at
+    site = _find_lake(gm)
+    assert site is not None
+    center, r, level = site
+    for dy in range(1, 5):
+        predicted = lake_tile_at(center, level + dy, gm.base_generation)
+        actual = gm.get_static_tile_type(center, level + dy, default=0, create_chunk=True)
+        if predicted == 120:
+            assert actual == 120, f"проба обещала воду на y={level + dy}, в мире {actual}"
+
+
+def test_lake_generation_is_free_for_chunks_without_lakes():
+    """Поиск площадки под озеро — скан столба на 1650 тайлов. Он обязан
+    платиться только там, где озеро действительно есть: замеры давали +61%
+    к стоимости генерации чанка без общего кэша и +29% без дешёвой проверки
+    по горизонтали."""
+    game = fresh_world(1)
+    gm = game.game_map
+    from units.Map.GameMap import lake_shape
+    import inspect
+    src = inspect.getsource(type(gm)._chunk_touches_lake)
+    assert "lake_shape" in src, "сначала должна идти дешёвая проверка по горизонтали"
+    assert src.index("lake_shape") < src.index("lake_site"), \
+        "дорогой поиск уровня не должен идти раньше дешёвой отсечки"
+    assert lake_shape(0, gm.base_generation) is None or \
+        len(lake_shape(0, gm.base_generation)) == 2, "форма — только центр и радиус"

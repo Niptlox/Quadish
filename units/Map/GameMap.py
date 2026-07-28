@@ -25,7 +25,7 @@ from units.Updater import parse_version
 class GameMap(SavedObject):
     not_save_vars = SavedObject.not_save_vars | {"gate", "particles", "world_id", "world_meta",
                                                  "dynamic_dump", "dump_keep_radius", "signal_receivers",
-                                                 "portals"}
+                                                 "portals", "lake_sites"}
     # держим в памяти чанки в этом радиусе (в чанках) вокруг игрока
     DUMP_KEEP_RADIUS = 8
 
@@ -74,6 +74,11 @@ class GameMap(SavedObject):
         # набору предметов внутри. Тоже runtime-кэш: порталы перерегистрируют
         # себя при создании и загрузке (Portal._register в TileClasses.py).
         self.portals = {}
+        # Кэш мест под озёра по клеткам решётки. Поиск площадки под озеро —
+        # это скан столба на ~1650 тайлов, и без общего кэша он повторялся для
+        # КАЖДОГО чанка: замер давал +61% к стоимости генерации чанка. Кэш
+        # выводится из сида, поэтому в сейв не идёт.
+        self.lake_sites = {}
         if self.base_generation is None:
             self.new_base_generation()
 
@@ -409,6 +414,31 @@ class GameMap(SavedObject):
             elif tile[2] == 1 and tile[3][TILE_TIMER] <= tact:
                 if tile[3][TILE_TIMER] != 0:
                     grow_tree((tile_x, tile_y), game_map=self)
+
+    def _chunk_touches_lake(self, base_x, base_y):
+        """Может ли в этом чанке быть вода озера."""
+        if not (TOP_MIDDLE_WORLD < base_y + CHUNK_SIZE and
+                base_y < BOTTOM_MIDDLE_WORLD):
+            return False
+        base = self.base_generation
+        for cell in range(base_x // LAKE_CELL, (base_x + CHUNK_SIZE) // LAKE_CELL + 1):
+            # Сначала дешёвая проверка по горизонтали — без поиска уровня.
+            shape = lake_shape(cell, base)
+            if shape is None:
+                continue
+            if base_x + CHUNK_SIZE <= shape[0] - shape[1] or shape[0] + shape[1] < base_x:
+                continue
+            if cell not in self.lake_sites:
+                self.lake_sites[cell] = lake_site(cell, base)
+            site = self.lake_sites[cell]
+            if site is None:
+                continue
+            center, r, level = site
+            top = level - LAKE_RIM_CLEAR
+            bottom = level + LAKE_MAX_DEPTH
+            if base_y + CHUNK_SIZE > top and base_y <= bottom:
+                return True
+        return False
 
     @staticmethod
     def _asteroid_tile(tile_x, tile_y, base):
@@ -866,6 +896,11 @@ class GameMap(SavedObject):
         # нескольких соседей, а раньше внутри неё noise2 считался 4 раза.
         _noise_cache = {}
         _climate_cache = {}
+        _lake_cache = self.lake_sites
+        # Пересекает ли этот чанк хоть одно озеро. Проверяем один раз на
+        # чанк, а не на каждый из 1024 тайлов: озёра редки, и подавляющее
+        # большинство чанков не должно платить за них вообще.
+        chunk_has_lake = self._chunk_touches_lake(base_x, base_y)
 
         def standart_noise2_bool(tx, ty):
             # кэш по тайлу: одна и та же проверка нужна нескольким соседям
@@ -874,6 +909,7 @@ class GameMap(SavedObject):
                 res = terrain_is_solid(tx, ty, base)
                 _noise_cache[(tx, ty)] = res
             return res
+
 
         # print("noise", (noise2(base_x / freq_x, base_y / freq_y) * 20 + base_y) > START_SPACE_Y)
         for y_pos in range(CHUNK_SIZE):  # local tile y in chunk (not px)
@@ -886,6 +922,10 @@ class GameMap(SavedObject):
                     tile_type = 0
                 # if (noise2(tile_x / freq_x, tile_y / freq_y) * 20 + tile_y) > START_SPACE_Y:
                 #     tile_type = 2
+                # Озеро вырезается поверх рельефа, поэтому считается ДО
+                # ветки «порода / пустота»: чаша выедает и породу тоже.
+                if chunk_has_lake and tile_type is None and biome_info[i][0] != 9:
+                    tile_type = lake_tile_at(tile_x, tile_y, base, _lake_cache)
                 if standart_noise2_bool(tile_x, tile_y) and tile_type is None:
                     if standart_noise2_bool(tile_x, tile_y - 2 - random.randint(0, 1)):
                         tile_type = 3  # stone
@@ -1253,6 +1293,116 @@ def terrain_is_solid(tx, ty, base):
         return False
     return noise2(tx / freq_x, ty / freq_y, _TERRAIN_OCTAVES, persistence=0.35,
                   base=base, lacunarity=_TERRAIN_LACUNARITY) < _TERRAIN_THRESHOLD
+
+
+def lake_shape(cell, base):
+    """Центр и полуширина озера в клетке решётки — БЕЗ поиска уровня.
+
+    Решётка вместо шума — чтобы у озера были заданные размер и центр: из шума
+    получались бы «поля воды» неопределённой формы, а нужна именно чаша.
+
+    Дешёвая часть отделена от дорогой намеренно: уровень зеркала — это скан
+    столба на 1650 тайлов, и платить за него для чанков, которые с озером
+    даже не пересекаются по горизонтали, незачем (замер: +29% к стоимости
+    генерации чанков, где озёр нет вообще).
+    """
+    rnd = random.Random(f"lake:{base}:{cell}")
+    if rnd.random() >= LAKE_CHANCE:
+        return None
+    r = rnd.randint(LAKE_MIN_R, LAKE_MAX_R)
+    margin = r + 4
+    center = cell * LAKE_CELL + rnd.randint(margin, max(margin, LAKE_CELL - margin))
+    return center, r
+
+
+def lake_site(cell, base):
+    """Озеро в клетке: (центр_x, полуширина, уровень зеркала) или None.
+
+    Слой выбирается случайно из всех годных площадок столба, а не берётся
+    самый верхний: мир — это стопка летающих островов с воздушными провалами
+    между ними, и «самый верхний» — это осколок у потолка атмосферы, за
+    тысячу тайлов от игрока.
+    """
+    shape = lake_shape(cell, base)
+    if shape is None:
+        return None
+    center, r = shape
+    tops = _island_tops(center, base)
+    if not tops:
+        return None
+    rnd = random.Random(f"lake-level:{base}:{cell}")
+    return center, r, rnd.choice(tops)
+
+
+def lake_tile_at(tx, ty, base, cache=None):
+    """Что стоит в этом тайле из-за озера: 120 (вода), 0 (берег) или None.
+
+    Чистая функция от (тайл, сид) — как terrain_is_solid, не требует
+    сгенерированного чанка. Значит зеркало озера можно узнать заранее (для
+    структур и проверок), а генератор и проба не разъедутся.
+
+    Берег вырезается вместе с чашей: искать готовую открытую котловину не
+    получается (замер — 8 подходящих тайлов на 800 колонок), а озеро,
+    вписанное в склон без выемки берега, вырождается в узкую шахту.
+    """
+    if not (TOP_MIDDLE_WORLD < ty < BOTTOM_MIDDLE_WORLD):
+        return None
+    cell = tx // LAKE_CELL
+    if cache is None:
+        cache = {}
+    if cell not in cache:
+        cache[cell] = lake_site(cell, base)
+    site = cache[cell]
+    if site is None:
+        return None
+    center, r, level = site
+    dx = tx - center
+    if abs(dx) > r:
+        return None
+    # Полукруглый профиль: у берега мелко, в середине глубоко.
+    bowl = (1 - (dx / r) ** 2) ** 0.5
+    depth = min(LAKE_MAX_DEPTH, int(r * LAKE_DEPTH_FACTOR * bowl))
+    if depth < 1:
+        return None
+    if level < ty <= level + depth:
+        return 120                          # вода
+    if level - int(LAKE_RIM_CLEAR * bowl) <= ty <= level:
+        return 0                            # берег: снимаем породу над зеркалом
+    return None
+
+
+# Мир — не «земля и небо над ней», а облако летающих островов от потолка
+# атмосферы до ада. Поэтому «верх породы в столбце» бесполезен: он находит
+# самый высокий тонкий осколок в тысяче тайлов над игроком. Ищем ПЛОЩАДКУ:
+# верх острова, над которым есть настоящее открытое небо и под которым есть
+# толща породы. Считается один раз на клетку решётки озёр и кэшируется.
+SURFACE_PROBE_SCAN = range(START_ATMO_Y + 5, BOTTOM_MIDDLE_WORLD)
+ISLAND_TOP_CLEARANCE = 14   # воздуха над площадкой (иначе это не поверхность)
+# Породы под площадкой должно быть заведомо больше, чем самая глубокая чаша,
+# иначе у широкого озера дно оказывалось ниже толщи острова, проверка дна не
+# проходила — и озеро молча не появлялось вообще.
+ISLAND_TOP_THICKNESS = int(LAKE_MAX_R * LAKE_DEPTH_FACTOR) + 3
+
+
+def _island_tops(tx, base, clearance=ISLAND_TOP_CLEARANCE,
+                 thickness=ISLAND_TOP_THICKNESS):
+    """Все верхушки островов в столбце, годные под озеро.
+
+    Годная — та, над которой есть настоящее открытое небо (clearance) и под
+    которой есть толща породы (thickness): на тонком осколке озеро вытекло
+    бы через его низ.
+    """
+    tops = []
+    air_run = 0
+    for y in SURFACE_PROBE_SCAN:
+        if terrain_is_solid(tx, y, base):
+            if air_run >= clearance and \
+                    all(terrain_is_solid(tx, y + d, base) for d in range(1, thickness + 1)):
+                tops.append(y)
+            air_run = 0
+        else:
+            air_run += 1
+    return tops
 
 
 def random_plant_selection(biome=None):

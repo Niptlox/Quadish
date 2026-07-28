@@ -389,12 +389,17 @@ class Player(PhysicalObject):
             self.vertical_momentum /= 1.5
         elif {121, 125} & self.collisions_ttile:
             self.inventory.update_available_create_items()
+        # Блоровые столбы: отдельный блок на подъём и отдельный на спуск.
+        # Направление задаёт сама шахта, а не зажатая клавиша, — так видно,
+        # куда шахта везёт, и собирается нормальный двухполосный подъёмник.
+        # Скорость спуска ниже порога урона от падения (0.75, см. ниже) —
+        # иначе приезд на дно шахты бил бы игрока.
         if 234 in self.collisions_ttile:
-            # Лифт: шахта тянет вверх, присед (S/вниз) — опускает. Ад и
-            # космос лежат за тысячами блоков по вертикали, пешком туда не
-            # добраться. Скорость спуска (0.7) намеренно ниже порога урона
-            # от падения (0.75) — иначе приезд на дно шахты бил бы игрока.
-            self.vertical_momentum = ELEVATOR_DOWN_SPEED if self.on_down else -ELEVATOR_UP_SPEED
+            self.vertical_momentum = -ELEVATOR_UP_SPEED
+            self.air_timer = 0
+            self.jump_count = 0
+        elif 236 in self.collisions_ttile:
+            self.vertical_momentum = ELEVATOR_DOWN_SPEED
             self.air_timer = 0
             self.jump_count = 0
 
