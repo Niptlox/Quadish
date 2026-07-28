@@ -135,6 +135,14 @@ class MovingCreature(Creature):
     # Зрение считается не каждый кадр: проверка луча — это до sight_tiles
     # обращений к карте, а поведение от 6 кадров задержки не меняется.
     SENSE_PERIOD = 6
+    # Ближе этого к цели горизонтальный ход прекращается. Без мёртвой зоны
+    # у самой цели знак (цель − я) меняется каждый кадр, и существо, дойдя до
+    # игрока, мелко дрожит на месте вместо того, чтобы стоять и бить.
+    STOP_DISTANCE = TSIZE * 3 // 4
+    # На сколько тактов направление фиксируется после разворота у обрыва.
+    # Решение пересчитывалось каждый кадр: существо отходило на пиксель,
+    # обрыв переставал определяться, оно шло обратно — и так каждый кадр.
+    TURN_LOCK = FPS // 3
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
@@ -144,6 +152,7 @@ class MovingCreature(Creature):
         self.alert_tacts = 0        # сколько ещё помним игрока
         self.provoked = False       # нас ударили — территориальные злятся
         self.last_seen_x = None
+        self.turn_lock = 0          # см. TURN_LOCK
 
     # ---------- восприятие ----------
 
@@ -231,12 +240,28 @@ class MovingCreature(Creature):
                     self.move_tact = random.randint(FPS // 2, FPS * 3)
                     self.move_direction = random.choice((-1, 1))
 
+        if self.turn_lock > 0:
+            # Направление держим: развернулись у обрыва и идём прочь, а не
+            # пересчитываем решение каждый кадр (см. TURN_LOCK).
+            self.turn_lock -= 1
+            return
+
         if self.state == ST_IDLE:
             self.move_direction = 0
         elif self.state == ST_CHASE and self.last_seen_x is not None:
-            self.move_direction = 1 if self.last_seen_x > self.rect.centerx else -1
+            self.move_direction = self._direction_to(self.last_seen_x)
         elif self.state == ST_FLEE and self.last_seen_x is not None:
-            self.move_direction = -1 if self.last_seen_x > self.rect.centerx else 1
+            away = -self._direction_to(self.last_seen_x)
+            # У самой цели знака нет — но убегающему стоять нельзя, поэтому
+            # он продолжает в ту же сторону, а не замирает под носом врага.
+            self.move_direction = away or self.move_direction or random.choice((-1, 1))
+
+    def _direction_to(self, target_x):
+        """Знак направления к цели, с мёртвой зоной у самой цели."""
+        delta = target_x - self.rect.centerx
+        if abs(delta) < self.STOP_DISTANCE:
+            return 0
+        return 1 if delta > 0 else -1
 
     def current_speed(self):
         if self.state in (ST_CHASE, ST_FLEE):
@@ -300,6 +325,15 @@ class MovingCreature(Creature):
         return True
 
     def check_abyss(self):
+        """Не дать уйти в обрыв — и не начать при этом дрожать на краю.
+
+        Раньше направление здесь переписывалось каждый кадр и независимо от
+        того, куда существо вообще шло. Получалась качель: think() гнал к
+        игроку за провалом, check_abyss разворачивал, на следующем кадре
+        обрыв уже не определялся — и так по кругу, каждый кадр.
+        """
+        if not self.move_direction:
+            return                          # стоим — упасть некуда
         x, y = self.rect.bottomleft
         left_abyss = True
         for i in range(self.width_of_abyss):
@@ -313,15 +347,21 @@ class MovingCreature(Creature):
                                                          convert_to_tile_pos=True)
             x += TSIZE
         if left_abyss and right_abyss:
-            return
+            return                          # стоим над пустотой, разворот не спасёт
         # Если через провал есть куда перескочить — не разворачиваемся:
         # иначе существо навсегда заперто на островке, где появилось.
         if self.can_jump_the_gap():
             return
-        if left_abyss:
-            self.move_direction = 1
-        elif right_abyss:
-            self.move_direction = -1
+        blocked = -1 if left_abyss else (1 if right_abyss else 0)
+        if not blocked or self.move_direction != blocked:
+            return                          # мы и так идём не в обрыв
+        if self.state in (ST_CHASE, ST_FLEE):
+            # Цель за обрывом. Разворот читался бы как бегство, а пересчёт
+            # каждый кадр давал дрожание — существо просто стоит на краю.
+            self.move_direction = 0
+        else:
+            self.move_direction = -blocked
+            self.turn_lock = self.TURN_LOCK
 
 
 "#D9F99DAA"

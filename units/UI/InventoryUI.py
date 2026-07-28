@@ -12,7 +12,33 @@ from units.UI.ColorsUI import *
 from units.UI.FontsUI import *
 from units.creating_items import RECIPES
 
-cell_size = int(TSIZE * 1.5 * UI_SCALE)  # in interface
+def compute_cell_size():
+    """Размер ячейки инвентаря и хотбара — примерно блок, каким игрок видит
+    его на экране.
+
+    Раньше считалось от МИРОВОГО TSIZE (32 * 1.5), то есть не зависело от
+    разрешения вовсе, хотя мир масштабируется из WSIZE в SCREEN_SIZE: на узком
+    экране ячейка выходила заметно крупнее блока, на широком — заметно мельче.
+    Теперь основа — экранный размер блока (на 2560x1440 при 50 блоках в
+    ширину это 51 px), а "Размер меню" остаётся множителем поверх: на
+    "нормальном" ячейка равна блоку.
+    """
+    return max(16, int(screen_tile_size() * UI_CELL_SCALE))
+
+
+cell_size = compute_cell_size()  # in interface
+
+
+def refresh_cell_size():
+    """Пересчитать размер ячейки после смены размера окна.
+
+    Размер ячейки — атрибут класса, а не экземпляра, поэтому обновляется
+    разом у всех открытых инвентарей."""
+    global cell_size
+    cell_size = compute_cell_size()
+    for cls in (InventoryUI, InventoryPlayerUI, ScrollSurfaceRecipes, ScrollSurfaceAllTiles):
+        cls.cell_size = cell_size
+    return cell_size
 
 
 class InventoryUI(SurfaceUI):
@@ -21,6 +47,7 @@ class InventoryUI(SurfaceUI):
     def __init__(self, inventory, size_table, margin_table=10, ui_owner=None):
         self.ui_owner = ui_owner
         self.inventory = inventory
+        self.size_table = size_table    # нужен для пересчёта таблицы в relayout
         self.margin = margin_table
         super(InventoryUI, self).__init__(((0, 0), SCREEN_SIZE))
         self.convert_alpha()
@@ -47,6 +74,12 @@ class InventoryUI(SurfaceUI):
         (в них попадали клики), см. convert_table_mpos_to_i."""
         self.set_size(tuple(SCREEN_SIZE))
         self.convert_alpha()
+        # Ячейка привязана к экранному размеру блока, а он от размера окна и
+        # зависит — значит пересчитать надо и саму таблицу, не только её центр.
+        refresh_cell_size()
+        size = self.size_table
+        self.table_inventory = SurfaceUI((0, 0, size[0] * self.cell_size + self.margin * 2,
+                                          size[1] * self.cell_size + self.margin * 2)).convert_alpha()
         self.table_inventory.rect.center = self.rect.center
         self.work_rect = self.table_inventory.rect
 
@@ -244,9 +277,22 @@ class InventoryPlayerUI(InventoryUI):
         хотбар, таблицу и панель рецептов/всех блоков. Состояние
         (открыт/закрыт) не трогаем — ресайз не должен закрывать инвентарь."""
         super().relayout()
+        # Ячейка привязана к экранному размеру блока: после ресайза хотбар и
+        # таблицу надо пересобрать целиком, а не только сдвинуть.
+        size = self.inventory.size_table
+        self.work_inventory = SurfaceUI((15, 15, size[0] * self.cell_size,
+                                         self.cell_size)).convert_alpha()
+        self.table_inventory = SurfaceUI((0, 0, size[0] * self.cell_size + 40,
+                                          size[1] * self.cell_size + 10 + 40)).convert_alpha()
         self.work_inventory.rect.centerx = self.rect.centerx
         self.table_inventory.rect.center = self.rect.center
         self.work_rect = self.table_inventory.rect
+        # Панели рецептов/блоков собирают свою прокручиваемую плоскость из
+        # cell_size в конструкторе — дешевле пересоздать, чем чинить размеры
+        # по кускам. Позиция прокрутки при ресайзе окна теряется осознанно.
+        panel = pg.Rect((0, 0, self.cell_size * 5, self.table_inventory.rect.h))
+        self.recipes = ScrollSurfaceRecipes(self.inventory, panel)
+        self.all_tiles = ScrollSurfaceAllTiles(self.inventory, panel)
         self.recipes.rect.y = self.table_inventory.rect.y
         self.recipes.rect.left = self.table_inventory.rect.right + 20
         self.all_tiles.rect.y = self.recipes.rect.y
@@ -260,12 +306,12 @@ class InventoryPlayerUI(InventoryUI):
         x = 20
         y = 20
         i = 0
-        cell_size_2 = cell_size // 2
+        cell_size_2 = self.cell_size // 2
         for i in range(self.inventory.inventory_size):
             if i == self.inventory.size_table[0]:
                 y += 10
             if i > 0 and i % self.inventory.size_table[0] == 0:
-                y += cell_size
+                y += self.cell_size
                 x = 20
             color = "#000000"
             if i == self.inventory.active_cell:
@@ -283,7 +329,7 @@ class InventoryPlayerUI(InventoryUI):
                 self.table_inventory.blit(text, (tx + 1, ty + 1))
                 text = textfont.render(res, True, text_color_light)
                 self.table_inventory.blit(text, (tx, ty))
-            x += cell_size
+            x += self.cell_size
 
     def redraw_top(self):
         self.recipes.redraw()
@@ -401,7 +447,12 @@ class ScrollSurfaceRecipes(ScrollSurface):
     cell_size = cell_size
     count_cells = len(RECIPES)
 
-    def __init__(self, inventory, rect, scroll_size=(5 * cell_size, ceil(len(RECIPES) / 5) * cell_size)):
+    def __init__(self, inventory, rect, scroll_size=None):
+        if scroll_size is None:
+            # Считаем здесь, а не в значении по умолчанию: значения по
+            # умолчанию вычисляются один раз при импорте, а cell_size теперь
+            # меняется вместе с размером окна.
+            scroll_size = (5 * self.cell_size, ceil(len(RECIPES) / 5) * self.cell_size)
         super(ScrollSurfaceRecipes, self).__init__(rect, scroll_size=scroll_size, background=bg_color)
         self.info_index = None
         self.info_index_surface = None
@@ -443,7 +494,7 @@ class ScrollSurfaceRecipes(ScrollSurface):
         cell_size_2 = self.cell_size // 2
         for i in range(len(RECIPES)):
             if i % 5 == 0 and i > 0:
-                y += cell_size
+                y += self.cell_size
                 x = 0
             color = "#000000"
             pygame.draw.rect(self.scroll_surface, color,
@@ -515,7 +566,7 @@ class ScrollSurfaceAllTiles(ScrollSurfaceRecipes):
     count_cells = len(tile_words)
 
     def __init__(self, inventory, rect):
-        scroll_size = (5 * cell_size, ceil(len(tile_words) / 5) * cell_size)
+        scroll_size = (5 * self.cell_size, ceil(len(tile_words) / 5) * self.cell_size)
         super(ScrollSurfaceAllTiles, self).__init__(inventory, rect, scroll_size=scroll_size)
         self.redraw()
 
@@ -534,10 +585,10 @@ class ScrollSurfaceAllTiles(ScrollSurfaceRecipes):
     def redraw(self):
         self.scroll_surface.fill(color_none)
         x, y = 0, 0
-        cell_size_2 = cell_size // 2
+        cell_size_2 = self.cell_size // 2
         for i in range(len(tile_words)):
             if i % 5 == 0 and i > 0:
-                y += cell_size
+                y += self.cell_size
                 x = 0
             color = "#000000"
             pygame.draw.rect(self.scroll_surface, color,
@@ -546,7 +597,7 @@ class ScrollSurfaceAllTiles(ScrollSurfaceRecipes):
             img = tile_imgs[ttile]
             iw, ih = img.get_size()
             self.scroll_surface.blit(img, (x + cell_size_2 - iw // 2, y + cell_size_2 - ih // 2))
-            x += cell_size
+            x += self.cell_size
 
     def creating_item_of_i(self, i, cnt=1):
         ttile = list(tile_words.keys())[i]

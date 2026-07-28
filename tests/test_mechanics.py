@@ -1081,6 +1081,61 @@ def test_mouse_aim_matches_world_scale():
 
 # ===================== рендер =====================
 
+def test_inventory_cell_matches_the_on_screen_block():
+    """Ячейка инвентаря и хотбара должна быть примерно с блок, каким игрок
+    видит его на экране.
+
+    Раньше она считалась от МИРОВОГО TSIZE и от разрешения не зависела вовсе,
+    хотя мир масштабируется из WSIZE в SCREEN_SIZE: на узком экране ячейка
+    выходила крупнее блока, на широком — мельче.
+    """
+    import units.common as common
+    from units.UI.InventoryUI import compute_cell_size
+    get_app()
+    for w, h in ((1366, 768), (1920, 1080), (2560, 1440), (3440, 1440)):
+        wsize = common._compute_wsize((w, h))
+        block = common.TSIZE * w / wsize[0]
+        cell = max(16, int(block * common.UI_CELL_SCALE))
+        assert abs(cell - block * common.UI_CELL_SCALE) < 1, f"{w}x{h}: ячейка {cell} против блока {block}"
+    # 2560x1440 — эталон из запроса: на "нормальном" ячейка равна блоку
+    wsize = common._compute_wsize((2560, 1440))
+    block = common.TSIZE * 2560 / wsize[0]
+    assert round(block) == 51, f"блок на 2560x1440 должен быть 51 px, а не {block}"
+    assert compute_cell_size() == max(16, int(common.screen_tile_size() * common.UI_CELL_SCALE))
+
+
+def test_menu_size_auto_does_not_count_resolution_twice():
+    """У ячейки "авто" — это 1.0, а не эвристика от ширины экрана: ячейка уже
+    привязана к экранному размеру блока и подстраивается сама."""
+    import units.common as common
+    from units import config
+    assert common._MENU_SIZE_SCALE["medium"] == 1.0
+    if config.Window.menu_size not in common._MENU_SIZE_SCALE:
+        assert common.UI_CELL_SCALE == 1.0, "в режиме 'авто' ячейка не должна масштабироваться повторно"
+
+
+def test_inventory_cell_follows_window_resize():
+    """После растягивания окна ячейка обязана пересчитаться: она привязана к
+    экранному размеру блока, а тот от размера окна и зависит."""
+    import units.common as common
+    from units.UI import InventoryUI as inv_mod
+    game = fresh_world(12)
+    ui = game.player.inventory.ui
+    old_screen = tuple(common.SCREEN_SIZE)
+    old_cell = ui.cell_size
+    try:
+        common.apply_resize((old_screen[0] * 2, old_screen[1] * 2))
+        ui.relayout()
+        assert ui.cell_size == inv_mod.compute_cell_size()
+        assert ui.cell_size > old_cell, f"ячейка не выросла вместе с окном: {old_cell} -> {ui.cell_size}"
+        # таблица и хотбар пересобраны под новую ячейку, а не остались старыми
+        assert ui.work_inventory.rect.h == ui.cell_size
+        ui.redraw_top()
+    finally:
+        common.apply_resize(old_screen)
+        ui.relayout()
+
+
 def test_world_screen_split():
     """Мир (game.display) может быть меньше экрана (game.screen) — HUD/меню
     рисуются на экране напрямую (для чёткости текста), а blit_world должен
@@ -3525,6 +3580,106 @@ def test_aggressive_creature_chases_and_then_gives_up():
         game.tact += 1
         wolf.update(game.tact, 16)
     assert wolf.state != ST_CHASE, "погоня обязана заканчиваться"
+
+
+def _count_direction_flips(game, obj, frames):
+    """Сколько раз за N кадров существо сменило сторону хода.
+
+    Именно это игрок видит как дрожание: направление пересчитывалось каждый
+    кадр, и знак прыгал туда-обратно.
+    """
+    flips = 0
+    prev = obj.move_direction
+    for _ in range(frames):
+        _run_frames(game, 1)
+        if obj.move_direction and prev and obj.move_direction != prev:
+            flips += 1
+        if obj.move_direction:
+            prev = obj.move_direction
+    return flips
+
+
+def test_chaser_does_not_jitter_at_the_player():
+    """Дойдя до игрока, волк дрожал на месте: знак (игрок − я) менялся каждый
+    кадр, потому что мёртвой зоны у цели не было."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Wolf
+    game = fresh_world(403)
+    x, y = _flat_arena(game, w=40)
+    wolf = _place(game, Wolf, x + 1, y)
+    game.player.tp_to((x * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 15)                    # дать дойти вплотную
+    flips = _count_direction_flips(game, wolf, 45)
+    assert flips <= 2, f"волк у игрока сменил сторону {flips} раз за 45 кадров — это дрожь"
+
+
+def test_creature_does_not_jitter_on_the_edge_of_a_cliff():
+    """Существо у обрыва дёргалось влево-вправо: check_abyss разворачивал его
+    каждый кадр, на следующем кадре обрыв уже не определялся, и оно шло
+    обратно."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Cow
+    game = fresh_world(404)
+    x, y = _flat_arena(game, w=20)
+    # обрыв справа, вплотную к корове: пола нет вовсе
+    gm = game.game_map
+    for tx in range(x + 9, x + 24):
+        for dy in range(1, 8):
+            gm.set_static_tile(tx, y + dy, 0)
+    cow = _place(game, Cow, x + 8, y)
+    game.player.tp_to(((x - 60) * TSIZE, y * TSIZE))   # игрок далеко, чистый ST_WANDER
+    game.screen_map.teleport_to_player()
+    cow.move_direction = 1                             # идёт прямо в обрыв
+    flips = _count_direction_flips(game, cow, 60)
+    assert flips <= 3, f"корова у обрыва сменила сторону {flips} раз за 60 кадров"
+    assert cow.rect.bottom <= (y + 2) * TSIZE, "корова не должна свалиться в обрыв"
+
+
+def test_chaser_stops_at_the_cliff_instead_of_turning_back():
+    """Цель за обрывом: разворот читался бы как бегство, а пересчёт каждый
+    кадр давал дрожь. Правильное поведение — стоять на краю."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Wolf, ST_CHASE
+    game = fresh_world(405)
+    x, y = _flat_arena(game, w=20)
+    gm = game.game_map
+    for tx in range(x + 8, x + 30):            # широкий провал, не перепрыгнуть
+        for dy in range(1, 8):
+            gm.set_static_tile(tx, y + dy, 0)
+    wolf = _place(game, Wolf, x + 6, y)
+    game.player.tp_to(((x + 14) * TSIZE, y * TSIZE))   # за провалом
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 30)
+    assert wolf.state == ST_CHASE, f"волк должен видеть игрока, а не {wolf.state}"
+    assert wolf.move_direction == 0, \
+        f"у края волк должен стоять, а не идти в сторону {wolf.move_direction}"
+    assert wolf.rect.bottom <= (y + 2) * TSIZE, "волк не должен упасть в провал"
+
+
+def test_turn_at_cliff_is_committed_for_a_while():
+    """Разворот у обрыва фиксируется на несколько тактов — иначе решение
+    пересчитывается на следующем же кадре."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Cow, ST_WANDER
+    game = fresh_world(406)
+    x, y = _flat_arena(game, w=20)
+    gm = game.game_map
+    for tx in range(x + 9, x + 20):
+        for dy in range(1, 8):
+            gm.set_static_tile(tx, y + dy, 0)
+    cow = _place(game, Cow, x + 8, y)
+    game.player.tp_to(((x - 60) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    cow.state = ST_WANDER
+    cow.move_tact = 1000            # чтобы think() не перевыбрал сторону сам
+    cow.move_direction = 1          # идёт прямо в обрыв
+    cow.update(game.tact, 16)
+    assert cow.move_direction == -1, "у обрыва существо обязано развернуться"
+    assert cow.turn_lock > 0, "разворот должен быть зафиксирован"
+    # и следующий кадр это решение не отменяет
+    cow.update(game.tact + 1, 16)
+    assert cow.move_direction == -1, "разворот отменён на следующем же кадре"
 
 
 def test_creatures_do_not_see_through_stone():

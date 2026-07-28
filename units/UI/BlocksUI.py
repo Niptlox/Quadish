@@ -3,7 +3,9 @@ from pygame import Vector2
 from units.UI.Button import TextButton
 from units.UI.ClassUI import SurfaceUI, MultilineEditText, GroupUI, Text
 from units.UI.ColorsUI import *
-from units.UI.InventoryUI import InventoryUI, cell_size, InventoryPlayerUI
+# cell_size берём через класс, а не значением при импорте: он теперь
+# зависит от размера окна и меняется при ресайзе (см. refresh_cell_size)
+from units.UI.InventoryUI import InventoryUI, InventoryPlayerUI
 from units.UI.ItemInMouse import *
 from units.common import *
 
@@ -171,15 +173,15 @@ class FurnaceUI(BlockUI):
     background = bg_color
 
     def __init__(self):
-        rect = pg.Rect(0, 0, cell_size * 6, cell_size * 4)
+        rect = pg.Rect(0, 0, InventoryUI.cell_size * 6, InventoryUI.cell_size * 4)
         super(FurnaceUI, self).__init__(rect)
         self.convert_alpha()
         self.input_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
-        self.input_inventory_ui.get_draw_rect().topleft = cell_size * 0.5, cell_size * 0.5
+        self.input_inventory_ui.get_draw_rect().topleft = InventoryUI.cell_size * 0.5, InventoryUI.cell_size * 0.5
         self.fuel_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
-        self.fuel_inventory_ui.get_draw_rect().topleft = cell_size * 0.5, cell_size * 2.5
+        self.fuel_inventory_ui.get_draw_rect().topleft = InventoryUI.cell_size * 0.5, InventoryUI.cell_size * 2.5
         self.result_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
-        self.result_inventory_ui.get_draw_rect().topleft = cell_size * 4.5, cell_size * 1.5
+        self.result_inventory_ui.get_draw_rect().topleft = InventoryUI.cell_size * 4.5, InventoryUI.cell_size * 1.5
         self.inventories = self.input_inventory_ui, self.fuel_inventory_ui, self.result_inventory_ui
         self._work_rect = None
 
@@ -191,7 +193,7 @@ class FurnaceUI(BlockUI):
         self.fill(self.background)
         for inv in self.inventories:
             inv.draw(self)
-        h = int(self.block_obj.progress * (cell_size - 4))
+        h = int(self.block_obj.progress * (InventoryUI.cell_size - 4))
         if h:
             x, y = self.input_inventory_ui.get_draw_rect().bottomleft
             pg.draw.rect(self, (255, 255, 255, 200), (x + 2, y - h - 2, 5, h))
@@ -301,11 +303,11 @@ class MusicBlockUI(BlockUI):
     background = bg_color
 
     def __init__(self):
-        rect = pg.Rect(0, 0, cell_size * 2, cell_size * 2)
+        rect = pg.Rect(0, 0, InventoryUI.cell_size * 2, InventoryUI.cell_size * 2)
         super().__init__(rect)
         self.convert_alpha()
         self.slot_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
-        self.slot_ui.get_draw_rect().topleft = cell_size * 0.5, cell_size * 0.5
+        self.slot_ui.get_draw_rect().topleft = InventoryUI.cell_size * 0.5, InventoryUI.cell_size * 0.5
 
     def set_work_rect(self, value):
         self.slot_ui.work_rect = value
@@ -338,11 +340,11 @@ class RadioBlockUI(BlockUI):
     background = bg_color
 
     def __init__(self):
-        rect = pg.Rect(0, 0, cell_size * 3, cell_size * 3)
+        rect = pg.Rect(0, 0, InventoryUI.cell_size * 3, InventoryUI.cell_size * 3)
         super().__init__(rect)
         self.convert_alpha()
         self.slots_ui = InventoryUI(None, [2, 2], margin_table=0, ui_owner=self)
-        self.slots_ui.get_draw_rect().topleft = cell_size * 0.5, cell_size * 0.5
+        self.slots_ui.get_draw_rect().topleft = InventoryUI.cell_size * 0.5, InventoryUI.cell_size * 0.5
 
     def set_work_rect(self, value):
         self.slots_ui.work_rect = value
