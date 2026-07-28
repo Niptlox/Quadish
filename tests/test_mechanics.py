@@ -3626,9 +3626,10 @@ def test_creature_jumps_over_a_gap_instead_of_turning_back():
     # существо реально въехало в блок, а стоя ровно на границе оно за кадр
     # опускается меньше чем на пиксель и физика не считает это опорой.
     cow.rect.bottom = (y + 1) * TSIZE + 2
-    # Игрока держим далеко и курс фиксируем: иначе корова то убегает, то
-    # разворачивается по своему таймеру, и тест проверяет случайность.
-    game.player.tp_to((x * TSIZE, (y - 40) * TSIZE))
+    # Игрок рядом (иначе существо за экраном не обновляется, см.
+    # COLLIDE_MARGIN), а реакции подавляем в hold_course: иначе корова то
+    # убегает, то разворачивается по таймеру, и тест проверяет случайность.
+    game.player.tp_to((x * TSIZE, (y - 6) * TSIZE))
     game.screen_map.teleport_to_player()
     game.elapsed_time = 16
 
@@ -3686,3 +3687,145 @@ def test_no_creature_keeps_its_own_copy_of_chase_logic():
         assert "update" not in cls.__dict__, f"{cls.__name__} снова завёл свой update"
     src = inspect.getsource(Wolf)
     assert "angry_rect" not in src, "старая коробка агра должна была уйти"
+
+
+# ===================== оптимизация отрисовки =====================
+
+def test_collisions_and_entities_only_near_the_screen():
+    """Раньше в static_tiles попадали ВСЕ непустые тайлы всех загруженных
+    чанков: замер давал 3700 записей на поверхности и 6500 в пещерах при 960
+    тайлах на экране — несколько тысяч лишних кортежей и вставок в словарь
+    каждый кадр."""
+    from units.common import TSIZE, COLLIDE_MARGIN
+    game = fresh_world(500)
+    game.player.tp_to((0, 500 * TSIZE))
+    game.screen_map.teleport_to_player()
+    game.elapsed_time = 16
+    for _ in range(20):
+        game.update()
+    sm = game.screen_map
+    sw, sh = sm.display.get_size()
+    visible = (sw // TSIZE + 2) * (sh // TSIZE + 2)
+    area = (sw // TSIZE + 2 + COLLIDE_MARGIN * 2) * (sh // TSIZE + 2 + COLLIDE_MARGIN * 2)
+    assert sm.static_tiles, "коллизии рядом с игроком нужны"
+    assert len(sm.static_tiles) <= area, \
+        f"{len(sm.static_tiles)} записей при площади с запасом {area}"
+    # и всё, что близко к игроку, в коллизиях есть
+    px, py = game.player.rect.centerx // TSIZE, game.player.rect.centery // TSIZE
+    for dx in (-2, 0, 2):
+        for dy in (-2, 0, 2):
+            t = game.game_map.get_static_tile_type(px + dx, py + dy, default=0, create_chunk=False)
+            if t != 0:
+                assert (px + dx, py + dy) in sm.static_tiles, "тайл под игроком обязан быть в коллизиях"
+    assert visible <= area
+
+
+def test_hidden_backtiles_are_not_drawn():
+    """44% блитов кадра уходило на задние панельки, полностью скрытые
+    передним тайлом: замер показал, что скрыто было 100% отрисованных."""
+    get_app()
+    from units.Tiles import OPAQUE_TILES, TILE_WITH_LOCAL_POS
+    import inspect
+    from units.Map.ScreenMap import ScreenMap
+    src = inspect.getsource(ScreenMap.update)
+    assert "tile_type not in opaque" in src, "проверка сплошного тайла должна быть в цикле"
+    # набор считается по пикселям, а не угадывается списком id
+    for solid in (1, 2, 3, 4, 5, 31):
+        assert solid in OPAQUE_TILES, f"тайл {solid} сплошной, панелька под ним не видна"
+    for transparent in (104, 251, 102):
+        assert transparent not in OPAQUE_TILES, f"тайл {transparent} прозрачный"
+    # тайлы со смещением спрайта клетку не закрывают по определению
+    assert not (OPAQUE_TILES & TILE_WITH_LOCAL_POS)
+
+
+def test_tile_state_is_read_before_update_tile():
+    """update_tile может переписать сам тайл (саженец за этот же вызов
+    вырастает в дерево), поэтому поля тайла надо прочитать до него — иначе
+    решения об отрисовке относятся уже к другому тайлу."""
+    get_app()
+    import inspect
+    from units.Map.ScreenMap import ScreenMap
+    src = inspect.getsource(ScreenMap.update)
+    assert src.index("state = chunk_static[index + 3]") < src.index("img = update_tile("), \
+        "состояние тайла должно читаться раньше update_tile"
+
+
+def _frame_hash(game, strips):
+    """Хеш нарисованного слоя тайлов при заданном наборе склеиваемых тайлов."""
+    import hashlib
+    import pygame
+    import units.Map.ScreenMap as SM
+    SM.STRIP_TILES = strips
+    game.display.fill((0, 0, 0))
+    game.screen_map.update(game.tact, 16)
+    return hashlib.md5(pygame.image.tostring(game.display, "RGB")).hexdigest()
+
+
+def test_tile_strips_draw_exactly_the_same_pixels():
+    """Склейка одинаковых тайлов в полосу — оптимизация, а не изменение
+    картинки: пиксели обязаны совпасть до последнего.
+
+    Стенд приходится замораживать целиком. Сам проход по тайлам меняет мир
+    (саженцы растут), двигает облака и существ — без заморозки два
+    одинаковых кадра уже различаются, и сравнение ничего не значит. Именно
+    на этом сравнение сначала «нашло» расхождения, которых не было.
+    """
+    from units.common import TSIZE, START_HELL_Y, START_SPACE_Y
+    from units import config
+    from units.Map.ScreenMap import ScreenMap
+    from units.Tiles import STRIP_TILES
+    import units.Map.ScreenMap as SM
+
+    real = (ScreenMap.update_dynamic, ScreenMap.update_particles, ScreenMap.update_tile)
+    clouds, stars = config.GameSettings.clouds, config.GameSettings.stars
+    ScreenMap.update_dynamic = lambda self: None
+    ScreenMap.update_particles = lambda self: None
+    ScreenMap.update_tile = lambda self, *a, **k: None
+    config.GameSettings.clouds = False
+    config.GameSettings.stars = False
+    try:
+        for y in (0, 30, 500, 900, START_HELL_Y + 120, START_SPACE_Y - 200):
+            game = fresh_world(910)
+            game.player.tp_to((0, y * TSIZE))
+            game.screen_map.teleport_to_player()
+            game.elapsed_time = 16
+            for _ in range(30):
+                game.update()
+            game.tact = 1000
+            assert _frame_hash(game, frozenset()) == _frame_hash(game, frozenset()), \
+                f"y={y}: стенд нестабилен, сравнивать нечем"
+            assert _frame_hash(game, frozenset()) == _frame_hash(game, STRIP_TILES), \
+                f"y={y}: полосы изменили картинку"
+    finally:
+        ScreenMap.update_dynamic, ScreenMap.update_particles, ScreenMap.update_tile = real
+        config.GameSettings.clouds, config.GameSettings.stars = clouds, stars
+        SM.STRIP_TILES = STRIP_TILES
+
+
+def test_strip_tiles_exclude_everything_that_would_break():
+    """Список склеиваемых тайлов выводится из свойств, а не пишется руками:
+    два условия из него нашлись только сравнением кадров по пикселям."""
+    get_app()
+    from units.Tiles import (STRIP_TILES, OPAQUE_TILES, ANIMATED_TILES, NEEDS_TICK,
+                             TILE_WITH_LOCAL_POS, tile_many_imgs, tile_imgs, TILE_SIZE)
+    assert STRIP_TILES <= OPAQUE_TILES
+    assert not (STRIP_TILES & set(ANIMATED_TILES)), \
+        "у анимированного тайла кадр в полосе застыл бы навсегда"
+    assert not (STRIP_TILES & NEEDS_TICK), "тайл со своей логикой нельзя склеивать"
+    assert not (STRIP_TILES & TILE_WITH_LOCAL_POS)
+    assert not (STRIP_TILES & set(tile_many_imgs)), "у тайла с кадрами полоса неоднозначна"
+    assert 1 not in STRIP_TILES, "дёрн рисуется биомными вариантами"
+    for idx in STRIP_TILES:
+        assert tile_imgs[idx].get_size() == (TILE_SIZE, TILE_SIZE), \
+            f"тайл {idx}: спрайт крупнее клетки заходил бы на соседей"
+    assert 3 in STRIP_TILES, "камень — главный случай, ради которого всё и делалось"
+
+
+def test_tile_strip_is_cached_and_correct_width():
+    """Полоса создаётся один раз на (тип, длину) и имеет ровно эту ширину."""
+    get_app()
+    from units.Tiles import tile_strip, TILE_SIZE, STRIP_LENGTHS
+    for length in STRIP_LENGTHS:
+        strip = tile_strip(3, length)
+        assert strip.get_size() == (TILE_SIZE * length, TILE_SIZE)
+        assert tile_strip(3, length) is strip, "полоса должна кэшироваться"

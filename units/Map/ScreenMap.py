@@ -185,13 +185,45 @@ class ScreenMap:
         # SHOW AND LOAD TILES ++++++++
 
         # Видимый диапазон тайлов (+1 тайл запаса по краям).
-        # Тайлы за экраном не рисуются, но регистрируются в static_tiles
-        # для коллизий существ в загруженных чанках.
         vis_x0 = scroll[0] // TILE_SIZE - 1
         vis_x1 = (scroll[0] + sw) // TILE_SIZE + 1
         vis_y0 = scroll[1] // TILE_SIZE - 1
         vis_y1 = (scroll[1] + sh) // TILE_SIZE + 1
+        # Область коллизий: экран плюс запас. Раньше в static_tiles попадали
+        # ВСЕ непустые тайлы всех загруженных чанков — замер показал 3700
+        # записей на поверхности и 6500 в пещерах при 960 тайлах на экране,
+        # то есть на каждый кадр приходилось несколько тысяч лишних кортежей
+        # и вставок в словарь. Существа и предметы дальше запаса не
+        # обновляются (см. фильтр dynamic_tiles ниже), значит и коллизии им
+        # не нужны.
+        col_x0 = vis_x0 - COLLIDE_MARGIN
+        col_x1 = vis_x1 + COLLIDE_MARGIN
+        col_y0 = vis_y0 - COLLIDE_MARGIN
+        col_y1 = vis_y1 + COLLIDE_MARGIN
         tds = self.game_map.tile_data_size
+        # Локальные ссылки на всё, к чему обращается внутренний цикл. Он
+        # прокручивается ~1000 раз за кадр, и на таком числе итераций поиск
+        # глобала/атрибута стоит сравнимо с самой работой.
+        get_type = self.game_map.get_static_tile_type
+        update_tile = self.update_tile
+        t_imgs = tile_imgs
+        t_many = tile_many_imgs
+        t_hand = tile_hand_imgs
+        solidity = TILES_SOLIDITY
+        br_imgs = break_imgs
+        br_cnt = break_imgs_cnt
+        g_imgs = ground_imgs
+        local_pos_tiles = TILE_WITH_LOCAL_POS
+        b_tiles = biome_tiles
+        opaque = OPAQUE_TILES
+        needs_tick = NEEDS_TICK
+        # Тайлы, годные для склейки в полосу: один фиксированный спрайт,
+        # без своей логики, без смещения и без задней панельки под ним.
+        strip_ok = STRIP_TILES
+        show_biomes = GameSettings.show_biomes   # раньше читалось на каждый тайл
+        sx, sy = scroll[0], scroll[1]
+        half_tile = TSIZE // 2
+        cell_img_size = (half_tile - 1, half_tile - 1)
 
         # Чанки, обойдённые на этом кадре: GameMap.tick_forced_chunks должен
         # их пропустить, иначе тайлы получат два тика за кадр и растения
@@ -207,7 +239,12 @@ class ScreenMap:
                     # генериует статические и динамичские чанки
                     chunk = self.game_map.generate_chunk(chunk_x, chunk_y)  # [static_lst, dynamic_lst]
                 if chunk:
-                    dynamic_tiles += chunk[1]
+                    # Обновляем только то, что рядом с экраном: далёкое
+                    # существо всё равно не видно, а платит за него каждый кадр.
+                    for obj in chunk[1]:
+                        otx, oty = obj.rect.centerx // TILE_SIZE, obj.rect.centery // TILE_SIZE
+                        if col_x0 <= otx <= col_x1 and col_y0 <= oty <= col_y1:
+                            dynamic_tiles.append(obj)
                     group_handlers.update(chunk[2])
                     chunk_static = chunk[0]
                     chunk_back = chunk[5]
@@ -217,94 +254,158 @@ class ScreenMap:
                     i = 0
                     for y in range(CSIZE):
                         tile_x = chunk_x * CSIZE
+                        if not (col_y0 <= tile_y <= col_y1):
+                            # строка вне области коллизий: не трогаем вообще
+                            index += CSIZE * tds
+                            backtile_index += CSIZE
+                            i += CSIZE
+                            tile_y += 1
+                            continue
                         if not (vis_y0 <= tile_y <= vis_y1):
-                            # строка целиком за экраном: только коллизии
+                            # строка за экраном: только коллизии
                             for x in range(CSIZE):
-                                tile_type = chunk_static[index]
-                                if tile_type != 0:
-                                    static_tiles[(tile_x, tile_y)] = tile_type
+                                if col_x0 <= tile_x <= col_x1:
+                                    tile_type = chunk_static[index]
+                                    if tile_type != 0:
+                                        static_tiles[(tile_x, tile_y)] = tile_type
                                 index += tds
                                 tile_x += 1
                             backtile_index += CSIZE
                             i += CSIZE
                             tile_y += 1
                             continue
-                        for x in range(CSIZE):
+                        # Позицию в пикселях считаем приращением: умножение
+                        # и вычитание на каждый тайл — это ~1000 лишних
+                        # операций за кадр.
+                        py = tile_y * TILE_SIZE - sy
+                        px = tile_x * TILE_SIZE - sx
+                        # Явный счётчик колонки, а не for: полоса из
+                        # одинаковых тайлов съедает несколько колонок за одну
+                        # итерацию, а присваивание переменной цикла for на его
+                        # ход не влияет — индексы разъезжались бы с колонкой.
+                        x = 0
+                        while x < CSIZE:
                             tile_type = chunk_static[index]
                             if not (vis_x0 <= tile_x <= vis_x1):
-                                # тайл за экраном: только коллизии
-                                if tile_type != 0:
+                                # тайл за экраном: только коллизии, и только
+                                # если он в области, где что-то шевелится
+                                if tile_type != 0 and col_x0 <= tile_x <= col_x1:
                                     static_tiles[(tile_x, tile_y)] = tile_type
                                 index += tds
                                 backtile_index += 1
                                 tile_x += 1
+                                px += TILE_SIZE
                                 i += 1
+                                x += 1
                                 continue
                             backtile_type = chunk_back[backtile_index]
-                            if backtile_type != 0:
-                                blit(tile_imgs[backtile_type],
-                                     (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1]))
+                            # Под сплошным блоком задней панельки не видно.
+                            # Замер: 100% отрисованных панелек были полностью
+                            # скрыты передним тайлом — 44% блитов кадра впустую.
+                            if backtile_type != 0 and tile_type not in opaque:
+                                blit(t_imgs[backtile_type], (px, py))
+
+                            # Пробег одинаковых простых тайлов рисуем одной
+                            # полосой. В сплошной породе это десятки
+                            # одинаковых блитов подряд, а пиксели те же —
+                            # спрайт один и тот же (см. tile_strip).
+                            if tile_type in strip_ok and chunk_static[index + 1] == solidity[tile_type]:
+                                run = 1
+                                j = index + tds
+                                rx = tile_x + 1
+                                while (run < STRIP_MAX and rx <= vis_x1 and x + run < CSIZE
+                                       and chunk_static[j] == tile_type
+                                       and chunk_static[j + 1] == solidity[tile_type]):
+                                    run += 1
+                                    j += tds
+                                    rx += 1
+                                for length in STRIP_LENGTHS:
+                                    if run >= length:
+                                        blit(tile_strip(tile_type, length), (px, py))
+                                        for k in range(length):
+                                            static_tiles[(tile_x, tile_y)] = tile_type
+                                            tile_x += 1
+                                            px += TILE_SIZE
+                                        index += length * tds
+                                        backtile_index += length
+                                        i += length
+                                        x += length
+                                        break
+                                else:
+                                    length = 0
+                                if length:
+                                    continue
 
                             if tile_type > 0:
-                                tile = chunk_static[index:index + tds]
-                                b_pos = [tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1]]
+                                # Поля тайла читаем по индексу, а не срезом:
+                                # срез создавал новый список на каждый
+                                # видимый тайл. Но читаем их ДО update_tile:
+                                # саженец за этот же вызов вырастает в дерево
+                                # и переписывает тайл на месте, а решения ниже
+                                # относятся к тому тайлу, который мы рисуем.
+                                sol = chunk_static[index + 1]
+                                state = chunk_static[index + 3]
+                                b_pos = (px, py)
                                 sprite_pos = b_pos
-                                if tile_type in tile_many_imgs:
-                                    img = tile_many_imgs[tile_type][tile[2]]
+                                if tile_type in t_many:
+                                    img = t_many[tile_type][chunk_static[index + 2]]  # кадр
                                 else:
-                                    img = tile_imgs[tile_type]
+                                    img = t_imgs[tile_type]
                                 if tile_type == 1:
                                     biome = chunk[4][i][0]
-                                    if biome not in ground_imgs:
+                                    if biome not in g_imgs:
                                         biome = None
-                                    img = ground_imgs[biome][0]
+                                    variants = g_imgs[biome]
+                                    img = variants[0]
+                                    # Правый сосед почти всегда в этом же чанке —
+                                    # тогда читаем его прямо из массива, без
+                                    # вызова метода с поиском чанка. На дёрне
+                                    # это было два таких вызова на тайл.
+                                    if x < CSIZE - 1:
+                                        right = chunk_static[index + tds]
+                                    else:
+                                        right = get_type(tile_x + 1, tile_y, default=1,
+                                                         create_chunk=False)
                                     if static_tiles.get((tile_x - 1, tile_y), 0) == 0:
-                                        img = ground_imgs[biome][1]
-                                        if self.game_map.get_static_tile_type(tile_x + 1, tile_y,
-                                                                              default=1, create_chunk=False) == 0:
-                                            img = ground_imgs[biome][3]
-                                    elif self.game_map.get_static_tile_type(tile_x + 1, tile_y,
-                                                                            default=1, create_chunk=False) == 0:
-                                        img = ground_imgs[biome][2]
+                                        img = variants[3] if right == 0 else variants[1]
+                                    elif right == 0:
+                                        img = variants[2]
                                 elif tile_type == 126:  # шкаф
-                                    img = tile_imgs[tile_type].copy()
-                                    step = TSIZE // 2
+                                    img = t_imgs[tile_type].copy()
                                     for ity in range(2):
                                         for itx in range(2):
-                                            if tile[3]:
-                                                item = tile[3][ity * 2 + itx]
+                                            if state:
+                                                item = state[ity * 2 + itx]
                                                 if item:
                                                     img.blit(
-                                                        pg.transform.scale(tile_hand_imgs[item[0]],
-                                                                           (TSIZE // 2 - 1, TSIZE // 2 - 1)),
-                                                        (itx * step + 1, ity * step + 1))
-                                else:
+                                                        pg.transform.scale(t_hand[item[0]], cell_img_size),
+                                                        (itx * half_tile + 1, ity * half_tile + 1))
+                                elif tile_type in needs_tick:
                                     # Если передана картинка, то отрисовываем
-                                    img = self.update_tile(chunk, tile, tile_type, index,
-                                                           tile_x, tile_y, chunk_x, chunk_y, tact) or img
+                                    img = update_tile(chunk, chunk_static[index:index + tds],
+                                                      tile_type, index, tile_x, tile_y,
+                                                      chunk_x, chunk_y, tact) or img
 
-                                if tile_type in TILE_WITH_LOCAL_POS:
-                                    local_pos = tile[3][TILE_LOCAL_POS]
-                                    sprite_pos[0] += local_pos[0]
-                                    sprite_pos[1] += local_pos[1]
+                                if tile_type in local_pos_tiles:
+                                    local_pos = state[TILE_LOCAL_POS]
+                                    sprite_pos = (px + local_pos[0], py + local_pos[1])
                                 blit(img, sprite_pos)
 
-                                sol = tile[1]
-                                if sol != -1 and sol != TILES_SOLIDITY[tile_type]:
-                                    br_i = (break_imgs_cnt - 1) - int(
-                                        sol * (break_imgs_cnt - 1) / TILES_SOLIDITY[tile_type])
-                                    blit(break_imgs[br_i], b_pos)
+                                if sol != -1:
+                                    full = solidity[tile_type]
+                                    if sol != full:
+                                        blit(br_imgs[(br_cnt - 1) - int(sol * (br_cnt - 1) / full)], b_pos)
 
-                            elif GameSettings.show_biomes:
-                                b_pos = (tile_x * TILE_SIZE - scroll[0], tile_y * TILE_SIZE - scroll[1])
-                                img = biome_tiles[chunk[4][i][0]]
-                                blit(img, b_pos)
+                            elif show_biomes:
+                                blit(b_tiles[chunk[4][i][0]], (px, py))
                             if tile_type != 0:
                                 static_tiles[(tile_x, tile_y)] = tile_type
                             index += tds
                             backtile_index += 1
                             tile_x += 1
+                            px += TILE_SIZE
                             i += 1
+                            x += 1
                         tile_y += 1
 
                 chunk_x += 1

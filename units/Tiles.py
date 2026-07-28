@@ -957,6 +957,106 @@ biomes_plants_chance = {
     9: {},                                                     # hell
 }
 
+def _covers_whole_tile(img):
+    """Закрывает ли спрайт клетку целиком, без прозрачных пикселей.
+
+    Нужно, чтобы не рисовать задние панельки под сплошным блоком: замер
+    показал, что 100% отрисованных задних панелей были полностью скрыты
+    передним тайлом — это 44% всех блитов кадра впустую.
+
+    Проверяем пиксели, а не «список опасных id»: список пришлось бы угадывать
+    и одна ошибка давала бы дырки в мире. Неизвестный случай считаем
+    прозрачным — тогда оптимизация просто не срабатывает.
+    """
+    if img.get_width() < TILE_SIZE or img.get_height() < TILE_SIZE:
+        return False
+    if img.get_alpha() not in (None, 255):
+        return False                     # полупрозрачный целиком
+    try:
+        colorkey = img.get_colorkey()
+        if colorkey is not None:
+            # Colorkey стоит почти на всех загруженных спрайтах по умолчанию
+            # (см. load_img), но у камня и земли этого цвета в пикселях нет —
+            # значит спрайт всё равно сплошной. Проверяем сами пиксели.
+            rgb = pygame.surfarray.array3d(img)[:TILE_SIZE, :TILE_SIZE]
+            key = colorkey[:3]
+            if ((rgb[:, :, 0] == key[0]) & (rgb[:, :, 1] == key[1]) &
+                    (rgb[:, :, 2] == key[2])).any():
+                return False
+        if img.get_flags() & pygame.SRCALPHA:
+            alpha = pygame.surfarray.array_alpha(img)[:TILE_SIZE, :TILE_SIZE]
+            if not bool((alpha == 255).all()):
+                return False
+    except Exception:
+        return False                     # не смогли проверить — считаем прозрачным
+    return True
+
+
+def _all_frames_of(idx):
+    """Все картинки, которыми тайл может нарисоваться.
+
+    Одной tile_imgs[idx] недостаточно: у куста, конвейера, арбуза и прочих
+    кадр берётся из tile_many_imgs по state_img, а у лавы и портала кадры
+    подменяются анимацией. Если хоть один кадр прозрачный, тайл нельзя
+    считать сплошным.
+    """
+    frames = []
+    img = tile_imgs.get(idx)
+    if img is not None:
+        frames.append(img)
+    frames += list(tile_many_imgs.get(idx, ()))
+    if idx == 1:
+        # Дёрн рисуется вариантами из ground_imgs (обычный/левый/правый/оба
+        # края), и у краевых спрайтов прозрачность своя.
+        for variants in ground_imgs.values():
+            frames += list(variants)
+    return frames
+
+
+def tile_strip(tile_type, length):
+    """Готовая полоса из length одинаковых тайлов.
+
+    В сплошной породе строка экрана — это десятки одинаковых блитов подряд.
+    Одна полоса вместо тридцати двух блитов даёт ровно те же пиксели (спрайт
+    один и тот же), но в разы меньше вызовов. Полосы создаются по требованию
+    и кэшируются: в мире реально встречается несколько типов породы, а не все
+    шестьдесят.
+    """
+    key = (tile_type, length)
+    strip = _tile_strips.get(key)
+    if strip is None:
+        img = tile_imgs[tile_type]
+        strip = pygame.Surface((TILE_SIZE * length, TILE_SIZE)).convert()
+        for k in range(length):
+            strip.blit(img, (k * TILE_SIZE, 0))
+        _tile_strips[key] = strip
+    return strip
+
+
+_tile_strips = {}
+# Длины полос: степени двойки, чтобы кэш не разрастался, а любой пробег
+# набирался жадно из нескольких полос.
+STRIP_LENGTHS = (8, 4, 2)
+STRIP_MAX = STRIP_LENGTHS[0]
+
+# Тайлы, годные для склейки в полосу
+# (заполняется ниже, когда известны все флаги)
+
+# Тайлы, которым вообще есть что делать в свой такт: у остальных вызов
+# update_tile был чистой потерей. Замер в глубоких пещерах: 1043 вызова за
+# кадр, из которых осмысленных — единицы.
+NEEDS_TICK = CLASS_UPDATING_TILES | PLANT_WITH_TIMER
+
+# Тайлы, под которыми задняя панелька заведомо не видна.
+# Тайлы со смещением спрайта (TILE_WITH_LOCAL_POS) исключены по определению:
+# они рисуются сдвинутыми и клетку целиком не закрывают, каким бы плотным ни
+# был сам спрайт.
+OPAQUE_TILES = frozenset(
+    idx for idx in tile_imgs
+    if idx not in TILE_WITH_LOCAL_POS
+    and all(not isinstance(f, list) and _covers_whole_tile(f) for f in _all_frames_of(idx))
+)
+
 # специальные каринки предметов для инвентаря
 tile_hand_imgs = {k: tile_imgs[k] if k in ITEM_TILES else transform_hand(i) for k, i in tile_imgs.items()}
 # tile_hand_imgs[102] = load_img("data/sprites/tiles/small_tree_item.png",
@@ -1261,3 +1361,22 @@ if _mods.MODS:
     tile_hand_imgs.update({_spec["id"]: (tile_imgs[_spec["id"]] if _spec["is_item"]
                                          else transform_hand(tile_imgs[_spec["id"]]))
                            for _spec in _mods.mod_blocks()})
+
+
+# Тайлы, которые можно склеивать в полосу: один и тот же спрайт РОВНО в
+# клетку, без своей логики, без смещения, без вариантов кадра и без биомных
+# вариантов (дёрн 1 и шкаф 126 рисуются особым образом).
+#
+# Два условия, найденные сравнением кадров по пикселям:
+# * ровно TILE_SIZE: спрайт крупнее клетки при отдельной отрисовке заходил на
+#   соседей, а внутри полосы обрезался — картинка расходилась;
+# * не анимированный: полоса кэшируется, а у лавы кадр подменяется в
+#   tile_imgs каждый такт, и в полосе он застыл бы навсегда.
+STRIP_TILES = frozenset(
+    idx for idx in OPAQUE_TILES
+    if idx not in tile_many_imgs and idx not in NEEDS_TICK
+    and idx not in TILE_WITH_LOCAL_POS and idx not in (1, 126)
+    and idx not in ANIMATED_TILES
+    and idx in TILES_SOLIDITY
+    and tile_imgs[idx].get_size() == (TILE_SIZE, TILE_SIZE)
+)
