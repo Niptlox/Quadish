@@ -227,6 +227,30 @@ BAT = [
     "....KKK....",
 ]
 
+# --- Птица: 11x7 -> 22x14, два кадра (крылья вверх / вниз) -----------
+# Два кадра, а не один: птица без взмаха читается как висящий в воздухе
+# камешек. Тело в обоих кадрах одно и то же — меняются только крылья, иначе
+# при подмене кадра птица «дёргалась» бы целиком.
+BIRD_UP = [
+    "..K.....K..",
+    ".KBK...KBK.",
+    ".KBBK.KBBK.",
+    "KKBBBKBBBKK",
+    "KBBBBBBBeBK",
+    ".KKBBBBBnnK",
+    "...KKKKKK..",
+]
+
+BIRD_DOWN = [
+    "...KKKKK...",
+    "..KBBBBBBK.",
+    ".KBBBBBBBeK",
+    "KKBBBBBBBnn",
+    ".KBBK.KBBK.",
+    "KBBK...KBBK",
+    "K.........K",
+]
+
 # --- Каменный голем: 17x19 -> 51x57 ----------------------------------
 GOLEM = [
     ".....KKKKKKK.....",
@@ -323,6 +347,13 @@ create_scorpion_sprite = _maker(SCORPION, "#D4A373")
 create_crab_sprite = _maker(CRAB, "#DC2626")
 create_penguin_sprite = _maker(PENGUIN, "#1E293B")
 create_bat_sprite = _maker(BAT, "#3F3A36")
+_bird_up = _maker(BIRD_UP, "#57534E")
+_bird_down = _maker(BIRD_DOWN, "#57534E")
+
+
+def create_bird_sprites(color=None, size=None):
+    """Два кадра взмаха. Возвращает список — существо листает его по такту."""
+    return [_bird_up(color, size), _bird_down(color, size)]
 create_golem_sprite = _maker(GOLEM, "#78716C")
 create_space_drifter_sprite = _maker(DRIFTER, "#818CF8")
 create_dust_swarm_sprite = _maker(DUST_SWARM, "#7DD3FC")

@@ -728,7 +728,62 @@ chear_img = load_img("data/sprites/tiles/chear.png")  # стул
 rack_img = load_img("data/sprites/tiles/rack.png")  # шкаф
 chest_img = load_img("data/sprites/tiles/chest.png")  # сундук
 cauldron_img = load_img("data/sprites/tiles/cauldron.png")
-water_img = load_img("data/sprites/tiles/water.png")
+def create_water_img(level=4, deep=False):
+    """Вода с уровнем заполнения 1..4 (4 — полный тайл).
+
+    Рисуем процедурно, а не одной картинкой, ради двух вещей сразу:
+
+    * **Уровни.** Вода в тайле может стоять не до потолка — из этого получается
+      видимая многоуровневость: у берега мелко, к середине глубоко, и озеро
+      перестаёт выглядеть залитым по линейке прямоугольником.
+    * **Кромка.** У поверхности воды нужен светлый блик, а в глубине —
+      затемнение. Одной текстурой это не получить: тайл не знает, где он.
+    """
+    img = pygame.Surface(TILE_RECT, pygame.SRCALPHA, 32)
+    w, h = img.get_size()
+    fill_h = max(4, h * level // 4)
+    top = h - fill_h
+    body = (36, 108, 168, 190) if not deep else (20, 62, 112, 215)
+    # тело воды: вертикальный градиент — сверху светлее
+    for y in range(top, h):
+        k = (y - top) / max(1, fill_h)
+        col = (int(body[0] * (1 - k * 0.35)), int(body[1] * (1 - k * 0.3)),
+               int(body[2] * (1 - k * 0.2)), body[3])
+        pygame.draw.line(img, col, (0, y), (w, y))
+    # блик на кромке: две волны, чтобы поверхность читалась как поверхность
+    crest = (150, 214, 245, 230)
+    pygame.draw.line(img, crest, (0, top), (w, top), 2)
+    for x in range(0, w, 8):
+        pygame.draw.line(img, (200, 236, 252, 190), (x + 1, top + 2), (x + 4, top + 2))
+    # блики в толще: редкие короткие штрихи, читаются как игра света
+    for i, (bx, by) in enumerate(((5, 9), (19, 14), (11, 22), (25, 27))):
+        if by <= top:
+            continue
+        pygame.draw.line(img, (120, 190, 230, 90), (bx, by), (bx + 5, by), 1)
+    return img
+
+
+# Кадры воды в ОДНОМ наборе: 0..3 — обычная вода от полного тайла к плёнке,
+# 4..7 — то же для глубинной. Один набор, а не два, потому что кадр выбирается
+# полем tile[2], а оно одно: держать глубокую воду отдельным ТАЙЛОМ значило бы
+# второй индекс с той же физикой, теми же правилами и вдвое большим числом
+# мест, где о нём надо помнить.
+#
+# Порядок «полная → мельче» обязателен: state_img по умолчанию 0, а воду
+# ставит не только генератор (игрок ставит её из инвентаря, старые миры хранят
+# 0). При порядке 1..4 вся уже существующая вода превратилась бы в плёнку.
+WATER_TILE = 120
+WATER_LEVELS = 4
+water_imgs = ([create_water_img(level) for level in (4, 3, 2, 1)]
+              + [create_water_img(level, deep=True) for level in (4, 3, 2, 1)])
+water_deep_imgs = water_imgs[WATER_LEVELS:]
+water_img = water_imgs[0]
+
+
+def water_frame(level=WATER_LEVELS, deep=False):
+    """Кадр тайла воды: уровень заполнения 1..4 и глубинный вариант."""
+    level = max(1, min(WATER_LEVELS, level))
+    return (WATER_LEVELS - level) + (WATER_LEVELS if deep else 0)
 furnace_img = load_img("data/sprites/tiles/furnace/furnace0.png")
 furnace_imgs = load_imgs("data/sprites/tiles/furnace/furnace{}.png", 5)
 
@@ -954,6 +1009,8 @@ tile_imgs = {None: none_img,
 count_tiles = len(tile_imgs)
 print("Count_tiles imgs", count_tiles)
 tile_many_imgs = {225: conveyor_imgs,
+                  # Вода: кадр = уровень заполнения (см. create_water_img)
+                  120: water_imgs,
                   238: blore_track_imgs,
                   101: bush_imgs,
                   104: grass_i_imgs,

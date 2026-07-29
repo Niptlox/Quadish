@@ -3438,11 +3438,18 @@ def test_lake_lookup_is_a_pure_function_of_seed():
     site = _find_lake(gm)
     assert site is not None
     center, r, level = site
+    checked = 0
     for dy in range(1, 5):
         predicted = lake_tile_at(center, level + dy, gm.base_generation)
-        actual = gm.get_static_tile_type(center, level + dy, default=0, create_chunk=True)
-        if predicted == 120:
-            assert actual == 120, f"проба обещала воду на y={level + dy}, в мире {actual}"
+        tile = gm.get_static_tile(center, level + dy, create_chunk=True)
+        if predicted is not None and predicted[0] == 120:
+            checked += 1
+            assert tile[0] == 120, f"проба обещала воду на y={level + dy}, в мире {tile[0]}"
+            # Кадр — часть ответа пробы: уровень заполнения воды считает та же
+            # функция, что и форму чаши, и мир обязан положить именно его.
+            assert tile[2] == predicted[1], \
+                f"уровень воды на y={level + dy}: проба {predicted[1]}, мир {tile[2]}"
+    assert checked, "проба не нашла воды в центре озера — тест ничего не проверил"
 
 
 def test_lake_generation_is_free_for_chunks_without_lakes():
@@ -3460,6 +3467,152 @@ def test_lake_generation_is_free_for_chunks_without_lakes():
         "дорогой поиск уровня не должен идти раньше дешёвой отсечки"
     assert lake_shape(0, gm.base_generation) is None or \
         len(lake_shape(0, gm.base_generation)) == 2, "форма — только центр и радиус"
+
+
+# ===================== многоуровневая вода и полости =====================
+
+def test_water_frame_zero_is_the_full_tile():
+    """Кадр 0 обязан быть ПОЛНЫМ тайлом воды.
+
+    state_img по умолчанию 0: так лежит вся вода в старых мирах и так её ставит
+    игрок из инвентаря. При порядке кадров «1..4» вся уже существующая вода
+    превратилась бы в плёнку на дне тайла."""
+    get_app()
+    from units.Tiles import water_imgs, water_frame, WATER_LEVELS
+    assert water_frame() == 0, "полная вода — это кадр 0"
+    assert len(water_imgs) == WATER_LEVELS * 2, "четыре уровня обычной и четыре глубинной"
+    full = water_imgs[0]
+    # у полного тайла верхняя строка непрозрачна, у плёнки — нет
+    assert full.get_at((16, 1))[3] > 0, "кадр 0 не заполняет тайл целиком"
+    assert water_imgs[water_frame(1)].get_at((16, 1))[3] == 0, "плёнка не должна быть полной"
+    assert water_frame(4, deep=True) != water_frame(4), "глубинная вода — отдельный кадр"
+
+
+def test_lake_shore_is_a_shoal_not_a_wall():
+    """У берега ряд зеркала заполнен не до конца — иначе озеро обрывается
+    вертикальной стеной в полный блок, и берега как явления нет."""
+    from units.Tiles import water_frame, WATER_LEVELS
+    game = fresh_world(21)
+    gm = game.game_map
+    from units.Map.GameMap import lake_tile_at
+    site = _find_lake(gm)
+    assert site is not None
+    center, r, level = site
+    surface = [lake_tile_at(tx, level + 1, gm.base_generation)
+               for tx in range(center - r, center + r + 1)]
+    water = [t for t in surface if t is not None and t[0] == 120]
+    assert water, "в ряду зеркала нет воды вообще"
+    assert water[0][1] != water_frame(WATER_LEVELS), "у берега вода должна быть мельче"
+    assert any(t[1] == water_frame(WATER_LEVELS) for t in water), \
+        "в середине озеро обязано быть полным"
+
+
+def test_lake_has_depth_shading():
+    """Ниже третьего ряда вода рисуется глубинным кадром: без этого водоём —
+    однородная синяя заливка без ощущения толщи."""
+    from units.Tiles import WATER_LEVELS
+    game = fresh_world(21)
+    gm = game.game_map
+    from units.Map.GameMap import lake_tile_at
+    site = max((s for s in (__import__("units.Map.GameMap", fromlist=["lake_site"])
+                            .lake_site(c, gm.base_generation) for c in range(-10, 11))
+                if s is not None), key=lambda s: s[1])
+    center, r, level = site
+    deep = [lake_tile_at(center, level + dy, gm.base_generation) for dy in (1, 4)]
+    assert deep[0] is not None and deep[1] is not None, "озеро слишком мелкое для проверки"
+    assert deep[0][1] < WATER_LEVELS, "верхний ряд — обычная вода"
+    assert deep[1][1] >= WATER_LEVELS, "нижние ряды — глубинный кадр"
+
+
+def test_lake_level_is_always_inside_the_water_band():
+    """Площадка под озеро искалась по ВСЕМУ столбу, включая атмосферу выше
+    границы среднего мира. Такое озеро lake_tile_at раскладывать отказывался, и
+    клетка решётки молча оставалась без воды: на сиде 21 зеркало приходилось на
+    -768 при границе -650."""
+    from units.common import LAKE_TOP_MIN, LAKE_TOP_MAX
+    from units.Map.GameMap import lake_site, lake_tile_at
+    for seed in (1, 7, 21):
+        game = fresh_world(seed)
+        base = game.game_map.base_generation
+        for cell in range(-10, 11):
+            site = lake_site(cell, base)
+            if site is None:
+                continue
+            center, r, level = site
+            assert LAKE_TOP_MIN < level < LAKE_TOP_MAX, \
+                f"сид {seed}: зеркало на {level} вне полосы воды"
+            got = lake_tile_at(center, level + 1, base)
+            assert got is not None and got[0] == 120, \
+                f"сид {seed}: озеро есть в решётке, а воды в нём нет"
+
+
+def test_water_pocket_is_sealed_and_has_a_waterline():
+    """Полость с водой внутри острова: вода не течёт, поэтому полость обязана
+    быть запечатана в породе, а над зеркалом должен быть воздух — иначе линии
+    воды не видно и находка выглядит просто синим прямоугольником."""
+    from units.Map.Water import pocket_site, POCKET_WALL
+    from units.Tiles import water_frame, WATER_LEVELS
+    game = fresh_world(5)
+    gm = game.game_map
+    base = gm.base_generation
+    found = 0
+    for cx in range(-10, 11):
+        for cy in range(2, 18):
+            site = pocket_site(cx, cy, base)
+            if site is None:
+                continue
+            found += 1
+            # воздух над зеркалом
+            above = gm.get_static_tile_type(site.cx, site.mirror - 1, default=0,
+                                            create_chunk=True)
+            assert above == 0, f"над зеркалом {above}, а должен быть воздух"
+            # вода под зеркалом и на самом зеркале
+            for ty in (site.mirror, site.mirror + 1):
+                if ty > site.cy + site.ry:
+                    continue
+                tile = gm.get_static_tile(site.cx, ty, create_chunk=True)
+                assert tile[0] == 120, f"в полости на y={ty} стоит {tile[0]}"
+                assert tile[2] >= WATER_LEVELS, "вода в полости — глубинный кадр"
+            mirror_tile = gm.get_static_tile(site.cx, site.mirror, create_chunk=True)
+            assert mirror_tile[2] == water_frame(site.fill, deep=True), \
+                "ряд зеркала обязан быть того уровня, который посчитала полость"
+            # породу проверяем по краям: полость не должна вскрываться
+            for dx in (-(site.rx + POCKET_WALL), site.rx + POCKET_WALL):
+                side = gm.get_static_tile_type(site.cx + dx, site.cy, default=0,
+                                               create_chunk=True)
+                assert side not in (0, 120), f"полость вскрыта сбоку: {side}"
+            if found >= 3:
+                return
+    assert found, "полостей с водой не нашлось вообще"
+
+
+def test_water_pocket_lookup_is_a_pure_function_of_seed():
+    """Как озеро и подземелье: полость можно узнать заранее, без генерации
+    чанка. Иначе проба и генератор однажды разъедутся."""
+    from units.Map.Water import pocket_site, water_pocket_tile_at
+    game = fresh_world(5)
+    gm = game.game_map
+    base = gm.base_generation
+    site = None
+    for cx in range(-10, 11):
+        for cy in range(2, 18):
+            site = pocket_site(cx, cy, base)
+            if site is not None:
+                break
+        if site is not None:
+            break
+    assert site is not None
+    checked = 0
+    for ty in range(site.cy - site.ry, site.cy + site.ry + 1):
+        predicted = water_pocket_tile_at(site.cx, ty, base)
+        if predicted is None:
+            continue
+        checked += 1
+        tile = gm.get_static_tile(site.cx, ty, create_chunk=True)
+        assert tile[0] == predicted[0], f"y={ty}: проба {predicted[0]}, мир {tile[0]}"
+        if predicted[0] == 120:
+            assert tile[2] == predicted[1], f"y={ty}: уровень воды разъехался"
+    assert checked, "проба не нашла полость там, где она есть"
 
 
 # ===================== пересчёт меню при смене размера окна =====================
@@ -3723,6 +3876,135 @@ def test_aggressive_creature_chases_and_then_gives_up():
         game.tact += 1
         wolf.update(game.tact, 16)
     assert wolf.state != ST_CHASE, "погоня обязана заканчиваться"
+
+
+def _place_flock(game, cls, tx, ty, count, flock_id=777):
+    """Поставить группу с общим flock_id — так их создаёт _spawn_flocks."""
+    mates = []
+    for i in range(count):
+        obj = _place(game, cls, tx + i * 2, ty)
+        obj.flock_id = flock_id
+        mates.append(obj)
+    return mates
+
+
+def test_flock_shares_the_alarm():
+    """Тронул одного — сорвалась вся группа. Это и есть «спот»: группа
+    реагирует как целое, иначе рядом стоящие звери — просто N одиночек."""
+    from units.Objects.Creatures import Cow
+    game = fresh_world(410)
+    x, y = _flat_arena(game)
+    herd = _place_flock(game, Cow, x + 2, y, 3)
+    game.screen_map.teleport_to_player()
+    # Тревога ровно у одного: игрока рядом нет, сами увидеть его они не могут.
+    herd[0].alert_tacts = herd[0].memory_tacts
+    herd[0].last_seen_x = herd[0].rect.centerx - 200
+    for tact in range(herd[0].FLOCK_PERIOD * 3):
+        for cow in herd:
+            cow.flock_update(tact)
+    assert all(cow.alert_tacts > 0 for cow in herd[1:]), \
+        f"тревога не разошлась по стае: {[c.alert_tacts for c in herd]}"
+    assert all(cow.last_seen_x == herd[0].last_seen_x for cow in herd[1:]), \
+        "стая должна знать, откуда опасность, а не просто нервничать"
+
+
+def test_solitary_creature_is_not_in_a_flock():
+    """flock_id 0 — «не в стае». Без этой проверки все существа, появившиеся
+    не групповым спавном, считали бы друг друга одной стаей просто потому, что
+    значение по умолчанию у всех совпадает."""
+    from units.Objects.Creatures import Cow
+    game = fresh_world(411)
+    x, y = _flat_arena(game)
+    a = _place(game, Cow, x + 2, y)
+    b = _place(game, Cow, x + 4, y)
+    assert a.flock_id == 0 and b.flock_id == 0
+    assert a.flockmates() == [], "существа без стаи не должны считаться стаей"
+    a.flock_id = b.flock_id = 5
+    assert b in a.flockmates(), "а с общим flock_id — должны"
+
+
+def test_flock_straggler_walks_back_to_the_group():
+    """Без сплочения стая расходится случайным блужданием за минуту, и от неё
+    остаётся только факт спавна."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Cow, ST_WANDER
+    game = fresh_world(412)
+    x, y = _flat_arena(game, w=60)
+    herd = _place_flock(game, Cow, x + 2, y, 3)
+    lost = herd[0]
+    # Дальше 2*flock_radius стая друг друга не видит (flockmates) — это
+    # намеренный предел: зверь, унесённый на полкарты, стае уже не член.
+    # Отбившийся здесь в этом пределе, но за порогом сплочения.
+    lost.rect.x = (x + 14) * TSIZE
+    lost.update_chunk_pos()
+    center = sum(c.rect.centerx for c in herd[1:]) // 2
+    for tact in range(lost.FLOCK_PERIOD * 2):
+        lost.flock_update(tact)
+    lost.state = ST_WANDER
+    lost.move_direction = 1                 # шёл прочь от стаи
+    lost.flock_cohesion()
+    assert lost.move_direction == -1, "отбившийся должен повернуть к стае"
+    assert lost.flock_center is not None and lost.flock_center < lost.rect.centerx, \
+        f"центр стаи посчитан неверно: {lost.flock_center} при {center}"
+
+
+def test_bird_holds_altitude_instead_of_falling():
+    """Птица не ходит по земле: гравитации у неё нет, высоту она держит сама.
+    Обычное существо на том же месте просто упало бы на пол арены."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Bird
+    game = fresh_world(413)
+    x, y = _flat_arena(game, w=30)
+    bird = _place(game, Bird, x + 5, y - 5)
+    game.screen_map.teleport_to_player()
+    assert bird.use_gravity is False, "у птицы не должно быть гравитации"
+    for tact in range(120):
+        bird.update(tact, 1000 / 60)
+        bird.update_altitude(tact)
+    floor = y + 1
+    height = floor - bird.rect.bottom / TSIZE
+    assert height > bird.fly_height - 3, \
+        f"птица просела до {height:.1f} тайлов над землёй вместо {bird.fly_height}"
+    assert bird.rect.bottom < floor * TSIZE, "птица не должна лежать на полу"
+
+
+def test_bird_flaps_its_wings():
+    """Два кадра взмаха: без анимации птица читается как висящий камешек."""
+    from units.Objects.Creatures import Bird
+    game = fresh_world(414)
+    x, y = _flat_arena(game, w=20)
+    bird = _place(game, Bird, x + 5, y - 5)
+    seen = set()
+    for tact in range(bird.WING_PERIOD * 4):
+        bird.update(tact, 1000 / 60)
+        seen.add(id(bird.sprite))
+    assert len(seen) == 2, f"кадров взмаха должно быть два, а не {len(seen)}"
+
+
+def test_flocking_species_spawn_as_groups():
+    """Генератор выбирает существо на каждый тайл отдельно, поэтому стая при
+    таком спавне невозможна: каждый зверь — независимый бросок. Группы
+    досыпаются вторым проходом по уже выпавшим существам."""
+    from units.common import TSIZE
+    game = fresh_world(415)
+    gm = game.game_map
+    for cx in range(-4, 5):
+        for cy in range(-1, 3):
+            gm.generate_chunk(cx, cy)
+    groups = {}
+    for chunk in gm.game_map.values():
+        for obj in chunk[1]:
+            fid = getattr(obj, "flock_id", 0)
+            if fid:
+                groups.setdefault((type(obj).__name__, fid), []).append(obj)
+    assert groups, "стайных существ не появилось вообще"
+    big = [m for m in groups.values() if len(m) >= 2]
+    assert big, f"все «стаи» оказались одиночками: {[len(m) for m in groups.values()]}"
+    for mates in big:
+        xs = [o.rect.centerx // TSIZE for o in mates]
+        radius = mates[0].flock_radius
+        assert max(xs) - min(xs) <= radius * 3, \
+            f"стая {type(mates[0]).__name__} рассыпана на {max(xs) - min(xs)} тайлов"
 
 
 def _count_direction_flips(game, obj, frames):

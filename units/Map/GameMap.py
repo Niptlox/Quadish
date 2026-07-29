@@ -6,7 +6,7 @@ from units.noise_compat import snoise2 as noise2
 
 from units.Objects.Creatures import (Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion,
                                      Rabbit, Deer, Fox, Camel, Penguin, Boar, Crab, Bat, StoneGolem, SpaceDrifter,
-                                     DustSwarm, VoidSentinel,
+                                     DustSwarm, VoidSentinel, Bird,
                                      MOD_CREATURES)
 from units.Objects.Entities import PortalMainGate
 from units.Objects.Entity import PhysicalObject
@@ -19,6 +19,7 @@ from units.biomes import biome_of_pos
 from units.Map.Structures import Structures_chance, Structures, Structures_all, structure_start
 from units.Map.Dungeons import (dungeon_tile_at, chunk_touches_dungeon, dungeon_at,
                                 DUNGEON_CELL_W, DUNGEON_CELL_H)
+from units.Map.Water import water_pocket_tile_at, chunk_touches_pocket
 from units.Tiles import *
 from units.sound import sound_gate
 from units.Updater import parse_version
@@ -27,7 +28,8 @@ from units.Updater import parse_version
 class GameMap(SavedObject):
     not_save_vars = SavedObject.not_save_vars | {"gate", "particles", "world_id", "world_meta",
                                                  "dynamic_dump", "dump_keep_radius", "signal_receivers",
-                                                 "portals", "lake_sites", "dungeon_sites", "active_tiles",
+                                                 "portals", "lake_sites", "dungeon_sites", "pocket_sites",
+                                                 "active_tiles",
                                                  "_offscreen_ring", "_offscreen_ring_set",
                                                  "_offscreen_pos", "_offscreen_round_tact",
                                                  "_offscreen_steps", "_forced_cache",
@@ -92,6 +94,7 @@ class GameMap(SavedObject):
         # выводится из сида, поэтому в сейв не идёт.
         self.lake_sites = {}
         self.dungeon_sites = {}
+        self.pocket_sites = {}
         # Индекс «живых» тайлов по чанкам: {cxy: {индекс_в_массиве}}. Тик за
         # экраном раньше просматривал ВСЮ площадь чанка — замер дал 16384
         # просмотренных слота на 30 активных тайлов (0.18%). Лежит на карте, а
@@ -1269,6 +1272,11 @@ class GameMap(SavedObject):
         _dungeon_cache = self.dungeon_sites
         chunk_has_dungeon = chunk_touches_dungeon(base_x, base_y, CHUNK_SIZE,
                                                   base, _dungeon_cache)
+        # И для полостей с водой (units/Map/Water.py): их проверка считает
+        # пробы породы, и в чанках без полостей платить за них незачем.
+        _pocket_cache = self.pocket_sites
+        chunk_has_pocket = chunk_touches_pocket(base_x, base_y, CHUNK_SIZE,
+                                                base, _pocket_cache)
 
         def standart_noise2_bool(tx, ty):
             # кэш по тайлу: одна и та же проверка нужна нескольким соседям
@@ -1285,6 +1293,9 @@ class GameMap(SavedObject):
             for x_pos in range(CHUNK_SIZE):  # local tile x in chunk (not px)
                 biome_info[i] = biome_of_pos(tile_x, tile_y, _climate_cache)
                 tile_type = None
+                # Кадр тайла (state_img). Нужен воде: уровень заполнения — это
+                # часть формы водоёма, и решает его тот, кто эту форму считает.
+                tile_frame = 0
                 backtile_type = None
                 if config.GameSettings.vertical_tunel and tile_x in (-2, -1, 0, 1):
                     tile_type = 0
@@ -1293,13 +1304,24 @@ class GameMap(SavedObject):
                 # Озеро вырезается поверх рельефа, поэтому считается ДО
                 # ветки «порода / пустота»: чаша выедает и породу тоже.
                 if chunk_has_lake and tile_type is None and biome_info[i][0] != 9:
-                    tile_type = lake_tile_at(tile_x, tile_y, base, _lake_cache)
-                # Подземелье кладётся ПОВЕРХ рельефа и озера: это постройка,
-                # она вытесняет и породу, и воду, иначе комнату затопило бы.
+                    ltile = lake_tile_at(tile_x, tile_y, base, _lake_cache)
+                    if ltile is not None:
+                        tile_type, tile_frame = ltile
+                # Полость с водой (units/Map/Water.py) вырезается в породе, то
+                # есть тоже ДО ветки «порода / пустота». После озера: полость
+                # внутри острова, озеро на его поверхности, и если они всё же
+                # пересеклись — сверху должно остаться озеро.
+                if chunk_has_pocket and tile_type is None:
+                    ptile = water_pocket_tile_at(tile_x, tile_y, base, _pocket_cache)
+                    if ptile is not None:
+                        tile_type, tile_frame = ptile
+                # Подземелье кладётся ПОВЕРХ рельефа, озера и полостей: это
+                # постройка, она вытесняет и породу, и воду, иначе комнату
+                # затопило бы.
                 if chunk_has_dungeon:
                     dtile = dungeon_tile_at(tile_x, tile_y, base, _dungeon_cache)
                     if dtile is not None:
-                        tile_type = dtile
+                        tile_type, tile_frame = dtile, 0
                 if standart_noise2_bool(tile_x, tile_y) and tile_type is None:
                     if standart_noise2_bool(tile_x, tile_y - 2 - random.randint(0, 1)):
                         tile_type = 3  # stone
@@ -1412,6 +1434,8 @@ class GameMap(SavedObject):
                 if tile_type is not None:
                     static_tiles[tile_index] = tile_type
                     static_tiles[tile_index + 1] = TILES_SOLIDITY.get(tile_type, -1)
+                    if tile_frame:
+                        static_tiles[tile_index + 2] = tile_frame
                 if backtile_type:
                     back_tiles[backtile_index] = backtile_type
                 tile_x += 1  # v28557
@@ -1419,10 +1443,50 @@ class GameMap(SavedObject):
                 backtile_index += 1
                 i += 1
             tile_y += 1
-        creature_cash[1] = cnt_creatures
+        creature_cash[1] = self._spawn_flocks(res, on_ground_tiles, cnt_creatures)
         if chunk_has_dungeon:
             self._place_dungeon_guards(res, x, y, base, _dungeon_cache)
         return res
+
+    def _spawn_flocks(self, chunk, on_ground_tiles, cnt_creatures):
+        """Досыпать компаньонов стайным существам этого чанка.
+
+        Почему вторым проходом, а не в самой жеребьёвке. Генератор выбирает
+        существо на КАЖДЫЙ подходящий тайл отдельно, поэтому стая при таком
+        спавне невозможна в принципе: каждый зверь — независимый бросок, и
+        встречаются они по одному. Стаю добавляем по уже выпавшим существам —
+        тогда биомные пулы, лимит чанка и кривая сложности остаются
+        единственным источником правды о том, кто где живёт, а стайность
+        оказывается свойством вида, а не второй таблицей спавна.
+
+        flock_id считается из позиции вожака, а не берётся из счётчика: чанк
+        выгружается и создаётся заново на ходу (`dynamic_dump`), и стая обязана
+        собраться той же самой, иначе после возвращения игрока на месте одной
+        группы оказались бы две.
+        """
+        leaders = [o for o in chunk[1] if getattr(o, "flock_size", 1) > 1]
+        if not leaders:
+            return cnt_creatures
+        spots = None
+        for leader in leaders:
+            if cnt_creatures >= CHUNK_CREATURE_LIMIT:
+                break
+            ltx, lty = leader.rect.centerx // TSIZE, leader.rect.centery // TSIZE
+            leader.flock_id = ltx * 4096 + lty
+            if spots is None:
+                spots = list(on_ground_tiles)
+            near = [t for t in spots
+                    if abs(t[0] - ltx) <= leader.flock_radius and abs(t[1] - lty) <= 4
+                    and (t[0], t[1]) != (ltx, lty)]
+            random.shuffle(near)
+            for tx, ty in near[:leader.flock_size - 1]:
+                mate = spawn_creature(type(leader), self.game, tx, ty)
+                mate.flock_id = leader.flock_id
+                chunk[1].append(mate)
+                cnt_creatures += 1
+                if cnt_creatures >= CHUNK_CREATURE_LIMIT:
+                    break
+        return cnt_creatures
 
     def _place_dungeon_guards(self, chunk, chunk_x, chunk_y, base, cache):
         """Поставить стражей подземелья в только что созданный чанк.
@@ -1792,27 +1856,63 @@ def lake_shape(cell, base):
     return center, r
 
 
+def _lake_flanks_hold(center, r, level, base):
+    """Опирается ли чаша такой полуширины на остров, а не свисает с обрыва.
+
+    Проверяется порода под зеркалом в БОКОВЫХ колонках. Без этого озеро,
+    попавшее центром на площадку у края острова, наполовину висело в
+    воздухе: центр опирался на породу, а половина зеркала торчала над
+    обрывом — вода в игре не течёт, и так это и оставалось.
+    """
+    for dx in (-r, -(r * 2) // 3, (r * 2) // 3, r):
+        if not terrain_is_solid(center + dx, level + 2, base):
+            return False
+    return True
+
+
 def lake_site(cell, base):
     """Озеро в клетке: (центр_x, полуширина, уровень зеркала) или None.
 
-    Слой выбирается случайно из всех годных площадок столба, а не берётся
-    самый верхний: мир — это стопка летающих островов с воздушными провалами
-    между ними, и «самый верхний» — это осколок у потолка атмосферы, за
-    тысячу тайлов от игрока.
+    Слой выбирается случайно из годных площадок столба, а не берётся самый
+    верхний: мир — это стопка летающих островов с воздушными провалами между
+    ними, и «самый верхний» — это осколок у потолка атмосферы, за тысячу
+    тайлов от игрока.
+
+    Две отсечки, без которых половина озёр была фикцией:
+
+    * **Площадка обязана быть в полосе, где вода вообще разрешена.** Раньше
+      площадку искали по всему столбу, включая атмосферу выше
+      TOP_MIDDLE_WORLD; `lake_tile_at` такое озеро отказывался раскладывать, и
+      клетка решётки молча оставалась без воды. Замер на сиде 21: озеро с
+      зеркалом на -768 при границе -650, то есть ни одного тайла воды.
+    * **Чаша обязана опираться на остров ВСЕЙ шириной.** Если не опирается —
+      сужаем её, а не выбрасываем: узкое озеро на площадке лучше, чем
+      отсутствие озера или зеркало, свисающее с обрыва.
     """
     shape = lake_shape(cell, base)
     if shape is None:
         return None
     center, r = shape
-    tops = _island_tops(center, base)
+    tops = [t for t in _island_tops(center, base)
+            if LAKE_TOP_MIN < t < LAKE_TOP_MAX]
     if not tops:
         return None
     rnd = random.Random(f"lake-level:{base}:{cell}")
-    return center, r, rnd.choice(tops)
+    level = rnd.choice(tops)
+    while r >= LAKE_MIN_R:
+        if _lake_flanks_hold(center, r, level, base):
+            return center, r, level
+        r -= 2
+    return None
 
 
 def lake_tile_at(tx, ty, base, cache=None):
-    """Что стоит в этом тайле из-за озера: 120 (вода), 0 (берег) или None.
+    """Что стоит в этом тайле из-за озера: (тайл, кадр) или None.
+
+    Кадр возвращается вместе с тайлом, а не подбирается потом: уровень
+    заполнения воды — это часть формы озера, и разделить их значило бы иметь
+    два места, где считается одна и та же геометрия. Для породы и воздуха
+    кадр 0, то есть возврат остаётся однородным.
 
     Чистая функция от (тайл, сид) — как terrain_is_solid, не требует
     сгенерированного чанка. Значит зеркало озера можно узнать заранее (для
@@ -1838,13 +1938,24 @@ def lake_tile_at(tx, ty, base, cache=None):
         return None
     # Полукруглый профиль: у берега мелко, в середине глубоко.
     bowl = (1 - (dx / r) ** 2) ** 0.5
-    depth = min(LAKE_MAX_DEPTH, int(r * LAKE_DEPTH_FACTOR * bowl))
-    if depth < 1:
-        return None
+    raw = r * LAKE_DEPTH_FACTOR * bowl      # глубина чаши в тайлах, с дробью
+    depth = min(LAKE_MAX_DEPTH, int(raw))
+    # Уровень заполнения ряда зеркала: у берега мельче, к середине полный.
+    # Именно это делает многоуровневость воды видимой — линия воды у отмели не
+    # совпадает с сеткой блоков, и берег перестаёт быть бортом бассейна.
+    shoal = max(1, min(WATER_LEVELS,
+                       int(raw * WATER_LEVELS / LAKE_SHOAL_SPAN + 0.5)))
     if level < ty <= level + depth:
-        return 120                          # вода
+        # Толща ниже третьего ряда — тёмная: так у озера видно глубину.
+        return WATER_TILE, water_frame(shoal if ty == level + 1 else WATER_LEVELS,
+                                       ty - level >= LAKE_DEEP_ROW)
+    if depth < 1:
+        # Кромка: чаша тоньше тайла, но вода тут всё равно должна быть —
+        # плёнкой, иначе озеро обрывается вертикальной стеной в полный блок.
+        if raw >= LAKE_SHOAL_MIN and ty == level + 1:
+            return WATER_TILE, water_frame(shoal)
     if level - int(LAKE_RIM_CLEAR * bowl) <= ty <= level:
-        return 0                            # берег: снимаем породу над зеркалом
+        return 0, 0                         # берег: снимаем породу над зеркалом
     return None
 
 
@@ -1979,19 +2090,19 @@ def random_creature_selection(tile_y=None, biome=None, tile_x=None):
     elif tile_y is not None and tile_y > BOTTOM_MIDDLE_WORLD:
         zone, pool, weights = "caves", [Slime, Bat, StoneGolem], [10, 6, 2]
     elif biome == 0:  # desert
-        zone, pool, weights = "surface", [Slime, Scorpion, Snake, Camel], [10, 6, 2, 3]
+        zone, pool, weights = "surface", [Slime, Scorpion, Snake, Camel, Bird], [10, 6, 2, 3, 2]
     elif biome == 1:  # savanna
-        zone, pool, weights = "surface", [Slime, Cow, Wolf, Rabbit], [15, 10, 1, 6]
+        zone, pool, weights = "surface", [Slime, Cow, Wolf, Rabbit, Bird], [15, 10, 1, 6, 2]
     elif biome in (3, 8):  # tundra, boreal_forest
-        zone, pool, weights = "surface", [Slime, Wolf, Cow, Deer, Penguin], [12, 5, 1, 4, 3]
+        zone, pool, weights = "surface", [Slime, Wolf, Cow, Deer, Penguin, Bird], [12, 5, 1, 4, 3, 2]
     elif biome in (2, 5):  # tropical_woodland, rainforest
-        zone, pool, weights = "surface", [Slime, Snake, Cow, Wolf, Crab], [15, 4, 3, 1, 3]
+        zone, pool, weights = "surface", [Slime, Snake, Cow, Wolf, Crab, Bird], [15, 4, 3, 1, 3, 2]
     elif biome in (4, 6, 7):  # seasonal/temperate/temperate_rainforest
-        zone, pool, weights = "surface", [Slime, Deer, Fox, Boar, Rabbit], [15, 5, 4, 2, 5]
+        zone, pool, weights = "surface", [Slime, Deer, Fox, Boar, Rabbit, Bird], [15, 5, 4, 2, 5, 2]
     else:
         zone = "surface"
-        pool = [Slime, Cow, Snake, Wolf, SlimeBigBoss, Rabbit]
-        weights = [20, 5, 1, 0.7, 0.25, 6]
+        pool = [Slime, Cow, Snake, Wolf, SlimeBigBoss, Rabbit, Bird]
+        weights = [20, 5, 1, 0.7, 0.25, 6, 2]
 
     if zone == "surface" and near_spawn(tile_x):
         filtered = [(c, w) for c, w in zip(pool, weights) if c not in HARD_CREATURES]

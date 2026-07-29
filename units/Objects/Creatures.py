@@ -13,7 +13,8 @@ from units.Objects.CreatureSprites import (
     create_scorpion_sprite, create_rabbit_sprite, create_deer_sprite, create_fox_sprite,
     create_camel_sprite, create_penguin_sprite, create_boar_sprite, create_crab_sprite,
     create_bat_sprite, create_golem_sprite, create_space_drifter_sprite,
-    create_dust_swarm_sprite, create_void_sentinel_sprite)
+    create_dust_swarm_sprite, create_void_sentinel_sprite,
+    create_bird_sprites)
 # PHYSBODY_TILES нужен «мозгу»: по нему считаются прямая видимость и
 # наличие тверди за провалом. units.common его не реэкспортирует.
 from units.Tiles import PHYSBODY_TILES
@@ -163,6 +164,20 @@ class MovingCreature(Creature):
     # обрыв переставал определяться, оно шло обратно — и так каждый кадр.
     TURN_LOCK = FPS // 3
 
+    # --- стая ---------------------------------------------------------
+    # «Спот» из стратегий, но без всякой демонстрации: нигде не написано, что
+    # это стая, и ничего не подсвечивается. Видно по поведению — группа стоит
+    # на своём месте и реагирует как целое. Из этого сразу следует тактика:
+    # тронул одного волка — получил всех, поэтому к спотам надо готовиться.
+    #
+    # Два эффекта, и оба обязательны. Без общей тревоги стая — это просто
+    # несколько зверей рядом, каждый сам за себя. Без сплочения стая
+    # расходится за минуту случайным блужданием, и от неё остаётся только
+    # факт спавна.
+    flock_size = 1              # 1 — одиночка, >1 — появляется группой
+    flock_radius = 7            # на сколько тайлов стая расходится
+    FLOCK_PERIOD = 12           # такты между сверками со стаей
+
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
         self.move_direction = 0
@@ -172,6 +187,8 @@ class MovingCreature(Creature):
         self.provoked = False       # нас ударили — территориальные злятся
         self.last_seen_x = None
         self.turn_lock = 0          # см. TURN_LOCK
+        self.flock_id = 0           # общий у группы, см. flock_size
+        self.flock_center = None    # центр стаи по X, пересчитывается редко
 
     # ---------- восприятие ----------
 
@@ -275,6 +292,77 @@ class MovingCreature(Creature):
             # он продолжает в ту же сторону, а не замирает под носом врага.
             self.move_direction = away or self.move_direction or random.choice((-1, 1))
 
+        if self.flock_size > 1 and self.state in (ST_WANDER, ST_IDLE):
+            # Спокойная стая держится вместе. Только в спокойном состоянии:
+            # бегущий от игрока зверь должен спасаться, а не строиться. И
+            # после выбора направления, а не до: сплочение отменяет случайную
+            # сторону блуждания, иначе отбившийся так и уходил бы дальше.
+            self.flock_cohesion()
+
+    # ---------- стая ----------
+
+    def flockmates(self):
+        """Соседи по стае: свой класс, свой flock_id, рядом по горизонтали.
+
+        Смотрим свой чанк и два соседних по X, а не девять вокруг: в чанке
+        лежат ВСЕ динамические объекты, включая предметы (замеры давали до 150
+        в одном чанке на ферме), и обход девяти чанков ради сверки со стаей
+        стоил бы дороже самой стаи. Радиус стаи — 7 тайлов, чанк — 32, так что
+        своей тройки чанков хватает.
+        """
+        if not self.flock_id:
+            # 0 — «не в стае»: так помечены существа, появившиеся не групповым
+            # спавном (подселение на видимую площадку, события, гнёзда). Без
+            # этой проверки все они считали бы друг друга одной стаей просто
+            # потому, что у всех значение по умолчанию совпадает.
+            return []
+        cx, cy = self.chunk_pos
+        chunks = self.game_map.game_map
+        cls = self.__class__
+        reach = self.flock_radius * TSIZE * 2
+        mates = []
+        for dx in (-1, 0, 1):
+            chunk = chunks.get((cx + dx, cy))
+            if chunk is None:
+                continue
+            for obj in chunk[1]:
+                if obj.__class__ is not cls or obj is self or not obj.alive:
+                    continue
+                if obj.flock_id != self.flock_id:
+                    continue
+                if abs(obj.rect.centerx - self.rect.centerx) <= reach:
+                    mates.append(obj)
+        return mates
+
+    def flock_update(self, tact):
+        """Сверка со стаей: тревога общая, центр стаи запоминается."""
+        if self.flock_size <= 1 or tact % self.FLOCK_PERIOD:
+            return
+        mates = self.flockmates()
+        if not mates:
+            self.flock_center = None
+            return
+        alarmed = max(mates, key=lambda o: o.alert_tacts)
+        if alarmed.alert_tacts > self.alert_tacts + 1 and alarmed.last_seen_x is not None:
+            # Тронули одного — сорвалась вся группа. Минус один такт памяти,
+            # чтобы тревога затухала, а не поддерживала себя по кругу между
+            # членами стаи вечно.
+            self.alert_tacts = alarmed.alert_tacts - 1
+            self.last_seen_x = alarmed.last_seen_x
+            self.provoked = self.provoked or alarmed.provoked
+        self.flock_center = sum(o.rect.centerx for o in mates) // len(mates)
+
+    def flock_cohesion(self):
+        """Отбился от стаи — возвращаться, а не бродить случайно."""
+        center = getattr(self, "flock_center", None)
+        if center is None:
+            return
+        delta = center - self.rect.centerx
+        if abs(delta) <= self.flock_radius * TSIZE:
+            return
+        self.state = ST_WANDER
+        self.move_direction = 1 if delta > 0 else -1
+
     def _direction_to(self, target_x):
         """Знак направления к цели, с мёртвой зоной у самой цели."""
         delta = target_x - self.rect.centerx
@@ -338,6 +426,9 @@ class MovingCreature(Creature):
     def update(self, tact, elapsed_time):
         if not super().update(tact, elapsed_time):
             return False
+        # Стая сверяется ДО решения: тревога товарища должна попасть в это же
+        # решение, а не в следующее — иначе стая срывается волной, по одному.
+        self.flock_update(tact)
         self.think(tact)
         self.check_abyss()
         self.move_by_state()
@@ -522,6 +613,8 @@ class Cow(MovingCreature):
     temperament = TEMPER_PEACEFUL
     flee_tiles = 4
     sight_tiles = 8
+    # Стадо: коровы держатся вместе и пугаются все разом.
+    flock_size = 3
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
@@ -535,6 +628,11 @@ class Wolf(MovingCreature):
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "wolf"
     bio_subspecies = "gray wolf"
+    # Стаи у волка НЕТ, хотя тематически она просилась первой: Wolf — базовый
+    # класс ещё для девяти существ (бес, скорпион, кабан, мышь, голем, страж,
+    # рой…), и стайность здесь молча удвоила бы их плотность, включая каменных
+    # големов и пустотных стражей. Стая — свойство вида, поэтому она задаётся у
+    # конкретных видов (Bat, DustSwarm, стадные животные), а не у общего мозга.
     width, height = int(TSIZE * 1), int(TSIZE * 0.9)
 
     color = "#708090"
@@ -645,6 +743,112 @@ class PassiveWanderer(MovingCreature):
     jump_speed = 5
 
 
+class FlyingCreature(MovingCreature):
+    """Летающее существо: держит высоту над породой, а не ходит по ней.
+
+    Гравитацию выключаем на экземпляре, а не заводим вторую физику: подъём и
+    спуск существо задаёт само, через movement_vector, ровно тем же способом,
+    которым все остальные ходят по горизонтали. Коллизии при этом остаются
+    включёнными — летающему нельзя пролетать сквозь породу.
+
+    Породу под собой ищем не каждый кадр: высота от 8 кадров задержки не
+    меняется, а поиск — это скан столба вниз (та же логика, что у SENSE_PERIOD
+    для зрения).
+    """
+    fly_height = 7              # на сколько тайлов над породой держится
+    fly_speed = 1.8             # вертикальная скорость выравнивания
+    FLY_PERIOD = 8              # такты между поисками породы под собой
+    FLEE_CLIMB = 4              # на сколько тайлов подниматься, убегая
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.use_gravity = False
+        self.target_y = None
+
+    def check_abyss(self):
+        return                  # для летающего пропасти не существует
+
+    def can_jump_the_gap(self):
+        return False            # и прыгать через неё незачем
+
+    def ground_below(self):
+        """Ряд ближайшей породы под собой или None, если её нет в запасе."""
+        tx = self.rect.centerx // TSIZE
+        ty = self.rect.bottom // TSIZE
+        for d in range(0, self.fly_height * 3):
+            if self._solid(tx, ty + d):
+                return ty + d
+        return None
+
+    def update_altitude(self, tact):
+        if tact % self.FLY_PERIOD:
+            return
+        ground = self.ground_below()
+        if ground is None:
+            # Под нами пустота (провал между островами) — высоту не меняем:
+            # иначе птица уходила бы в бесконечное падение или в потолок.
+            self.target_y = None
+            return
+        height = self.fly_height + (self.FLEE_CLIMB if self.state == ST_FLEE else 0)
+        self.target_y = (ground - height) * TSIZE
+
+    def move_by_state(self):
+        self.movement_vector.x += self.move_direction * self.current_speed()
+        if self.target_y is None:
+            return
+        delta = self.target_y - self.rect.y
+        if abs(delta) < 2:
+            return
+        step = self.fly_speed if delta > 0 else -self.fly_speed
+        self.movement_vector.y += step if abs(step) < abs(delta) else delta
+
+    def update(self, tact, elapsed_time):
+        if not super().update(tact, elapsed_time):
+            return False
+        self.update_altitude(tact)
+        return True
+
+
+class Bird(FlyingCreature):
+    """Птица — мирная стая над поверхностью.
+
+    Зачем птицы вообще: поверхность Quadish — это земля, растения и звери на
+    земле. Небо над островами было пустым, и от этого мир читался как декорация
+    в один слой. Птица не даёт игроку ничего механически (её и убивать почти
+    незачем) — она делает воздух обитаемым. Поэтому она стайная, пугливая и
+    быстрая: её видно издалека и она реагирует на приближение.
+    """
+    temperament = TEMPER_SKITTISH
+    flee_tiles = 6
+    sight_tiles = 10
+    idle_chance = 0.15
+    angry_speed_mult = 1.8
+    not_save_vars = MovingCreature.not_save_vars | {"sprites"}
+    bio_kingdom = KINGDOM_ANIMALIA
+    bio_species = "bird"
+    bio_subspecies = "island bird"
+    width, height = int(TSIZE * 0.7), int(TSIZE * 0.45)
+    colors = ["#57534E", "#78716C", "#1C1917"]
+    max_lives = 6
+    drop_items = [(ItemsTile, (404, (0, 1)))]
+    move_speed = 4
+    flock_size = 5
+    flock_radius = 6
+    WING_PERIOD = 6             # кадры взмаха
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.color = random.choice(self.colors)
+        self.sprites = create_bird_sprites(self.color, self.rect.size)
+        self.sprite = self.sprites[0]
+
+    def update(self, tact, elapsed_time):
+        if not super().update(tact, elapsed_time):
+            return False
+        self.sprite = self.sprites[(tact // self.WING_PERIOD) % 2]
+        return True
+
+
 class Rabbit(PassiveWanderer):
     """Заяц — мелкое мирное животное, водится почти везде."""
     # Заяц — самый пугливый: срывается издалека и бежит быстро.
@@ -656,6 +860,7 @@ class Rabbit(PassiveWanderer):
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "rabbit"
     bio_subspecies = "wild rabbit"
+    flock_size = 3
     width, height = int(TSIZE * 0.5), int(TSIZE * 0.4)
     colors = ["#E7E5E4", "#A8A29E", "#78716C"]
     max_lives = 8
@@ -676,6 +881,7 @@ class Deer(PassiveWanderer):
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "deer"
     bio_subspecies = "forest deer"
+    flock_size = 4
     width, height = int(TSIZE * 1.1), int(TSIZE * 1.1)
     colors = ["#A16207", "#92400E", "#78350F"]
     max_lives = 25
@@ -739,6 +945,8 @@ class Penguin(PassiveWanderer):
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "penguin"
     bio_subspecies = "arctic penguin"
+    flock_size = 4
+    flock_radius = 5
     width, height = int(TSIZE * 0.5), int(TSIZE * 0.7)
     color = "#1E293B"
     max_lives = 10
@@ -817,6 +1025,9 @@ class Bat(Wolf):
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "bat"
     bio_subspecies = "cave bat"
+    # Мыши висят гроздью: одна мышь в пещере — это шум, а не встреча.
+    flock_size = 3
+    flock_radius = 6
     width, height = int(TSIZE * 0.7), int(TSIZE * 0.45)
     color = "#3F3A36"
     max_lives = 10
@@ -906,6 +1117,8 @@ class DustSwarm(Wolf):
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "dust_swarm"
     bio_subspecies = "dust swarm"
+    # Рой роится: одиночная «пылинка» противоречит собственному названию.
+    flock_size = 4
     width, height = int(TSIZE * 0.7), int(TSIZE * 0.6)
     color = "#7DD3FC"
     max_lives = 18
@@ -984,7 +1197,7 @@ class SlimeBigBoss(Slime):
 
 CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion,
             Rabbit, Deer, Fox, Camel, Penguin, Boar, Crab, Bat, StoneGolem, SpaceDrifter,
-            DustSwarm, VoidSentinel]
+            DustSwarm, VoidSentinel, Bird]
 CREATURES_D = {cls.__name__: cls for cls in CREATURES}
 
 
