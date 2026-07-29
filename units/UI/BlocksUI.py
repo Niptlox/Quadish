@@ -290,6 +290,19 @@ class InventoryPlayerChestUI(InventoryPlayerWithBlockUI):
         super(InventoryPlayerChestUI, self).__init__(player, ChestUI())
 
 
+class CupboardUI(ChestUI):
+    """Шкаф — тот же интерфейс, что у сундука, только таблица меньше."""
+    def __init__(self):
+        InventoryUI.__init__(self, None, [5, 2])
+
+
+class InventoryPlayerCupboardUI(InventoryPlayerWithBlockUI):
+    index = 126
+
+    def __init__(self, player):
+        super().__init__(player, CupboardUI())
+
+
 class InventoryPlayerFurnaceUI(InventoryPlayerWithBlockUI):
     index = 131
 
@@ -509,9 +522,14 @@ class InventoryPlayerChunkLoaderUI(InventoryPlayerWithBlockUI):
         super().__init__(player, LogisticBlockUI())
 
 
+class EchoUI(LoreTabletUI):
+    """Тот же экран, что у плиты: отголосок это тоже текст, просто живой."""
+    index = 239
+
+
 BLOCKS_UI = {cls.index: cls for cls in
-             [InventoryPlayerChestUI, InventoryPlayerFurnaceUI, CommandBlockUI, InventoryPlayerMusicBlockUI,
-              InventoryPlayerReceiverUI, InventoryPlayerTransmitterUI, LoreTabletUI,
+             [InventoryPlayerChestUI, InventoryPlayerCupboardUI, InventoryPlayerFurnaceUI, CommandBlockUI, InventoryPlayerMusicBlockUI,
+              InventoryPlayerReceiverUI, InventoryPlayerTransmitterUI, LoreTabletUI, EchoUI,
               InventoryPlayerHopperUI, InventoryPlayerDropperUI,
               InventoryPlayerFuelEngineUI, InventoryPlayerCreativeEngineUI,
               InventoryPlayerSpaceEngineUI, InventoryPlayerHellEngineUI,

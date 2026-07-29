@@ -1099,10 +1099,45 @@ class GameMap(SavedObject):
             points = self.structures_lst[build_index][2]
             self.set_state_of_points_build(points, 1)  # building
             pos = points[0]
-            self.set_structure(pos, Structures_all[build_id][2])
+            self.set_structure(pos, Structures_all[build_id][2],
+                               self.STRUCTURE_LOOT.get(Structures_all[build_id][0]))
             self.set_state_of_points_build(points, 2)  # builded
 
-    def set_structure(self, pos, build):
+    # Какая таблица добычи у какой структуры (units/Loot.py). Ключ — имя из
+    # StructuresBiome; чего нет в таблице, наполняется по глубине.
+    STRUCTURE_LOOT = {
+        "Home": "жильё", "Abandoned tower": "дозор", "Bunker": "бункер",
+        "desert marker": "храм", "desert crypt": "храм",
+        "savanna watchpost": "дозор", "tundra camp": "жильё",
+        "rainforest greenhouse": "оранжерея", "tropical flooded temple": "храм",
+        "forest observatory": "дозор", "boreal sawmill": "жильё",
+        "deep mine": "забой", "cave shrine": "забой",
+    }
+
+    def fill_structure_containers(self, pos, size, array, kind_name=None):
+        """Наполнить сундуки и шкафы только что поставленной структуры.
+
+        Раньше структуры ставили контейнеры пустыми: тайл создаётся вместе с
+        объектом-инвентарём, а положить в него что-то было некому. Игрок
+        находил склеп, открывал сундук и получал ничего — самое
+        разочаровывающее, что может сделать находка.
+        """
+        from units.Loot import fill_container
+        for i_y in range(size[1]):
+            for i_x in range(size[0]):
+                ttile = array[i_y * size[0] + i_x][0]
+                if ttile not in (129, 126):          # сундук, шкаф
+                    continue
+                tx, ty = pos[0] + i_x, pos[1] + i_y
+                tile = self.get_static_tile(tx, ty, create_chunk=False)
+                if not tile or tile[0] != ttile:
+                    continue
+                obj = self.get_tile_obj(*self.to_chunk_xy(tx, ty), tile[3])
+                inv = getattr(obj, "inventory", None)
+                if inv is not None:
+                    fill_container(self.game, inv, tx, ty, self.base_generation, kind_name)
+
+    def set_structure(self, pos, build, kind_name=None):
         foundation = ()
         if len(build) == 2:
             backtiles = []
@@ -1123,6 +1158,7 @@ class GameMap(SavedObject):
                     self.set_static_tile(pos[0] + i_x, pos[1] + i_y, tile, create_chunk=True)
         if foundation:
             self._build_foundation(pos, foundation)
+        self.fill_structure_containers(pos, size, array, kind_name)
 
     def _build_foundation(self, pos, foundation):
         """Достроить фундамент вниз до земли.
@@ -1396,6 +1432,11 @@ class GameMap(SavedObject):
         даёт тех же стражей, а не удваивает толпу.
         """
         import units.Objects.Creatures as C
+        # Сначала выдать объекты блокам, которые генератор написал прямо в
+        # массив. Генерация не проходит через set_static_tile, поэтому у
+        # сундука, лампы и плиты подземелья не появлялось объекта: лампа не
+        # светила, плита не читалась, сундук не открывался вовсе.
+        self._bind_class_tile_objects(chunk, chunk_x, chunk_y)
         seen = set()
         for dx in (0, CHUNK_SIZE - 1):
             for dy in (0, CHUNK_SIZE - 1):
@@ -1403,12 +1444,59 @@ class GameMap(SavedObject):
                 if site is None or id(site) in seen:
                     continue
                 seen.add(id(site))
+                self._fill_dungeon_chests(chunk, site, chunk_x, chunk_y)
                 for name, tx, ty in site.guard_spots(chunk_x, chunk_y, CHUNK_SIZE):
                     cls = getattr(C, name, None)
                     if cls is None:
                         continue
                     chunk[1].append(spawn_creature(cls, self.game, tx, ty))
                     chunk[3][1] += 1
+
+    def _bind_class_tile_objects(self, chunk, chunk_x, chunk_y):
+        """Создать объекты для CLASS_TILE-блоков, записанных генератором.
+
+        set_static_tile создаёт объект (сундук/лампа/плита) при постановке, а
+        генератор пишет тип прямо в массив чанка и объект не создаёт. Для
+        обычного рельефа это неважно — там нет таких блоков, — но подземелья
+        их ставят, и без этого прохода они были бы декорацией.
+        """
+        static = chunk[0]
+        base_x, base_y = chunk_x * CHUNK_SIZE, chunk_y * CHUNK_SIZE
+        for i in range(0, self.chunk_arr_size, self.tile_data_size):
+            ttile = static[i]
+            if ttile not in CLASS_TILE:
+                continue
+            if static[i + 3]:
+                continue                    # объект уже есть
+            cell = i // self.tile_data_size
+            tx = base_x + cell % CHUNK_SIZE
+            ty = base_y + cell // CHUNK_SIZE
+            obj = tiles_class[ttile](self.game, (tx, ty))
+            self.add_tile_obj_to_chunk(chunk, obj)
+            static[i + 3] = obj.id
+
+    def _fill_dungeon_chests(self, chunk, site, chunk_x, chunk_y):
+        """Наполнить сундуки подземелья, попавшие в этот чанк.
+
+        Раньше сундук в сокровищнице стоял пустым (docs/DUNGEONS.md отмечал
+        это как незакрытый пробел): раскладка подземелья — чистая функция от
+        тайла, а наполнение требует объекта-инвентаря, который существует
+        только после генерации.
+
+        Читаем из переданного chunk, а не через get_static_tile: чанк ещё НЕ
+        вставлен в self.game_map — он только строится, и по координатам его
+        пока не найти.
+        """
+        from units.Loot import fill_container
+        for tx, ty in site.chest_spots(chunk_x, chunk_y, CHUNK_SIZE):
+            i = self.convert_pos_to_i(tx, ty)
+            if chunk[0][i] != 129:
+                continue
+            obj = chunk[2].get(chunk[0][i + 3])
+            inv = getattr(obj, "inventory", None)
+            if inv is not None:
+                fill_container(self.game, inv, tx, ty, self.base_generation,
+                               site.kind.name)
 
     def save_current_game_map(self):
         if self.world_id is None:
@@ -1524,6 +1612,7 @@ class GameMap(SavedObject):
         self.game.player.tp_to(config.GameSettings.start_pos)
         self.spawn_gate()
         self._place_altar_tablet()
+        self._place_altar_echo()
         self._build_starter_grove()
         if tutorial:
             self._build_tutorial_island()
@@ -1537,6 +1626,20 @@ class GameMap(SavedObject):
     GROVE_RADIUS = 26
     GROVE_TREES = 5
     GROVE_BUSHES = 4
+
+    def _place_altar_echo(self):
+        """Поставить отголосок у алтаря.
+
+        Первое, что игрок видит после плиты: он отвечает на текущую главу и
+        тем самым говорит, куда идти дальше, — но говорит про то, что делали
+        ОНИ, а не приказывает (docs/STORYBOOK.md).
+        """
+        pos = config.GameSettings.start_pos
+        tx, ty = pos[0] // TSIZE + 3, pos[1] // TSIZE
+        for dy in range(0, 6):
+            if self.get_static_tile_type(tx, ty + dy, 0, create_chunk=True):
+                self.set_static_tile(tx, ty + dy - 1, 239, create_chunk=True)
+                return
 
     def _build_starter_grove(self):
         """Гарантировать у спавна деревья и ягодные кусты.

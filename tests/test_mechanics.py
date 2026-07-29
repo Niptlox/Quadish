@@ -4673,6 +4673,157 @@ def test_events_are_tied_to_places():
         assert evs, f"в месте «{name}» не может произойти вообще ничего"
 
 
+# ===================== наполнение контейнеров, НПС, полный сюжет ============
+
+def test_container_is_never_empty():
+    """Пустой контейнер — худший исход находки: игрок дошёл, открыл и получил
+    ничего. Все шансы в таблице могут не сработать разом, поэтому минимум
+    одна позиция выдаётся принудительно."""
+    import random as _r
+    from units.Loot import TABLES
+    for name, table in TABLES.items():
+        for i in range(60):
+            rolled = table.roll(_r.Random(f"t{i}"), 0.0)
+            assert rolled, f"таблица «{name}» выдала пустоту на броске {i}"
+
+
+def test_loot_is_deterministic_per_position():
+    """Сундук, найденный дважды, даёт то же самое: чанки выгружаются и
+    создаются заново на ходу, и «новая порция при каждом заходе» была бы
+    бесконечным источником золота."""
+    from units.Loot import fill_container
+    from units.Inventory import Inventory
+    game = fresh_world(960)
+    gm = game.game_map
+    first = fill_container(game, Inventory(gm, None, [5, 3]), 100, 600, 7, "забой")
+    second = fill_container(game, Inventory(gm, None, [5, 3]), 100, 600, 7, "забой")
+    assert first == second, f"выдача разошлась: {first} против {second}"
+    other = fill_container(game, Inventory(gm, None, [5, 3]), 101, 600, 7, "забой")
+    assert other != first, "разные сундуки не должны давать одно и то же"
+
+
+def test_loot_grows_with_depth():
+    """Награда идёт по той же кривой, что и опасность."""
+    import random as _r
+    from units.Loot import MINE
+    shallow = sum(c for _, c in MINE.roll(_r.Random("d"), 0.0))
+    deep = sum(c for _, c in MINE.roll(_r.Random("d"), 1.0))
+    assert deep > shallow, f"на глубине должно быть больше: {shallow} -> {deep}"
+
+
+def test_cupboard_is_a_container_now():
+    """Шкаф был чистой мебелью — блоком без инвентаря, который структуры
+    ставили как обстановку. Открыть его было нельзя."""
+    from units.Tiles import CLASS_TILE
+    from units.Objects.TileClasses import tiles_class, Cupboard
+    from units.UI.BlocksUI import BLOCKS_UI
+    assert 126 in CLASS_TILE
+    assert tiles_class[126] is Cupboard
+    assert 126 in BLOCKS_UI, "у шкафа должен быть интерфейс"
+    game = fresh_world(961)
+    obj = _place_block(game.game_map, 40, 8, 126)
+    assert obj is not None and getattr(obj, "inventory", None) is not None
+
+
+def test_generated_class_tiles_get_their_objects():
+    """Генератор пишет тайлы прямо в массив, минуя set_static_tile, поэтому у
+    сундука, лампы и плиты подземелья не появлялось объекта: лампа не светила,
+    плита не читалась, сундук не открывался вовсе."""
+    from units.common import CHUNK_SIZE
+    from units.Map.Dungeons import dungeon_site, in_dungeon_band
+    game = fresh_world(962)
+    gm = game.game_map
+    base = gm.base_generation
+    site = next(s for s in (dungeon_site(cx, cy, base)
+                            for cx in range(14) for cy in range(1, 14))
+                if s is not None and in_dungeon_band(s.y))
+    r, c = site.vault
+    rx, ry, rw, rh = site.room_rect(r, c)
+    tx, ty = rx + rw // 2, ry + rh - 2
+    gm.generate_chunk(tx // CHUNK_SIZE, ty // CHUNK_SIZE)
+    tile = gm.get_static_tile(tx, ty)
+    assert tile and tile[0] == 129, f"сундука в сокровищнице нет: {tile}"
+    obj = gm.get_tile_obj(*gm.to_chunk_xy(tx, ty), tile[3])
+    assert obj is not None, "у сундука подземелья нет объекта"
+    assert any(cell for cell in obj.inventory), "сундук подземелья пуст"
+
+
+def test_echo_answers_the_current_chapter():
+    """Отголосок — единственный НПС, и он не человек: соплеменников не
+    осталось, живой болтливый спутник отменил бы тон брошенного мира.
+    Он отвечает на главу, в которой игрок СЕЙЧАС."""
+    from units.Lore import echo_for_act, ECHOES
+    from units.Story import ACTS, update_story, current_act
+    game = fresh_world(963)
+    first = current_act(game)
+    line_before = echo_for_act(first.id)
+    game.game_map.read_inscriptions = ["altar"]
+    update_story(game)
+    line_after = echo_for_act(current_act(game).id)
+    assert line_before != line_after, "реплика должна меняться вместе с главой"
+    for act in ACTS:
+        assert act.id in ECHOES, f"у главы {act.id} нет реплики отголоска"
+    silent = echo_for_act(None)
+    assert silent and silent[1], "пройденный сюжет тоже должен что-то отвечать"
+
+
+def test_echo_is_registered_and_walkable():
+    """Отголосок — не препятствие: он висит в воздухе, сквозь него проходят."""
+    from units.Tiles import CLASS_TILE, SEMIPHYSBODY_TILES, PHYSBODY_TILES, tile_words
+    from units.Objects.TileClasses import tiles_class, Echo
+    assert 239 in tile_words and 239 in CLASS_TILE
+    assert tiles_class[239] is Echo
+    assert 239 in SEMIPHYSBODY_TILES and 239 not in PHYSBODY_TILES
+
+
+def test_altar_has_an_echo_nearby():
+    """Первое, что игрок встречает после плиты, — отголосок: он говорит, куда
+    идти, ничего не приказывая."""
+    from units.common import TSIZE
+    from units import config
+    game = fresh_world(964)
+    gm = game.game_map
+    pos = config.GameSettings.start_pos
+    px, py = pos[0] // TSIZE, pos[1] // TSIZE
+    found = any(gm.get_static_tile_type(px + dx, py + dy, 0, create_chunk=False) == 239
+                for dx in range(-2, 9) for dy in range(-4, 9))
+    assert found, "у алтаря должен стоять отголосок"
+
+
+def test_story_covers_all_twelve_chapters():
+    """Сюжет из стори-бука доведён до игры целиком, а не первыми тремя главами."""
+    from units.Story import ACTS
+    assert len(ACTS) == 12, f"глав должно быть 12, а не {len(ACTS)}"
+    acts_titles = {a.title for a in ACTS}
+    assert len(acts_titles) == 4, f"четыре акта, а не {len(acts_titles)}: {acts_titles}"
+    ids = [a.id for a in ACTS]
+    assert len(set(ids)) == len(ids), "id глав должны быть уникальны"
+    for a in ACTS:
+        assert a.goal and len(a.goal) > 10, f"у главы {a.id} нет внятной цели"
+
+
+def test_story_never_nags():
+    """Главное требование к ведению: подсказка не должна бесить. Значит игра
+    НЕ напоминает о невыполненной цели — сообщение приходит только когда
+    глава ЗАКРЫЛАСЬ, то есть как награда, а не как понукание."""
+    from units.Story import update_story
+    game = fresh_world(965)
+    # десять секунд «ничего не делаем» — ни одного сообщения быть не должно
+    said = []
+    real = game.ui.new_sys_message
+    game.ui.new_sys_message = lambda text, *a, **k: said.append(text)
+    try:
+        for _ in range(10):
+            assert update_story(game) is None or True
+        assert not said, f"игра напомнила о цели сама: {said}"
+        # а вот закрытие главы сообщить обязана
+        game.game_map.read_inscriptions = ["altar"]
+        closed = update_story(game)
+        assert closed is not None
+    finally:
+        del game.ui.new_sys_message
+
+
 def test_creatures_do_not_see_through_stone():
     """Стая сбегалась к игроку, который копал в закрытой шахте через двадцать
     блоков породы."""

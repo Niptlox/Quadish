@@ -59,6 +59,8 @@ CHEST = 129
 LAMP = 215
 # Плита с надписью (units/Lore.py): вариант выбирается кадром тайла
 TABLET = 300
+# Отголосок — единственный НПС (units/Objects/TileClasses.py Echo)
+ECHO = 239
 ORE_GOLD, ORE_SILVER, ORE_BLORE, ORE_IRON = 23, 25, 21, 24
 
 
@@ -227,6 +229,10 @@ class Dungeon:
             # (units/Story.py) — то есть находка ещё и продвигает историю.
             if ty == floor_y - 1 and tx == rx + 1:
                 return TABLET
+            # И отголосок рядом: он говорит про ту главу, в которой игрок
+            # сейчас, поэтому найденное подземелье само даёт направление.
+            if ty == floor_y - 1 and tx == rx + 3:
+                return ECHO
         return AIR
 
     def _vault_tile(self, tx, ty, rx, ry, rw, rh):
@@ -287,6 +293,16 @@ class Dungeon:
         return None
 
     # ---------- обитатели ----------
+
+    def chest_spots(self, chunk_x, chunk_y, chunk_size):
+        """Где в этом чанке стоят сундуки подземелья."""
+        r, c = self.vault
+        rx, ry, rw, rh = self.room_rect(r, c)
+        tx, ty = rx + rw // 2, ry + rh - 2
+        if (chunk_x * chunk_size <= tx < (chunk_x + 1) * chunk_size and
+                chunk_y * chunk_size <= ty < (chunk_y + 1) * chunk_size):
+            return [(tx, ty)]
+        return []
 
     def guard_spots(self, chunk_x, chunk_y, chunk_size):
         """Где в этом чанке должны стоять стражи.

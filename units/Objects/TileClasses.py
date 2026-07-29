@@ -41,6 +41,45 @@ class Chest(Tile):
     def items_of_break(self):
         return self.inventory.items_of_break()
 
+class Echo(Tile):
+    """Отголосок: оставленная в блоровом канале запись, отвечающая один раз.
+
+    Единственный «НПС» в игре, и он намеренно не человек: соплеменников не
+    осталось — это несущая часть истории (docs/STORYBOOK.md), и живой
+    болтливый спутник отменил бы весь тон брошенного мира одной репликой.
+
+    Отголосок говорит то, что относится к главе, в которой игрок находится
+    СЕЙЧАС, и говорит про то, что делали ОНИ, а не что должен делать игрок.
+    Направление без приказа.
+    """
+    index = 239
+    view_interface_on_click = True
+
+    def inscription(self):
+        from units.Lore import echo_for_act
+        from units.Story import current_act
+        act = current_act(self.game)
+        return echo_for_act(act.id if act is not None else None)
+
+    def right_click(self, mouse_local_pos):
+        # Отголосок не отмечается как «прочитанная надпись»: он не запись, а
+        # ответ, и в журнал записей ему попадать незачем.
+        return True
+
+
+class Cupboard(Chest):
+    """Шкаф: контейнер поменьше сундука.
+
+    До этого шкаф был чистой мебелью — блок без инвентаря. Структуры ставили
+    его как обстановку, и открыть его было нельзя. Теперь это контейнер: в
+    жилых постройках наполнение логичнее держать в шкафу, а не в сундуке,
+    который по игровой логике игрок делает сам.
+    """
+    index = 126
+    # Меньше сундука: шкаф — это находка «по мелочи», а не клад
+    size_table = [5, 2]
+
+
 class SignalTile(Tile):
     """Общая база для всех тайлов схемы (активатор/таймер/датчик/провод/
     рычаг/лампа/вентили). activating сбрасывался бы "не вовремя": тайлы
@@ -1226,5 +1265,5 @@ classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate,
           Receiver, Transmitter, LoreTablet,
           Hopper, Conveyor, Dropper, Chopper,
           FuelEngine, CreativeEngine, SpaceEngine, HellEngine, Portal, GolemNest,
-          DustCollector, BloreTrack}
+          DustCollector, BloreTrack, Cupboard, Echo}
 tiles_class = {cls.index: cls for cls in classes}

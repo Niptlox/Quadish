@@ -42,11 +42,11 @@ if not AUDIO_ENABLED:
 FPS = config.GameSettings.max_fps
 print("INIT GAME VARS")
 last_versions = ["0.9.1", "0.1.3-alpha", "0.1.5-alpha", "0.1.6-alpha", "0.1.7-alpha",
-                 "0.2.16-alpha", "0.2.17-alpha", "0.2.18-alpha", "0.2.19-alpha", "0.2.20-alpha", "0.2.21-alpha"]
+                 "0.2.16-alpha", "0.2.17-alpha", "0.2.18-alpha", "0.2.19-alpha", "0.2.20-alpha", "0.2.21-alpha", "0.2.22-alpha"]
 # Версия игры. Отставала от тегов релизов (0.1.7 против v0.2.x) — из-за
 # этого проверка обновлений (units/Updater.py) считала бы новым любой
 # опубликованный релиз. Держим синхронной с тегом.
-GAME_VERSION = "0.2.22-alpha"
+GAME_VERSION = "0.2.23-alpha"
 
 FULLSCREEN = config.Window.fullscreen
 

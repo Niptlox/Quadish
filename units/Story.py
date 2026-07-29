@@ -74,6 +74,29 @@ def note_flag(game, flag):
     return True
 
 
+def _has_tile(game, ttile, radius=60):
+    """Стоит ли такой блок где-то рядом с игроком.
+
+    Радиусом, а не по всему миру: обход всей карты ради строчки на экране
+    неоправдан, а «поставил у себя на базе» — именно то, что проверяется.
+    """
+    player = getattr(game, "player", None)
+    if player is None:
+        return False
+    gm = game.game_map
+    px, py = player.rect.centerx // 32, player.rect.centery // 32
+    for cxy in {gm.to_chunk_xy(px + dx, py + dy)
+                for dx in (-radius, 0, radius) for dy in (-radius, 0, radius)}:
+        chunk = gm.game_map.get(cxy)
+        if chunk is None:
+            continue
+        static = chunk[0]
+        for i in range(0, len(static), 4):
+            if static[i] == ttile:
+                return True
+    return False
+
+
 ACTS = (
     Act("arrival", "Акт I. Где я",
         "Прочитай плиту алтаря — с неё всё начинается",
@@ -81,16 +104,42 @@ ACTS = (
     Act("first_night", "Акт I. Где я",
         "Переживи первую ночь",
         _survived_night),
+    Act("settle", "Акт I. Где я",
+        "Обживись: поставь верстак и печку",
+        lambda g: _has_tile(g, 121) and _has_tile(g, 131)),
     Act("traces", "Акт II. Их здесь не осталось",
         "Найди ещё две записи тех, кто жил здесь до тебя",
         lambda g: len(_read(g)) >= 3),
+    Act("dispute", "Акт II. Их здесь не осталось",
+        "Найди обсерваторию: там они спорили, уйти или позвать",
+        lambda g: "observatory" in _read(g)),
+    Act("shift_norm", "Акт II. Их здесь не осталось",
+        "Найди забой и спустись глубже 300 — там писали норму на смену",
+        lambda g: "mine_deep" in _read(g) and _depth(g) > 300),
     Act("blore", "Акт III. Чистый блор",
         "Спустись глубже и добудь блоровую руду — канал держится на ней",
         _has_deep_blore),
+    Act("vault", "Акт III. Чистый блор",
+        "Найди их шахту под землёй и дойди до сокровищницы",
+        lambda g: "vault_looted" in _flags(g)),
+    Act("last_ones", "Акт III. Чистый блор",
+        "Найди бункер: последние держали канал с этой стороны",
+        lambda g: "bunker_last" in _read(g)),
     Act("edge", "Акт IV. Уйти",
         "Дойди до края мира: вниз в ад или вверх в космос",
         _reached_edge),
+    Act("portal", "Акт IV. Уйти",
+        "Собери портал — повтори их работу",
+        lambda g: _has_tile(g, 232)),
+    Act("weight", "Акт IV. Уйти",
+        "Оно приближается. Дождись, пока почувствуешь вес",
+        lambda g: "weight_felt" in _flags(g)),
 )
+
+
+def _depth(game):
+    player = getattr(game, "player", None)
+    return 0 if player is None else player.rect.centery // 32
 
 # Глубина, начиная с которой блор считается «чистым» (docs/STORY.md:
 # «чем глубже — тем чище»)
@@ -114,6 +163,27 @@ def check_world_flags(game):
         note_flag(game, "space")
     if ty >= DEEP_BLORE_Y and _has_item(player, BLORE_ORE_ITEM):
         note_flag(game, "blore_deep")
+    # «Дошёл до сокровищницы» — по факту нахождения в ней, а не по открытию
+    # сундука. Так же, как весь остальной сюжет: состояние мира, а не событие
+    # интерфейса. Заодно не требует особого класса сундука — он был бы вторым
+    # классом на тот же индекс тайла.
+    if _in_vault(game, player):
+        note_flag(game, "vault_looted")
+    # «Вес» — финальная отметка: оно подошло достаточно близко, чтобы его
+    # можно было почувствовать. Условие сюжетное, а не механическое: игрок
+    # прошёл всё остальное и провёл в мире достаточно времени.
+    if ("portal" in _done_ids(game)
+            and getattr(game.game_map, "world_time", 0) > DAY_LENGTH * 6):
+        note_flag(game, "weight_felt")
+
+
+def _in_vault(game, player):
+    """Стоит ли игрок в сокровищнице подземелья."""
+    from units.Map.Dungeons import dungeon_at
+    gm = game.game_map
+    tx, ty = player.rect.centerx // 32, player.rect.centery // 32
+    site = dungeon_at(tx, ty, gm.base_generation, getattr(gm, "dungeon_sites", None))
+    return site is not None and site.room_at(tx, ty) == site.vault
 
 
 def _has_item(player, index):
