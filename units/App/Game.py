@@ -166,6 +166,9 @@ class GameScene(Scene):
         # Автоматика под прогрузчиком должна работать и когда игрок ушёл:
         # ScreenMap обновляет только видимые тайлы.
         self.game_map.tick_offscreen(self.tact, self.screen_map.visible_chunks)
+        # Поток воды: обслуживается порцией клеток за такт (units/Map/WaterFlow.py).
+        # Водоём в равновесии не стоит ничего — очередь просто пуста.
+        self.game_map.water_flow.tick(self.tact)
         self.events.update(self)
         if self.tact % FPS == 0:
             # Сюжет смотрит в инвентарь и координаты — раз в секунду хватает

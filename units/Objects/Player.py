@@ -56,6 +56,7 @@ class Player(PhysicalObject):
 
         self.tact = 0
         self.on_wall = False
+        self.swimming = False       # плывёт ли сейчас (см. moving)
         self.moving_right = False
         self.moving_left = False
         self.sitting = False
@@ -404,7 +405,11 @@ class Player(PhysicalObject):
         # self.speed каждый кадр пересчитывается от ввода (и гасится делением
         # при отсутствии ввода), так что записанный в него разгон умирал бы на
         # следующем же кадре.
-        player_movement[0] += (self.speed + self.track_speed) * elapsed_time
+        # Плавание (docs/WATER.md). Проверяем ДО расчёта хода: вода меняет и
+        # горизонтальную скорость, и вертикальную, то есть весь кадр движения.
+        self.swimming = self.in_water() and not self.flying
+        drag = WATER_DRAG if self.swimming else 1.0
+        player_movement[0] += (self.speed * drag + self.track_speed) * elapsed_time
         player_movement[1] += self.vertical_momentum * elapsed_time
         if self.flying:
             if self.on_up:
@@ -414,6 +419,20 @@ class Player(PhysicalObject):
             else:
                 self.vertical_momentum = 0
 
+        elif self.swimming:
+            # Гребок вверх повторяется, пока держат клавишу: из воды выплывают,
+            # а не выпрыгивают одним разрешённым прыжком. Прыжковый счётчик тут
+            # намеренно ни при чём — иначе в воде кончался бы «воздух прыжков».
+            if self.on_up:
+                self.vertical_momentum = -WATER_SWIM_SPEED
+            else:
+                self.vertical_momentum += self.fall_speed * WATER_GRAVITY
+                # Тонем медленно и с потолком скорости: вода спасает от падения,
+                # и это её первая функция в вертикальном мире.
+                self.vertical_momentum = min(self.vertical_momentum, WATER_SINK_SPEED)
+            self.air_timer = 0
+            self.jump_count = 0
+            self.first_fall = False
         else:
             self.vertical_momentum += self.fall_speed
 
@@ -424,11 +443,13 @@ class Player(PhysicalObject):
 
         collisions = self.move(player_movement, self.game.screen_map.static_tiles)
         self.collisions_ttile = {col[1] for arrow in collisions for col in collisions[arrow]}
-        if 120 in self.collisions_ttile:
-            self.air_timer = 0
-            self.jump_count = 0
-            self.vertical_momentum /= 1.5
-        elif {121, 125} & self.collisions_ttile:
+        # Воды тут больше нет: раньше она обрабатывалась ЗДЕСЬ, по
+        # столкновениям после хода, и всё «плавание» состояло в делении
+        # скорости падения на 1.5. Столкновение с водой к тому же
+        # регистрировалось только в кадры реального сдвига rect, так что и это
+        # деление срабатывало через кадр. Теперь плавание считается до хода,
+        # чтением тайла (см. выше и Entity.in_water).
+        if {121, 125} & self.collisions_ttile:
             self.inventory.update_available_create_items()
         # Блоровые столбы: отдельный блок на подъём и отдельный на спуск.
         # Направление задаёт сама шахта, а не зажатая клавиша, — так видно,

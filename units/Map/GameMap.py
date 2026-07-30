@@ -6,7 +6,7 @@ from units.noise_compat import snoise2 as noise2
 
 from units.Objects.Creatures import (Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion,
                                      Rabbit, Deer, Fox, Camel, Penguin, Boar, Crab, Bat, StoneGolem, SpaceDrifter,
-                                     DustSwarm, VoidSentinel, Bird,
+                                     DustSwarm, VoidSentinel, Bird, Gull, Raven, Hawk,
                                      MOD_CREATURES)
 from units.Objects.Entities import PortalMainGate
 from units.Objects.Entity import PhysicalObject
@@ -20,6 +20,7 @@ from units.Map.Structures import Structures_chance, Structures, Structures_all, 
 from units.Map.Dungeons import (dungeon_tile_at, chunk_touches_dungeon, dungeon_at,
                                 DUNGEON_CELL_W, DUNGEON_CELL_H)
 from units.Map.Water import water_pocket_tile_at, chunk_touches_pocket
+from units.Map.WaterFlow import WaterFlow
 from units.Tiles import *
 from units.sound import sound_gate
 from units.Updater import parse_version
@@ -29,7 +30,7 @@ class GameMap(SavedObject):
     not_save_vars = SavedObject.not_save_vars | {"gate", "particles", "world_id", "world_meta",
                                                  "dynamic_dump", "dump_keep_radius", "signal_receivers",
                                                  "portals", "lake_sites", "dungeon_sites", "pocket_sites",
-                                                 "active_tiles",
+                                                 "active_tiles", "water_flow", "_water_writing",
                                                  "_offscreen_ring", "_offscreen_ring_set",
                                                  "_offscreen_pos", "_offscreen_round_tact",
                                                  "_offscreen_steps", "_forced_cache",
@@ -95,6 +96,11 @@ class GameMap(SavedObject):
         self.lake_sites = {}
         self.dungeon_sites = {}
         self.pocket_sites = {}
+        # Поток воды: активное множество неуспокоенных клеток. Выводится из
+        # состояния мира, поэтому в сейв не идёт — загруженный водоём стоит в
+        # равновесии, и будить его незачем.
+        self.water_flow = WaterFlow(self)
+        self._water_writing = False
         # Индекс «живых» тайлов по чанкам: {cxy: {индекс_в_массиве}}. Тик за
         # экраном раньше просматривал ВСЮ площадь чанка — замер дал 16384
         # просмотренных слота на 30 активных тайлов (0.18%). Лежит на карте, а
@@ -316,6 +322,13 @@ class GameMap(SavedObject):
             chunk[0][i:i + self.tile_data_size] = tile
             self.modified_chunks.add(cxy)
             self._note_active_tile(cxy, i, tile[0])
+            if not self._water_writing:
+                # Правка тайла может выпустить воду: прокоп в дне озера, снятый
+                # блок рядом с водой, поставленный игроком блок воды. Будим
+                # окрестность — сама вода не «знает», что мир изменился.
+                # Записи самого потока сюда не попадают: он будит соседей сам, и
+                # рекурсия через set_static_tile была бы двойной работой.
+                self.water_flow.touch_around(x, y)
             return True
         return False
 
@@ -1443,10 +1456,87 @@ class GameMap(SavedObject):
                 backtile_index += 1
                 i += 1
             tile_y += 1
+        if chunk_has_lake or chunk_has_pocket:
+            cnt_creatures = self._spawn_water_creatures(res, x, y, base, cnt_creatures,
+                                                        chunk_has_pocket)
         creature_cash[1] = self._spawn_flocks(res, on_ground_tiles, cnt_creatures)
         if chunk_has_dungeon:
             self._place_dungeon_guards(res, x, y, base, _dungeon_cache)
         return res
+
+    def _spawn_water_creatures(self, chunk, chunk_x, chunk_y, base, cnt_creatures,
+                               has_pocket):
+        """Заселить воду этого чанка (units/Objects/Creatures.py).
+
+        Отдельным проходом, а не общей жеребьёвкой по тайлам: наземный спавн
+        привязан к дёрну (`random_creature_selection` зовут из ветки земли), и
+        воду он не видит вообще — до этого в водоёмах не было никого.
+
+        Ищем ВНУТРЕННЮЮ воду: тайл, у которого вода и слева, и справа, и сверху.
+        Рыба, посаженная в кромку озера толщиной в тайл, всю жизнь билась бы о
+        два берега. Проход по массиву чанка платится только там, где вода
+        вообще есть (проверка на чанк уже сделана вызывающим).
+        """
+        if not config.GameSettings.creatures:
+            return cnt_creatures
+        import units.Objects.Creatures as C
+        static = chunk[0]
+        tds = self.tile_data_size
+        width = CHUNK_SIZE
+        spots = []
+        for cell in range(CHUNK_SIZE * CHUNK_SIZE):
+            i = cell * tds
+            if static[i] != WATER_TILE:
+                continue
+            cx, cy = cell % width, cell // width
+            if not (0 < cx < width - 1 and 0 < cy < width - 1):
+                continue        # у границы чанка соседей не видно
+            if (static[i - tds] != WATER_TILE or static[i + tds] != WATER_TILE
+                    or static[i - self.chunk_arr_width] != WATER_TILE):
+                continue
+            spots.append((chunk_x * CHUNK_SIZE + cx, chunk_y * CHUNK_SIZE + cy))
+        if not spots:
+            return cnt_creatures
+        rnd = random.Random(f"water-life:{base}:{chunk_x}:{chunk_y}")
+        # Чайки идут ПЕРВЫМИ и берут не больше двух мест. Лимит существ на чанк
+        # маленький (CHUNK_CREATURE_LIMIT = 4), а рыбья стая заполняет его
+        # целиком: при обратном порядке чаек не появлялось вообще — замер дал
+        # ноль на пяти сидах. Чайка при этом единственный признак водоёма,
+        # видимый издалека, и терять её дороже, чем третью рыбу.
+        if rnd.random() < 0.5:
+            tx, ty = rnd.choice(spots)
+            # В запечатанной полости чайке не место — там нет неба.
+            if not (has_pocket and water_pocket_tile_at(
+                    tx, ty, base, self.pocket_sites) is not None):
+                gull = spawn_creature(C.Gull, self.game, tx, ty - C.Gull.fly_height)
+                chunk[1].append(gull)
+                cnt_creatures += 1
+                cnt_creatures = self._fill_flock(
+                    chunk, gull, [(x, y - C.Gull.fly_height) for x, y in spots],
+                    cnt_creatures, limit=cnt_creatures + 1)
+        # Один бросок на водоём в чанке, а не на тайл: иначе озеро на сорок
+        # тайлов воды выдавало бы сорок жеребьёвок и превращалось в аквариум.
+        for _ in range(rnd.randint(1, 2)):
+            if cnt_creatures >= CHUNK_CREATURE_LIMIT:
+                break
+            tx, ty = rnd.choice(spots)
+            # Кто живёт в этой воде, решает сама вода, а не чанк: глубинник —
+            # хозяин ЗАПЕЧАТАННОЙ полости, и в открытом озере его быть не
+            # должно, иначе находка перестаёт быть находкой. Чанк при этом
+            # запросто содержит и полость, и озеро сразу, так что проверять
+            # надо выбранный тайл.
+            in_pocket = has_pocket and water_pocket_tile_at(
+                tx, ty, base, self.pocket_sites) is not None
+            pool = [(C.Fish, 10), (C.Piranha, 4), (C.Jellyfish, 3)]
+            if in_pocket:
+                pool.append((C.DeepLurker, 4))
+            cls = rnd.choices([c for c, _ in pool], [w for _, w in pool])[0]
+            obj = spawn_creature(cls, self.game, tx, ty)
+            chunk[1].append(obj)
+            cnt_creatures += 1
+            if obj.flock_size > 1:
+                cnt_creatures = self._fill_flock(chunk, obj, spots, cnt_creatures)
+        return cnt_creatures
 
     def _spawn_flocks(self, chunk, on_ground_tiles, cnt_creatures):
         """Досыпать компаньонов стайным существам этого чанка.
@@ -1464,28 +1554,46 @@ class GameMap(SavedObject):
         собраться той же самой, иначе после возвращения игрока на месте одной
         группы оказались бы две.
         """
-        leaders = [o for o in chunk[1] if getattr(o, "flock_size", 1) > 1]
+        # Существа, у которых стая уже собрана, пропускаются: водную живность
+        # заселяет свой проход, и места он берёт в воде, а не на дёрне.
+        leaders = [o for o in chunk[1]
+                   if getattr(o, "flock_size", 1) > 1 and not getattr(o, "flock_id", 0)]
         if not leaders:
             return cnt_creatures
         spots = None
         for leader in leaders:
             if cnt_creatures >= CHUNK_CREATURE_LIMIT:
                 break
-            ltx, lty = leader.rect.centerx // TSIZE, leader.rect.centery // TSIZE
-            leader.flock_id = ltx * 4096 + lty
             if spots is None:
                 spots = list(on_ground_tiles)
-            near = [t for t in spots
-                    if abs(t[0] - ltx) <= leader.flock_radius and abs(t[1] - lty) <= 4
-                    and (t[0], t[1]) != (ltx, lty)]
-            random.shuffle(near)
-            for tx, ty in near[:leader.flock_size - 1]:
-                mate = spawn_creature(type(leader), self.game, tx, ty)
-                mate.flock_id = leader.flock_id
-                chunk[1].append(mate)
-                cnt_creatures += 1
-                if cnt_creatures >= CHUNK_CREATURE_LIMIT:
-                    break
+            cnt_creatures = self._fill_flock(chunk, leader, spots, cnt_creatures)
+        return cnt_creatures
+
+    def _fill_flock(self, chunk, leader, spots, cnt_creatures, limit=None):
+        """Досыпать вожаку компаньонов из списка подходящих мест.
+
+        Список мест передаётся, а не берётся отсюда: для стада это дёрн, для
+        рыбьей стаи — внутренняя вода. Рыба, посаженная на дёрн, задохнулась бы
+        на берегу собственного озера.
+
+        limit — свой предел числа существ, ниже общего: у водоёма нужно оставить
+        места и рыбе, и чайкам, а лимит на чанк всего четыре.
+        """
+        if limit is None:
+            limit = CHUNK_CREATURE_LIMIT
+        ltx, lty = leader.rect.centerx // TSIZE, leader.rect.centery // TSIZE
+        leader.flock_id = ltx * 4096 + lty
+        near = [t for t in spots
+                if abs(t[0] - ltx) <= leader.flock_radius and abs(t[1] - lty) <= 4
+                and (t[0], t[1]) != (ltx, lty)]
+        random.shuffle(near)
+        for tx, ty in near[:leader.flock_size - 1]:
+            if cnt_creatures >= limit:
+                break
+            mate = spawn_creature(type(leader), self.game, tx, ty)
+            mate.flock_id = leader.flock_id
+            chunk[1].append(mate)
+            cnt_creatures += 1
         return cnt_creatures
 
     def _place_dungeon_guards(self, chunk, chunk_x, chunk_y, base, cache):
@@ -2090,19 +2198,19 @@ def random_creature_selection(tile_y=None, biome=None, tile_x=None):
     elif tile_y is not None and tile_y > BOTTOM_MIDDLE_WORLD:
         zone, pool, weights = "caves", [Slime, Bat, StoneGolem], [10, 6, 2]
     elif biome == 0:  # desert
-        zone, pool, weights = "surface", [Slime, Scorpion, Snake, Camel, Bird], [10, 6, 2, 3, 2]
+        zone, pool, weights = "surface", [Slime, Scorpion, Snake, Camel, Bird, Hawk], [10, 6, 2, 3, 2, 1]
     elif biome == 1:  # savanna
-        zone, pool, weights = "surface", [Slime, Cow, Wolf, Rabbit, Bird], [15, 10, 1, 6, 2]
+        zone, pool, weights = "surface", [Slime, Cow, Wolf, Rabbit, Bird, Raven, Hawk], [15, 10, 1, 6, 2, 1.5, 1]
     elif biome in (3, 8):  # tundra, boreal_forest
-        zone, pool, weights = "surface", [Slime, Wolf, Cow, Deer, Penguin, Bird], [12, 5, 1, 4, 3, 2]
+        zone, pool, weights = "surface", [Slime, Wolf, Cow, Deer, Penguin, Bird, Raven], [12, 5, 1, 4, 3, 2, 2]
     elif biome in (2, 5):  # tropical_woodland, rainforest
-        zone, pool, weights = "surface", [Slime, Snake, Cow, Wolf, Crab, Bird], [15, 4, 3, 1, 3, 2]
+        zone, pool, weights = "surface", [Slime, Snake, Cow, Wolf, Crab, Bird, Hawk], [15, 4, 3, 1, 3, 2, 1]
     elif biome in (4, 6, 7):  # seasonal/temperate/temperate_rainforest
-        zone, pool, weights = "surface", [Slime, Deer, Fox, Boar, Rabbit, Bird], [15, 5, 4, 2, 5, 2]
+        zone, pool, weights = "surface", [Slime, Deer, Fox, Boar, Rabbit, Bird, Raven, Hawk], [15, 5, 4, 2, 5, 2, 1.5, 1]
     else:
         zone = "surface"
-        pool = [Slime, Cow, Snake, Wolf, SlimeBigBoss, Rabbit, Bird]
-        weights = [20, 5, 1, 0.7, 0.25, 6, 2]
+        pool = [Slime, Cow, Snake, Wolf, SlimeBigBoss, Rabbit, Bird, Raven]
+        weights = [20, 5, 1, 0.7, 0.25, 6, 2, 1]
 
     if zone == "surface" and near_spawn(tile_x):
         filtered = [(c, w) for c, w in zip(pool, weights) if c not in HARD_CREATURES]

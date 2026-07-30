@@ -14,10 +14,11 @@ from units.Objects.CreatureSprites import (
     create_camel_sprite, create_penguin_sprite, create_boar_sprite, create_crab_sprite,
     create_bat_sprite, create_golem_sprite, create_space_drifter_sprite,
     create_dust_swarm_sprite, create_void_sentinel_sprite,
-    create_bird_sprites)
+    create_bird_sprites, create_hawk_sprites, create_fish_sprite,
+    create_piranha_sprite, create_jelly_sprite, create_lurker_sprite)
 # PHYSBODY_TILES нужен «мозгу»: по нему считаются прямая видимость и
 # наличие тверди за провалом. units.common его не реэкспортирует.
-from units.Tiles import PHYSBODY_TILES
+from units.Tiles import PHYSBODY_TILES, WATER_TILE, water_frame_level
 from units.common import *
 
 
@@ -416,7 +417,16 @@ class MovingCreature(Creature):
 
     def move_by_state(self):
         """Общий шаг: идти в выбранную сторону, прыгать через стену и провал."""
-        self.movement_vector.x += self.move_direction * self.current_speed()
+        speed = self.current_speed()
+        if self.in_water():
+            # Наземное существо в воде барахтается: медленно и всплывая. Без
+            # этого корова, свалившаяся в озеро, стояла бы на его дне до конца
+            # жизни мира — вода её не держала вообще.
+            speed *= WATER_DRAG
+            if self.physical_vector.y > WATER_SINK_PX:
+                self.physical_vector.y = WATER_SINK_PX
+            self.movement_vector.y -= WATER_FLOAT_PX
+        self.movement_vector.x += self.move_direction * speed
         if not self.collisions.get("bottom"):
             return
         blocked = self.collisions.get("left") or self.collisions.get("right")
@@ -849,6 +859,285 @@ class Bird(FlyingCreature):
         return True
 
 
+class Gull(Bird):
+    """Чайка — птица над водой. Крупнее мелкой птицы и держится ниже.
+
+    Отдельный вид, а не цвет: чайка ходит стаей у самой воды, и по ней издалека
+    видно, что там вода, — то же, что дым над трубой.
+    """
+    bio_species = "gull"
+    bio_subspecies = "lake gull"
+    width, height = int(TSIZE * 0.85), int(TSIZE * 0.55)
+    colors = ["#F5F5F4", "#E7E5E4"]
+    max_lives = 8
+    move_speed = 4.5
+    fly_height = 4              # ниже мелкой птицы: держится над водой
+    flock_size = 4
+    drop_items = [(ItemsTile, (404, (0, 1)))]
+
+
+class Raven(Bird):
+    """Ворон — территориальный. Не охотится, но задень его — ответит.
+
+    Единственная птица, которая может дать отпор: небо без единой угрозы
+    читается как декорация, а полностью враждебное небо не даёт по нему
+    летать. Ворон — середина: он отвечает, но не начинает.
+    """
+    temperament = TEMPER_TERRITORIAL
+    touch_tiles = 3
+    sight_tiles = 9
+    bio_species = "raven"
+    bio_subspecies = "black raven"
+    width, height = int(TSIZE * 0.9), int(TSIZE * 0.6)
+    colors = ["#1C1917", "#292524"]
+    max_lives = 14
+    move_speed = 4
+    fly_height = 9
+    flock_size = 3
+    enemy = True
+    punch_damage = 4
+    punch_speed = 3
+    punch_discard = 2
+    drop_items = [(ItemsTile, (404, (1, 2)))]
+
+
+class Hawk(Bird):
+    """Ястреб — воздушный хищник. Одиночка и охотится.
+
+    Своя сетка спрайта: крылья длиннее и острее, чем у стаи, — хищника надо
+    отличать от птиц ещё до того, как он начал снижаться. Спускается к игроку,
+    то есть это первая угроза, приходящая СВЕРХУ: до него весь мир нападал
+    сбоку или снизу.
+    """
+    temperament = TEMPER_AGGRESSIVE
+    sight_tiles = 14
+    idle_chance = 0.05
+    angry_speed_mult = 1.5
+    bio_species = "hawk"
+    bio_subspecies = "island hawk"
+    width, height = int(TSIZE * 1.1), int(TSIZE * 0.7)
+    colors = ["#78350F", "#92400E"]
+    max_lives = 22
+    move_speed = 5
+    fly_height = 11             # высоко: сначала его видно, потом он падает
+    fly_speed = 2.4
+    FLEE_CLIMB = 0
+    flock_size = 1              # одиночка: стая хищников — это уже осада
+    enemy = True
+    punch_damage = 7
+    punch_speed = 2
+    punch_discard = 4
+    drop_items = [(ItemsTile, (404, (1, 3)))]
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.sprites = create_hawk_sprites(self.color, self.rect.size)
+        self.sprite = self.sprites[0]
+
+    def update_altitude(self, tact):
+        """В погоне ястреб идёт на высоту игрока, а не держит свою.
+
+        Без этого он висел бы над игроком на одиннадцати тайлах и «охотился»
+        бы, не долетая: горизонтально он цель догоняет, а вертикально — нет.
+        """
+        if self.state == ST_CHASE:
+            player = getattr(self.game, "player", None)
+            if player is not None:
+                self.target_y = player.rect.y
+                return
+        super().update_altitude(tact)
+
+
+class SwimmingCreature(MovingCreature):
+    """Существо, живущее в воде: не ходит по дну и не выходит на сушу.
+
+    Устроено как FlyingCreature и по той же причине: гравитация выключается на
+    экземпляре, а вертикальный шаг существо задаёт само. Разница — в границе.
+    Летающему граница мешает (порода), плавающему граница ДЕРЖИТ: за пределом
+    воды ему нельзя, поэтому он разворачивается у стенки водоёма так же, как
+    наземное существо разворачивается у обрыва.
+
+    На суше не умирает мгновенно, а задыхается (`AIR_DAMAGE_PERIOD`): рыба,
+    выброшенная на берег обмелевшим озером, должна биться на берегу, а не
+    исчезать в тот же кадр.
+    """
+    swim_speed = 1.0            # вертикальная скорость, пикселей за кадр
+    SWIM_PERIOD = 10            # такты между решениями о глубине
+    AIR_DAMAGE_PERIOD = FPS     # как часто бьёт нехватка воды
+    AIR_DAMAGE = 2
+    height_of_abyss = 0
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.use_gravity = False
+        self.dive_direction = 0
+
+    def check_abyss(self):
+        return                  # у воды нет обрыва, у неё есть берег
+
+    def can_jump_the_gap(self):
+        return False
+
+    def water_at(self, tx, ty):
+        """Достаточно ли воды в этом тайле, чтобы в нём плыть."""
+        tile = self.game_map.get_static_tile(tx, ty, create_chunk=False)
+        if tile is None or tile[0] != WATER_TILE:
+            return False
+        return water_frame_level(tile[2]) >= WATER_SWIM_LEVEL
+
+    def swim_think(self, tact):
+        """Выбрать, куда идти по вертикали. Редко — как и всё остальное зрение."""
+        if tact % self.SWIM_PERIOD:
+            return
+        cx, cy = self.rect.centerx // TSIZE, self.rect.centery // TSIZE
+        if not self.water_at(cx, cy + 1):
+            self.dive_direction = -1        # у дна — вверх
+        elif not self.water_at(cx, cy - 1):
+            self.dive_direction = 1         # у поверхности — вниз
+        elif random.random() < 0.3:
+            self.dive_direction = random.choice((-1, 0, 1))
+
+    def move_by_state(self):
+        cx, cy = self.rect.centerx // TSIZE, self.rect.centery // TSIZE
+        if self.move_direction and not self.water_at(cx + self.move_direction, cy):
+            # Впереди берег. Разворот с фиксацией направления — та же защита от
+            # дрожания на границе, что у наземных существ у обрыва.
+            self.move_direction = -self.move_direction
+            self.turn_lock = self.TURN_LOCK
+        self.movement_vector.x += self.move_direction * self.current_speed() * WATER_DRAG
+        self.movement_vector.y += self.dive_direction * self.swim_speed
+
+    def update(self, tact, elapsed_time):
+        if not super().update(tact, elapsed_time):
+            return False
+        if self.in_water():
+            self.use_gravity = False
+            self.swim_think(tact)
+        else:
+            # Вода ушла (игрок спустил озеро) — существо падает и задыхается.
+            self.use_gravity = True
+            self.dive_direction = 0
+            if tact % self.AIR_DAMAGE_PERIOD == 0:
+                self.damage(self.AIR_DAMAGE)
+        return True
+
+
+class Fish(SwimmingCreature):
+    """Рыба — мирная стайная обитательница водоёмов и подземных полостей."""
+    temperament = TEMPER_SKITTISH
+    flee_tiles = 5
+    sight_tiles = 8
+    idle_chance = 0.15
+    not_save_vars = MovingCreature.not_save_vars
+    bio_kingdom = KINGDOM_ANIMALIA
+    bio_species = "fish"
+    bio_subspecies = "river fish"
+    width, height = int(TSIZE * 0.7), int(TSIZE * 0.45)
+    colors = ["#38BDF8", "#0EA5E9", "#FBBF24"]
+    max_lives = 6
+    drop_items = [(ItemsTile, (405, (1, 1)))]
+    move_speed = 3.5
+    flock_size = 5
+    flock_radius = 5
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.color = random.choice(self.colors)
+        self.sprite = create_fish_sprite(self.color, self.rect.size)
+
+
+class Piranha(SwimmingCreature):
+    """Хищная рыба — из-за неё в воду больше нельзя заходить бездумно.
+
+    Стайная и агрессивная: смысл именно в стае. Одна пиранья — 4 урона, то есть
+    ничто; три — уже причина сначала посмотреть, что в воде, а потом плыть.
+    """
+    temperament = TEMPER_AGGRESSIVE
+    sight_tiles = 9
+    idle_chance = 0.05
+    not_save_vars = MovingCreature.not_save_vars
+    bio_kingdom = KINGDOM_ANIMALIA
+    bio_species = "piranha"
+    bio_subspecies = "toothed piranha"
+    width, height = int(TSIZE * 0.75), int(TSIZE * 0.5)
+    colors = ["#65A30D", "#4D7C0F"]
+    max_lives = 12
+    drop_items = [(ItemsTile, (405, (1, 2)))]
+    move_speed = 5
+    flock_size = 3
+    flock_radius = 6
+    enemy = True
+    punch_damage = 4
+    punch_speed = 3
+    punch_discard = 1
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.color = random.choice(self.colors)
+        self.sprite = create_piranha_sprite(self.color, self.rect.size)
+
+
+class Jellyfish(SwimmingCreature):
+    """Медуза — территориальная, медленная, больно жжётся.
+
+    Медленная намеренно: её всегда можно обойти. Опасна она не преследованием,
+    а тем, что стоит на пути — как лава, только плавает.
+    """
+    temperament = TEMPER_TERRITORIAL
+    touch_tiles = 2
+    sight_tiles = 5
+    idle_chance = 0.6
+    swim_speed = 0.5
+    not_save_vars = MovingCreature.not_save_vars
+    bio_kingdom = KINGDOM_ANIMALIA
+    bio_species = "jellyfish"
+    bio_subspecies = "pale jellyfish"
+    width, height = int(TSIZE * 0.55), int(TSIZE * 0.7)
+    colors = ["#C084FC", "#A78BFA"]
+    max_lives = 10
+    drop_items = [(ItemsTile, (51, (1, 2)))]
+    move_speed = 1.5
+    enemy = True
+    punch_damage = 6
+    punch_speed = 2
+    punch_discard = 3
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.color = random.choice(self.colors)
+        self.sprite = create_jelly_sprite(self.color, self.rect.size)
+
+
+class DeepLurker(SwimmingCreature):
+    """Глубинник — хозяин подземных полостей с водой.
+
+    Живёт только там, где вода запечатана в породе (`units/Map/Water.py`), и
+    существует ради одного: чтобы находка «пустота в камне, а в ней зеркало» не
+    была бесплатной. Одиночка, крупный, светит глазом в темноте.
+    """
+    temperament = TEMPER_AGGRESSIVE
+    sight_tiles = 10
+    idle_chance = 0.2
+    not_save_vars = MovingCreature.not_save_vars
+    bio_kingdom = KINGDOM_ANIMALIA
+    bio_species = "deep_lurker"
+    bio_subspecies = "deep lurker"
+    width, height = int(TSIZE * 1.2), int(TSIZE * 0.8)
+    color = "#1E3A5F"
+    max_lives = 40
+    drop_items = [(ItemsTile, (405, (2, 3))), (ItemsTile, (403, (1, 2)))]
+    move_speed = 4
+    swim_speed = 1.2
+    enemy = True
+    punch_damage = 10
+    punch_speed = 2
+    punch_discard = 5
+
+    def __init__(self, game, pos=(0, 0)):
+        super().__init__(game, pos)
+        self.sprite = create_lurker_sprite(self.color, self.rect.size)
+
+
 class Rabbit(PassiveWanderer):
     """Заяц — мелкое мирное животное, водится почти везде."""
     # Заяц — самый пугливый: срывается издалека и бежит быстро.
@@ -1197,7 +1486,8 @@ class SlimeBigBoss(Slime):
 
 CREATURES = [Creature, Slime, Cow, Wolf, SlimeBigBoss, Snake, Imp, Scorpion,
             Rabbit, Deer, Fox, Camel, Penguin, Boar, Crab, Bat, StoneGolem, SpaceDrifter,
-            DustSwarm, VoidSentinel, Bird]
+            DustSwarm, VoidSentinel, Bird, Gull, Raven, Hawk,
+            Fish, Piranha, Jellyfish, DeepLurker]
 CREATURES_D = {cls.__name__: cls for cls in CREATURES}
 
 

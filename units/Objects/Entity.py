@@ -1,5 +1,5 @@
 from units.Map.TileFlags import TILE_FLAG_BITS, BIT_PHYSBODY, BIT_SEMIPHYSBODY
-from units.Tiles import DAMAGE_TILES
+from units.Tiles import DAMAGE_TILES, WATER_TILE, water_frame_level
 from units.common import *
 
 
@@ -79,6 +79,25 @@ class PhysicalObject(SavedObject):
         """Словарь {(tx, ty): тип} для проверки столкновений."""
         tiles = self._collision_tiles
         return self.game.screen_map.static_tiles if tiles is None else tiles
+
+    def in_water(self, offset_y=0):
+        """Погружён ли центр тела в воду (docs/WATER.md).
+
+        Не по столкновениям, а чтением тайла: столкновение с водой
+        регистрируется только в тот кадр, когда rect действительно сдвинулся, а
+        висящий в воде объект двигается на доли пикселя и в половине кадров
+        «воды не касается». На этой же грабле уже стояли блоровая дорожка и
+        гусеничный краулер.
+
+        Уровень заполнения учитываем: плёнка на дне тайла — это лужа, по ней
+        ходят, а не плывут.
+        """
+        tile = self.game_map.get_static_tile(self.rect.centerx // TSIZE,
+                                             (self.rect.centery + offset_y) // TSIZE,
+                                             create_chunk=False)
+        if tile is None or tile[0] != WATER_TILE:
+            return False
+        return water_frame_level(tile[2]) >= WATER_SWIM_LEVEL
 
     def collision_dynamic(self):
         """Список сущностей, с которыми имеет смысл сверяться."""

@@ -784,6 +784,16 @@ def water_frame(level=WATER_LEVELS, deep=False):
     """Кадр тайла воды: уровень заполнения 1..4 и глубинный вариант."""
     level = max(1, min(WATER_LEVELS, level))
     return (WATER_LEVELS - level) + (WATER_LEVELS if deep else 0)
+
+
+def water_frame_level(frame):
+    """Уровень заполнения 1..4 по кадру — обратная water_frame."""
+    return WATER_LEVELS - (frame % WATER_LEVELS)
+
+
+def water_frame_deep(frame):
+    """Глубинная ли это вода."""
+    return frame >= WATER_LEVELS
 furnace_img = load_img("data/sprites/tiles/furnace/furnace0.png")
 furnace_imgs = load_imgs("data/sprites/tiles/furnace/furnace{}.png", 5)
 

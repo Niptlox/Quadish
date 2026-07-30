@@ -3615,6 +3615,360 @@ def test_water_pocket_lookup_is_a_pure_function_of_seed():
     assert checked, "проба не нашла полость там, где она есть"
 
 
+# ===================== физика воды =====================
+
+def _water_arena(game, x=70, y=8, w=30):
+    """Ровная площадка с полом и чистым воздухом над ним."""
+    gm = game.game_map
+    for tx in range(x - 4, x + w):
+        gm.set_static_tile(tx, y + 1, 3)
+        for dy in range(0, 8):
+            gm.set_static_tile(tx, y - dy, 0)
+    gm.water_flow.queue.clear()
+    gm.water_flow.pending.clear()
+    return x, y
+
+
+def _pour(gm, tx, ty, rows=4, level=4):
+    from units.Tiles import water_frame
+    for dy in range(rows):
+        gm.set_static_tile(tx, ty - dy, [120, 0, water_frame(level), 0])
+
+
+def _water_volume(gm, x0, x1, y0, y1):
+    from units.Tiles import water_frame_level
+    total = 0
+    for ty in range(y0, y1 + 1):
+        for tx in range(x0, x1 + 1):
+            tile = gm.get_static_tile(tx, ty, create_chunk=True)
+            if tile and tile[0] == 120:
+                total += water_frame_level(tile[2])
+    return total
+
+
+def test_water_falls_spreads_and_settles():
+    """Вода была рельефом: поставленный в воздухе блок воды там и стоял.
+    Теперь столб падает, растекается по полу — и поток ЗАТУХАЕТ: очередь
+    пустеет, иначе водоём тикал бы вечно."""
+    game = fresh_world(700)
+    gm = game.game_map
+    x, y = _water_arena(game)
+    _pour(gm, x + 10, y)
+    for tact in range(0, 600):
+        gm.water_flow.tick(tact)
+    assert not gm.water_flow.queue, "поток не успокоился — вода тикала бы вечно"
+    row = [gm.get_static_tile(tx, y, create_chunk=True)[0] for tx in range(x + 5, x + 16)]
+    assert row.count(120) >= 5, f"вода не растеклась по полу: {row}"
+    assert gm.get_static_tile(x + 10, y - 3, create_chunk=True)[0] == 0, \
+        "вода осталась висеть в воздухе"
+
+
+def test_water_volume_is_conserved():
+    """Ни одна единица воды не должна ни исчезнуть, ни появиться: иначе
+    водоём либо высыхает сам, либо становится бесконечным источником."""
+    game = fresh_world(701)
+    gm = game.game_map
+    x, y = _water_arena(game, w=40)
+    _pour(gm, x + 12, y, rows=4, level=4)
+    before = _water_volume(gm, x - 4, x + 36, y - 8, y)
+    for tact in range(0, 800):
+        gm.water_flow.tick(tact)
+    after = _water_volume(gm, x - 4, x + 36, y - 8, y)
+    assert before == 16, f"налили не 16 единиц, а {before}"
+    assert after == before, f"объём воды изменился: {before} -> {after}"
+
+
+def test_water_does_not_eat_blocks():
+    """Вода течёт только в воздух и в воду. Вытеснение блока потоком — это
+    разрушение мира водой, и такого решения никто не принимал."""
+    game = fresh_world(702)
+    gm = game.game_map
+    x, y = _water_arena(game)
+    gm.set_static_tile(x + 12, y, 3)            # камень на пути растекания
+    gm.set_static_tile(x + 13, y, 104)          # и трава
+    _pour(gm, x + 10, y)
+    for tact in range(0, 600):
+        gm.water_flow.tick(tact)
+    assert gm.get_static_tile(x + 12, y, create_chunk=True)[0] == 3, "вода съела камень"
+    assert gm.get_static_tile(x + 13, y, create_chunk=True)[0] == 104, "вода съела траву"
+
+
+def test_generated_lake_does_not_tick_until_disturbed():
+    """Главное решение всей физики: водоём в равновесии не стоит НИЧЕГО.
+    Озеро на сотни тайлов не должно попадать в очередь просто потому, что
+    сгенерировалось."""
+    game = fresh_world(21)
+    gm = game.game_map
+    site = _find_lake(gm)
+    assert site is not None
+    center, r, level = site
+    for tx in range(center - r, center + r + 1):
+        gm.get_static_tile_type(tx, level + 1, default=0, create_chunk=True)
+    gm.water_flow.queue.clear()
+    gm.water_flow.pending.clear()
+    moved = sum(gm.water_flow.tick(t) for t in range(0, 200))
+    assert moved == 0, "спокойное озеро не должно течь само по себе"
+    # А вот прокоп в дне обязан его разбудить
+    gm.set_static_tile(center, level + 4, 0)
+    assert gm.water_flow.queue, "правка тайла рядом с водой не разбудила поток"
+
+
+def test_dug_lake_bottom_drains_the_water():
+    """Прокопал дно — вода пошла в дырку. Это то, зачем физика воды нужна
+    игроку: водоём стал частью мира, а не рисунком на нём."""
+    game = fresh_world(703)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    # ванна: пол и стенки, в ней вода
+    for tx in range(x + 8, x + 13):
+        gm.set_static_tile(tx, y + 1, 3)
+    gm.set_static_tile(x + 7, y, 3)
+    gm.set_static_tile(x + 13, y, 3)
+    for tx in range(x + 8, x + 13):
+        gm.set_static_tile(tx, y, [120, 0, 0, 0])
+    for tact in range(0, 200):
+        gm.water_flow.tick(tact)
+    assert gm.get_static_tile(x + 10, y, create_chunk=True)[0] == 120, "вода не удержалась в ванне"
+    for ty in range(y + 1, y + 5):
+        gm.set_static_tile(x + 10, ty, 0)       # пробили дно
+    for tact in range(0, 400):
+        gm.water_flow.tick(tact)
+    below = _water_volume(gm, x + 8, x + 12, y + 1, y + 5)
+    assert below > 0, "вода не потекла в пробитое дно"
+
+
+# ===================== плавание =====================
+
+def _flood(gm, x, y, w=6, depth=5):
+    """Залить водой прямоугольник и удержать её стенками."""
+    for tx in range(x - 1, x + w + 1):
+        gm.set_static_tile(tx, y + 1, 3)
+    for ty in range(y, y - depth, -1):
+        gm.set_static_tile(x - 1, ty, 3)
+        gm.set_static_tile(x + w, ty, 3)
+        for tx in range(x, x + w):
+            gm.set_static_tile(tx, ty, [120, 0, 0, 0])
+    gm.water_flow.queue.clear()
+    gm.water_flow.pending.clear()
+
+
+def test_player_sinks_slowly_in_water():
+    """Вода была проходимой пустотой: падали в неё с той же скоростью, что и
+    в воздухе. Теперь она держит — иначе в вертикальном мире у воды нет
+    вообще никакой функции."""
+    from units.common import TSIZE, WATER_SINK_SPEED
+    game = fresh_world(710)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    _flood(gm, x + 5, y, w=6, depth=6)
+    player = game.player
+    player.active = True
+    player.first_fall = False
+    player.tp_to(((x + 7) * TSIZE, (y - 4) * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 30)
+    assert player.swimming, "игрок в воде обязан плыть"
+    assert player.vertical_momentum <= WATER_SINK_SPEED + 1e-9, \
+        f"в воде тонут медленно, а скорость {player.vertical_momentum}"
+
+
+def test_player_swims_up_while_holding_the_key():
+    """Из воды выплывают, а не выпрыгивают одним разрешённым прыжком:
+    гребок повторяется, пока держат клавишу."""
+    from units.common import TSIZE
+    game = fresh_world(711)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    _flood(gm, x + 5, y, w=6, depth=6)
+    player = game.player
+    player.active = True
+    player.first_fall = False
+    player.tp_to(((x + 7) * TSIZE, (y - 1) * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 10)
+    start = player.rect.y
+    player.on_up = True
+    player.jump_count = player.max_jump_count      # прыжки кончились — плыть это не мешает
+    _run_frames(game, 60)
+    player.on_up = False
+    assert player.rect.y < start - TSIZE, \
+        f"игрок не выплыл: {start} -> {player.rect.y}"
+
+
+def test_water_saves_from_fall_damage():
+    """Упасть в воду должно быть безопасно — это первая польза воды в
+    вертикальном мире."""
+    from units.common import TSIZE
+    game = fresh_world(712)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    for dy in range(0, 40):
+        for tx in range(x + 4, x + 12):
+            gm.set_static_tile(tx, y - dy, 0)
+    _flood(gm, x + 5, y, w=6, depth=6)
+    player = game.player
+    player.active = True
+    player.first_fall = False
+    player.tp_to(((x + 7) * TSIZE, (y - 35) * TSIZE))
+    game.screen_map.teleport_to_player()
+    lives = player.lives
+    _run_frames(game, 150)
+    assert player.lives == lives, f"вода не спасла от падения: {lives} -> {player.lives}"
+
+
+def test_shallow_water_is_not_deep_enough_to_swim():
+    """Плёнка воды на дне тайла — это лужа: по ней ходят. Иначе уровни
+    заполнения ничего не значат для физики."""
+    from units.common import TSIZE
+    from units.Tiles import water_frame
+    game = fresh_world(713)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    for tx in range(x + 5, x + 11):
+        gm.set_static_tile(tx, y, [120, 0, water_frame(1), 0])
+    player = game.player
+    player.active = True
+    player.tp_to(((x + 7) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 10)
+    assert not player.swimming, "в луже нельзя плавать"
+
+
+def test_land_creature_floats_instead_of_walking_the_bottom():
+    """Корова, свалившаяся в озеро, раньше стояла на его дне до конца жизни
+    мира: вода её не держала вообще."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Cow
+    game = fresh_world(714)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    _flood(gm, x + 5, y, w=8, depth=7)
+    cow = _place(game, Cow, x + 8, y - 1)
+    game.screen_map.teleport_to_player()
+    bottom_start = cow.rect.bottom
+    for tact in range(120):
+        cow.update(tact, 1000 / 60)
+    assert cow.rect.bottom <= bottom_start + TSIZE, \
+        f"корова утонула на дно: {bottom_start} -> {cow.rect.bottom}"
+
+
+# ===================== водные твари =====================
+
+def test_fish_stays_in_the_water():
+    """Плавающему существу граница воды не мешает, а ДЕРЖИТ: рыба
+    разворачивается у берега так же, как наземное существо у обрыва."""
+    from units.Objects.Creatures import Fish
+    game = fresh_world(720)
+    gm = game.game_map
+    x, y = _water_arena(game, w=24)
+    _flood(gm, x + 5, y, w=10, depth=6)
+    fish = _place(game, Fish, x + 9, y - 3)
+    game.screen_map.teleport_to_player()
+    assert fish.use_gravity is False, "рыба не должна падать"
+    for tact in range(240):
+        fish.update(tact, 1000 / 60)
+        assert fish.in_water(), f"рыба вышла из воды на такте {tact}: {fish.rect.topleft}"
+    assert fish.lives == fish.max_lives, "рыба в воде не должна получать урон"
+
+
+def test_fish_suffocates_out_of_water():
+    """Рыба, выброшенная обмелевшим озером на берег, должна биться на берегу —
+    а не исчезать в тот же кадр и не жить в воздухе вечно."""
+    from units.Objects.Creatures import Fish
+    game = fresh_world(721)
+    game_map = game.game_map
+    x, y = _water_arena(game, w=20)
+    fish = _place(game, Fish, x + 8, y - 4)      # в воздухе
+    game.screen_map.teleport_to_player()
+    assert not fish.in_water()
+    lives = fish.lives
+    for tact in range(int(fish.AIR_DAMAGE_PERIOD * 3)):
+        fish.update(tact, 1000 / 60)
+    assert fish.lives < lives, "на суше рыба обязана задыхаться"
+    assert fish.use_gravity, "вне воды рыба падает"
+
+
+def test_water_creatures_spawn_in_lakes():
+    """Наземный спавн привязан к дёрну и воду не видит вообще — до этого в
+    водоёмах не было никого."""
+    from units.Objects.Creatures import SwimmingCreature
+    from units.Map.GameMap import lake_site
+    game = fresh_world(21)
+    gm = game.game_map
+    found = 0
+    for cell in range(-10, 11):
+        site = lake_site(cell, gm.base_generation)
+        if site is None:
+            continue
+        cx0, cy0 = site[0] // 32, site[2] // 32
+        for cx in range(cx0 - 1, cx0 + 2):
+            for cy in range(cy0 - 1, cy0 + 2):
+                for obj in gm.generate_chunk(cx, cy)[1]:
+                    if isinstance(obj, SwimmingCreature):
+                        found += 1
+                        assert obj.in_water(), \
+                            f"{type(obj).__name__} появился не в воде: {obj.rect.topleft}"
+    assert found, "в озёрах не появилось ни одной водной твари"
+
+
+def test_gulls_spawn_over_the_water():
+    """Чайка — единственный признак водоёма, видимый издалека. Лимит существ
+    на чанк мал, а рыбья стая забирает его целиком, поэтому чайки ставятся
+    первыми: при обратном порядке их не появлялось вообще (замер — ноль на
+    пяти сидах)."""
+    from units.Objects.Creatures import Gull
+    from units.Map.GameMap import lake_site
+    game = fresh_world(5)
+    gm = game.game_map
+    gulls = 0
+    for cell in range(-10, 11):
+        site = lake_site(cell, gm.base_generation)
+        if site is None:
+            continue
+        cx0, cy0 = site[0] // 32, site[2] // 32
+        for cx in range(cx0 - 1, cx0 + 2):
+            for cy in range(cy0 - 1, cy0 + 2):
+                gulls += sum(1 for o in gm.generate_chunk(cx, cy)[1] if isinstance(o, Gull))
+    assert gulls, "над водой не появилось ни одной чайки"
+
+
+def test_deep_lurker_lives_only_in_sealed_pockets():
+    """Глубинник существует ради того, чтобы находка «пустота в камне, а в ней
+    зеркало» не была бесплатной. В открытом озере его быть не должно."""
+    from units.Objects.Creatures import DeepLurker
+    from units.Map.Water import water_pocket_tile_at
+    game = fresh_world(5)
+    gm = game.game_map
+    checked = 0
+    for cx in range(-8, 9):
+        for cy in range(2, 18):
+            for obj in gm.generate_chunk(cx, cy)[1]:
+                if isinstance(obj, DeepLurker):
+                    checked += 1
+                    tx, ty = obj.rect.centerx // 32, obj.rect.centery // 32
+                    assert water_pocket_tile_at(tx, ty, gm.base_generation) is not None, \
+                        "глубинник оказался вне полости"
+    assert checked, "глубинников не нашлось — тест ничего не проверил"
+
+
+def test_hawk_dives_to_the_player_instead_of_hovering():
+    """Ястреб — первая угроза, приходящая СВЕРХУ. Без этого он висел бы на
+    своей высоте и «охотился», не долетая: горизонтально догоняет, вертикально
+    нет."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Hawk, ST_CHASE
+    game = fresh_world(722)
+    x, y = _flat_arena(game, w=30)
+    hawk = _place(game, Hawk, x + 10, y - 12)
+    game.player.active = True
+    game.player.tp_to(((x + 10) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    hawk.state = ST_CHASE
+    hawk.update_altitude(0)
+    assert hawk.target_y == game.player.rect.y, \
+        f"в погоне ястреб обязан идти на высоту игрока: {hawk.target_y}"
+
+
 # ===================== пересчёт меню при смене размера окна =====================
 
 def test_resize_relayouts_every_menu_of_the_scene():

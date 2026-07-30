@@ -251,6 +251,87 @@ BIRD_DOWN = [
     "K.........K",
 ]
 
+# --- Ястреб: 13x8 -> 26x16, два кадра ---------------------------------
+# Крылья длиннее и острее, чем у мелкой птицы: хищника надо отличать от стаи
+# ещё до того, как он начал снижаться.
+HAWK_UP = [
+    "K.........K..",
+    ".KK.....KK...",
+    "..KBK.KBK....",
+    "..KBBKKBBKKK.",
+    ".KBBBBBBBBBeK",
+    ".KKBBBBBBBBnn",
+    "...KKBBBBKK..",
+    "....KhKKhK...",
+]
+
+HAWK_DOWN = [
+    "....KKKKKK...",
+    "..KBBBBBBBK..",
+    ".KBBBBBBBBBeK",
+    ".KKBBBBBBBBnn",
+    "..KBBKKBBKK..",
+    ".KBBK.KBBK...",
+    "KBK.....KBK..",
+    "K.........K..",
+]
+
+# --- Рыба: 11x7 -> 22x14 ---------------------------------------------
+# Хвост слева, глаз справа — как у всех: все существа смотрят вправо.
+FISH = [
+    "K....KKK...",
+    "KK.KBBBBK..",
+    "KBKBBBBBBK.",
+    "KBBBBBBeBBK",
+    "KBKBBBBBBK.",
+    "KK.KBBBBK..",
+    "K....KKK...",
+]
+
+# --- Хищная рыба: 12x8 -> 24x16 --------------------------------------
+# Отличается от мирной ровно одним читаемым признаком — зубами (w).
+PIRANHA = [
+    "............",
+    "K....KKKK...",
+    "KK.KBBBBBK..",
+    "KBKBBBBBBBK.",
+    "KBBBBBBBeBBK",
+    "KBKBBBBBwwwK",
+    "KK.KBBBBBK..",
+    "K....KKKK...",
+]
+
+# --- Медуза: 9x11 -> 18x22 -------------------------------------------
+# Купол и щупальца. Единственное существо, смотрящее не вправо, а вниз:
+# у медузы нет «переда».
+JELLY = [
+    "..KKKKK..",
+    ".KBBBBBK.",
+    "KBBBBBBBK",
+    "KBBeBeBBK",
+    "KBBBBBBBK",
+    ".KKKKKKK.",
+    ".K.K.K.K.",
+    ".K.K.K.K.",
+    "..K.K.K..",
+    "..K.K.K..",
+    "...K.K...",
+]
+
+# --- Глубинник: 14x9 -> 28x18 ----------------------------------------
+# Обитатель полостей с водой: тёмный, крупный, со светящимся глазом (y).
+LURKER = [
+    "..............",
+    "K.....KKKKK...",
+    "KK..KBBBBBBK..",
+    "KBK.KBBBBBBBK.",
+    "KBBKKBBBBBByBK",
+    "KBBKKBBBBBBBnK",
+    "KBK.KBBBBBBBK.",
+    "KK..KBBBBBBK..",
+    "K.....KKKKK...",
+]
+
 # --- Каменный голем: 17x19 -> 51x57 ----------------------------------
 GOLEM = [
     ".....KKKKKKK.....",
@@ -354,6 +435,21 @@ _bird_down = _maker(BIRD_DOWN, "#57534E")
 def create_bird_sprites(color=None, size=None):
     """Два кадра взмаха. Возвращает список — существо листает его по такту."""
     return [_bird_up(color, size), _bird_down(color, size)]
+
+
+_hawk_up = _maker(HAWK_UP, "#78350F")
+_hawk_down = _maker(HAWK_DOWN, "#78350F")
+
+
+def create_hawk_sprites(color=None, size=None):
+    """Кадры взмаха ястреба — своя сетка: крылья длиннее и острее."""
+    return [_hawk_up(color, size), _hawk_down(color, size)]
+
+
+create_fish_sprite = _maker(FISH, "#38BDF8")
+create_piranha_sprite = _maker(PIRANHA, "#65A30D")
+create_jelly_sprite = _maker(JELLY, "#C084FC")
+create_lurker_sprite = _maker(LURKER, "#1E3A5F")
 create_golem_sprite = _maker(GOLEM, "#78716C")
 create_space_drifter_sprite = _maker(DRIFTER, "#818CF8")
 create_dust_swarm_sprite = _maker(DUST_SWARM, "#7DD3FC")
