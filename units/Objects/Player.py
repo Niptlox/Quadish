@@ -113,6 +113,9 @@ class Player(PhysicalObject):
         # обычный словарь чисел, поэтому эффекты переживают сохранение мира.
         self.effects_state = {}
         self.effects = Effects(self)
+        # Дыхание под водой (docs/WATER.md). Число, а не объект: сохраняется
+        # вместе с игроком без отдельной ветки в сериализации.
+        self.air = AIR_MAX
 
         self.achievements = Achievements(self)
         self.killer = ""
@@ -260,6 +263,7 @@ class Player(PhysicalObject):
             return True
         self.tact = tact
         self.effects.update(tact)
+        self.update_air(tact)
         self.death_animation.update(elapsed_time)
         self.draw(self.ui.display)
 
@@ -337,6 +341,31 @@ class Player(PhysicalObject):
             self.achievements.new_completed("space")
 
         return True
+
+    def update_air(self, tact):
+        """Отсчитать дыхание. Считаем по ГОЛОВЕ, а не по центру тела.
+
+        Иначе игрок, стоящий по пояс в воде, задыхался бы на суше: центр у него
+        под водой, а голова — на воздухе. Ровно это отличает «идти по мелководью»
+        от «нырнуть», и никакой другой проверки для этого не нужно.
+        """
+        if self.creative_mode or not self.alive:
+            self.air = AIR_MAX
+            return
+        head_under = self.in_water(offset_y=-self.rect.height // 3,
+                                   min_level=AIR_SUBMERGE_LEVEL)
+        if not head_under:
+            # Наверху дыхание восстанавливается быстро: наказывать за то, что
+            # игрок уже выплыл, нечестно.
+            self.air = min(AIR_MAX, self.air + AIR_REFILL_RATE)
+            return
+        # Зелье дыхания растягивает запас, а не отменяет его: множитель делит
+        # расход, поэтому эффект виден, но не превращает воду в воздух.
+        self.air -= 1 / max(1.0, self.effects.mult(BREATH))
+        if self.air <= 0:
+            self.air = 0
+            if tact % AIR_LOSS_PERIOD == 0:
+                self.damage(AIR_LOSS_DAMAGE, owner="Вода")
 
     def draw_lives(self, surface, pos_obj):
         self.lives_surface.fill(f"#78716CAA")

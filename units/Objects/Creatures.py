@@ -190,6 +190,17 @@ class MovingCreature(Creature):
         self.turn_lock = 0          # см. TURN_LOCK
         self.flock_id = 0           # общий у группы, см. flock_size
         self.flock_center = None    # центр стаи по X, пересчитывается редко
+        # Добыча и охотник (см. hunt_update). Ссылки на существ, поэтому в
+        # сейв не идут: после загрузки они находятся заново на первом же такте.
+        self.prey = None
+        self.threat = None
+        # Домашнее хозяйство (units/Objects/TileClasses.py Trough): сытое
+        # животное живёт у кормушки и не боится хозяина. Обычные поля — числа
+        # и координаты, поэтому сохраняются вместе с существом.
+        self.tamed = False
+        self.home = None
+        self.fed_until = 0
+        self.produced_tact = 0
 
     # ---------- восприятие ----------
 
@@ -239,6 +250,10 @@ class MovingCreature(Creature):
 
     def wants_to_flee(self):
         if self.temperament in (TEMPER_AGGRESSIVE, TEMPER_TERRITORIAL):
+            return False
+        if getattr(self, "tamed", False) and not self.provoked:
+            # Домашнее животное не шарахается от хозяина: иначе за собственным
+            # стадом пришлось бы бегать, и хозяйство превратилось бы в погоню.
             return False
         dist = self.player_distance_tiles()
         if dist is None:
@@ -293,7 +308,15 @@ class MovingCreature(Creature):
             # он продолжает в ту же сторону, а не замирает под носом врага.
             self.move_direction = away or self.move_direction or random.choice((-1, 1))
 
-        if self.flock_size > 1 and self.state in (ST_WANDER, ST_IDLE):
+        # Охота решается ПОСЛЕ выбора состояния и независимо от него: если
+        # проверять только в блуждании, то существо, начавшее погоню, на
+        # следующем такте уже в ST_CHASE — и в охоту больше не заходит. Так и
+        # было: волк доходил до зайца по инерции и не кусал его.
+        if self.hunt_step():
+            return
+
+        if (self.flock_size > 1 or getattr(self, "tamed", False)) \
+                and self.state in (ST_WANDER, ST_IDLE):
             # Спокойная стая держится вместе. Только в спокойном состоянии:
             # бегущий от игрока зверь должен спасаться, а не строиться. И
             # после выбора направления, а не до: сплочение отменяет случайную
@@ -354,7 +377,18 @@ class MovingCreature(Creature):
         self.flock_center = sum(o.rect.centerx for o in mates) // len(mates)
 
     def flock_cohesion(self):
-        """Отбился от стаи — возвращаться, а не бродить случайно."""
+        """Отбился от стаи — возвращаться, а не бродить случайно.
+
+        У домашнего животного центр — КОРМУШКА, а не стая: стадо должно
+        держаться места, где его кормят, иначе загон живёт ровно до первой
+        случайной прогулки.
+        """
+        if getattr(self, "tamed", False) and self.home is not None:
+            delta = self.home[0] * TSIZE - self.rect.centerx
+            if abs(delta) > self.flock_radius * TSIZE:
+                self.state = ST_WANDER
+                self.move_direction = 1 if delta > 0 else -1
+                return
         center = getattr(self, "flock_center", None)
         if center is None:
             return
@@ -363,6 +397,93 @@ class MovingCreature(Creature):
             return
         self.state = ST_WANDER
         self.move_direction = 1 if delta > 0 else -1
+
+    # ---------- охота на других существ ----------
+    #
+    # До этого существа не замечали друг друга вообще: волк и заяц могли стоять
+    # в одном тайле, и мир читался как набор независимых мишеней для игрока.
+    # Охота делает его местом, где что-то происходит и без игрока.
+    #
+    # Список ведём по bio_species, а не по классам: вид — это то, что игрок
+    # видит, и мод-существо со species "rabbit" должно ловиться волком без
+    # правок в коде волка.
+    hunts = ()                  # на кого охотится
+    is_prey = False             # замечает ли охотников (травоядные — да)
+    HUNT_PERIOD = 15            # такты между поисками добычи и угроз
+    HUNT_SIGHT = 10             # дальность охоты в тайлах
+
+    def nearby_creatures(self):
+        """Существа в своём и двух соседних по X чанках."""
+        cx, cy = self.chunk_pos
+        chunks = self.game_map.game_map
+        out = []
+        for dx in (-1, 0, 1):
+            chunk = chunks.get((cx + dx, cy))
+            if chunk is None:
+                continue
+            for obj in chunk[1]:
+                if obj is not self and obj.alive and obj.class_obj & OBJ_CREATURE:
+                    out.append(obj)
+        return out
+
+    def hunt_update(self, tact):
+        """Найти добычу и заметить охотника. Один обход на оба вопроса.
+
+        Обход соседей стоит денег, поэтому и «на кого я охочусь», и «кто
+        охотится на меня» считаются за один проход и редко — раз в HUNT_PERIOD.
+        """
+        if tact % self.HUNT_PERIOD or (not self.hunts and not self.is_prey):
+            return
+        reach = self.HUNT_SIGHT * TSIZE
+        prey = threat = None
+        prey_dist = threat_dist = reach
+        for obj in self.nearby_creatures():
+            dist = abs(obj.rect.centerx - self.rect.centerx)
+            if dist > reach:
+                continue
+            if obj.bio_species in self.hunts and dist < prey_dist:
+                prey, prey_dist = obj, dist
+            elif self.bio_species in getattr(obj, "hunts", ()) and dist < threat_dist:
+                threat, threat_dist = obj, dist
+        self.prey = prey
+        self.threat = threat
+
+    def hunt_step(self):
+        """Ход по добыче/угрозе. Возвращает True, если решение принято.
+
+        Игрок ВСЕГДА важнее: охота не должна мешать существу реагировать на
+        того, кто его бьёт.
+        """
+        if self.alert_tacts > 0:
+            return False
+        threat = getattr(self, "threat", None)
+        if threat is not None and threat.alive:
+            # Бежать от хищника — то же бегство, что и от игрока, поэтому и
+            # состояние то же: ST_FLEE, и никакой отдельной ветки поведения.
+            self.state = ST_FLEE
+            away = -self._direction_to(threat.rect.centerx)
+            self.move_direction = away or self.move_direction or random.choice((-1, 1))
+            return True
+        prey = getattr(self, "prey", None)
+        if prey is not None and prey.alive:
+            self.state = ST_CHASE
+            self.move_direction = self._direction_to(prey.rect.centerx)
+            if self.rect.colliderect(prey.rect):
+                self.bite(prey)
+            return True
+        # Охота кончилась (добыча умерла или ушла) — возвращаемся к блужданию
+        # сами: иначе существо осталось бы в погоне без цели навсегда.
+        if self.state in (ST_CHASE, ST_FLEE) and self.alert_tacts <= 0 \
+                and (self.hunts or self.is_prey):
+            self.state = ST_WANDER
+        return False
+
+    def bite(self, prey):
+        """Укус добычи. Перезарядка общая с ударом по игроку."""
+        if time() <= self.punch_reload_time + self.last_punch_time:
+            return
+        self.last_punch_time = time()
+        prey.damage(max(1, self.punch_damage))
 
     def _direction_to(self, target_x):
         """Знак направления к цели, с мёртвой зоной у самой цели."""
@@ -439,6 +560,7 @@ class MovingCreature(Creature):
         # Стая сверяется ДО решения: тревога товарища должна попасть в это же
         # решение, а не в следующее — иначе стая срывается волной, по одному.
         self.flock_update(tact)
+        self.hunt_update(tact)
         self.think(tact)
         self.check_abyss()
         self.move_by_state()
@@ -613,6 +735,7 @@ class Slime(MovingCreature):
 class Cow(MovingCreature):
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "cow"
+    is_prey = True
     bio_subspecies = "white cow"
     width, height = int(TSIZE * 1), int(TSIZE * 0.8)
     colors = ["#FFFAFA", "#FAEBD7", "#FDF4E3", "#FAF0E6"]
@@ -637,6 +760,8 @@ class Wolf(MovingCreature):
     not_save_vars = MovingCreature.not_save_vars
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "wolf"
+    # Волк охотится на травоядных: мир должен жить и без игрока.
+    hunts = ("rabbit", "deer", "cow", "fox")
     bio_subspecies = "gray wolf"
     # Стаи у волка НЕТ, хотя тематически она просилась первой: Wolf — базовый
     # класс ещё для девяти существ (бес, скорпион, кабан, мышь, голем, страж,
@@ -840,6 +965,7 @@ class Bird(FlyingCreature):
     not_save_vars = MovingCreature.not_save_vars | {"sprites"}
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "bird"
+    is_prey = True
     bio_subspecies = "island bird"
     width, height = int(TSIZE * 0.7), int(TSIZE * 0.45)
     colors = ["#57534E", "#78716C", "#1C1917"]
@@ -870,6 +996,7 @@ class Gull(Bird):
     видно, что там вода, — то же, что дым над трубой.
     """
     bio_species = "gull"
+    is_prey = True
     bio_subspecies = "lake gull"
     width, height = int(TSIZE * 0.85), int(TSIZE * 0.55)
     colors = ["#F5F5F4", "#E7E5E4"]
@@ -918,6 +1045,7 @@ class Hawk(Bird):
     idle_chance = 0.05
     angry_speed_mult = 1.5
     bio_species = "hawk"
+    hunts = ("bird", "gull", "rabbit")
     bio_subspecies = "island hawk"
     width, height = int(TSIZE * 1.1), int(TSIZE * 0.7)
     colors = ["#78350F", "#92400E"]
@@ -1035,6 +1163,7 @@ class Fish(SwimmingCreature):
     not_save_vars = MovingCreature.not_save_vars
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "fish"
+    is_prey = True
     bio_subspecies = "river fish"
     width, height = int(TSIZE * 0.7), int(TSIZE * 0.45)
     colors = ["#38BDF8", "#0EA5E9", "#FBBF24"]
@@ -1062,6 +1191,7 @@ class Piranha(SwimmingCreature):
     not_save_vars = MovingCreature.not_save_vars
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "piranha"
+    hunts = ("fish",)
     bio_subspecies = "toothed piranha"
     width, height = int(TSIZE * 0.75), int(TSIZE * 0.5)
     colors = ["#65A30D", "#4D7C0F"]
@@ -1156,6 +1286,7 @@ class Rabbit(PassiveWanderer):
     idle_chance = 0.5
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "rabbit"
+    is_prey = True
     bio_subspecies = "wild rabbit"
     flock_size = 3
     width, height = int(TSIZE * 0.5), int(TSIZE * 0.4)
@@ -1177,6 +1308,7 @@ class Deer(PassiveWanderer):
     idle_chance = 0.45
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "deer"
+    is_prey = True
     bio_subspecies = "forest deer"
     flock_size = 4
     width, height = int(TSIZE * 1.1), int(TSIZE * 1.1)
@@ -1199,6 +1331,8 @@ class Fox(PassiveWanderer):
     sight_tiles = 10
     bio_kingdom = KINGDOM_ANIMALIA
     bio_species = "fox"
+    hunts = ("rabbit",)
+    is_prey = True          # лису тоже едят волки
     bio_subspecies = "red fox"
     width, height = int(TSIZE * 0.7), int(TSIZE * 0.5)
     colors = ["#EA580C", "#C2410C"]

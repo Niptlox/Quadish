@@ -97,7 +97,7 @@ class PhysicalObject(SavedObject):
         from units.Effects import FIREPROOF
         return FIREPROOF_TILES if effects.has(FIREPROOF) else frozenset()
 
-    def in_water(self, offset_y=0):
+    def in_water(self, offset_y=0, min_level=None):
         """Погружён ли центр тела в воду (docs/WATER.md).
 
         Не по столкновениям, а чтением тайла: столкновение с водой
@@ -107,14 +107,17 @@ class PhysicalObject(SavedObject):
         гусеничный краулер.
 
         Уровень заполнения учитываем: плёнка на дне тайла — это лужа, по ней
-        ходят, а не плывут.
+        ходят, а не плывут. Порог можно поднять (min_level): «плыть» и
+        «захлебнуться» — разные глубины, и второе требует почти полного тайла.
         """
+        if min_level is None:
+            min_level = WATER_SWIM_LEVEL
         tile = self.game_map.get_static_tile(self.rect.centerx // TSIZE,
                                              (self.rect.centery + offset_y) // TSIZE,
                                              create_chunk=False)
         if tile is None or tile[0] != WATER_TILE:
             return False
-        return water_frame_level(tile[2]) >= WATER_SWIM_LEVEL
+        return water_frame_level(tile[2]) >= min_level
 
     def collision_dynamic(self):
         """Список сущностей, с которыми имеет смысл сверяться."""

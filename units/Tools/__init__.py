@@ -9,6 +9,7 @@ from units.Tools.ToolsSword import *
 from units.Tools.ToolSpatula import *
 from units.Tools.ToolsVehicle import *
 from units.Tools.ToolBucket import *
+from units.Tools.ToolFishing import *
 
 
 # модуль обобщения and items

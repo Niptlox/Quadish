@@ -31,6 +31,7 @@ class GameMap(SavedObject):
                                                  "dynamic_dump", "dump_keep_radius", "signal_receivers",
                                                  "portals", "lake_sites", "dungeon_sites", "pocket_sites",
                                                  "active_tiles", "water_flow", "_water_writing",
+                                                 "_crowd_cache", "_crowd_tact",
                                                  "_offscreen_ring", "_offscreen_ring_set",
                                                  "_offscreen_pos", "_offscreen_round_tact",
                                                  "_offscreen_steps", "_forced_cache",
@@ -101,6 +102,9 @@ class GameMap(SavedObject):
         # равновесии, и будить его незачем.
         self.water_flow = WaterFlow(self)
         self._water_writing = False
+        # Кэш населения вокруг игрока (см. creatures_near_player)
+        self._crowd_cache = None
+        self._crowd_tact = 0
         # Индекс «живых» тайлов по чанкам: {cxy: {индекс_в_массиве}}. Тик за
         # экраном раньше просматривал ВСЮ площадь чанка — замер дал 16384
         # просмотренных слота на 30 активных тайлов (0.18%). Лежит на карте, а
@@ -226,31 +230,81 @@ class GameMap(SavedObject):
                     return True
         return False
 
+    # Сколько существ терпим вокруг игрока и в каком радиусе считаем.
+    # Без этого предела остров зарастал: подселение шло раз в пять минут на
+    # КАЖДЫЙ чанк, счётчик чанка считал «сколько я породил за всю жизнь», а
+    # существа расходятся и идут к игроку — за пять минут на экране собиралось
+    # два десятка.
+    CREATURE_SOFT_CAP = 20
+    CREATURE_CAP_RADIUS = 3
+    CROWD_RECHECK = FPS * 2
+
+    def creatures_near_player(self, tact=None):
+        """Сколько существ живёт вокруг игрока. С кэшем на пару секунд.
+
+        Обход соседних чанков стоит заметно, а вызывается это при обслуживании
+        каждого чанка — без кэша проверка населения была бы дороже самого
+        подселения.
+        """
+        if tact is not None and self._crowd_cache is not None \
+                and tact - self._crowd_tact < self.CROWD_RECHECK:
+            return self._crowd_cache
+        player = getattr(self.game, "player", None)
+        if player is None:
+            return 0
+        pcx, pcy = self.to_chunk_xy(player.rect.centerx // TSIZE, player.rect.centery // TSIZE)
+        r = self.CREATURE_CAP_RADIUS
+        total = 0
+        for cx in range(pcx - r, pcx + r + 1):
+            for cy in range(pcy - r, pcy + r + 1):
+                chunk = self.game_map.get((cx, cy))
+                if chunk is None:
+                    continue
+                total += sum(1 for o in chunk[1]
+                             if o.class_obj & OBJ_CREATURE and o.alive)
+        if tact is not None:
+            self._crowd_cache, self._crowd_tact = total, tact
+        return total
+
     def update_chunk(self, chunk):
-        if config.GameSettings.creatures:
-            crt_cash = chunk[3]
-            if self.game.tact > crt_cash[2] + FPS * 300:
-                if crt_cash[1] < CHUNK_CREATURE_LIMIT:
-                    crt_cash[2] = self.game.tact
-                    dynamic_tiles = chunk[1]
-                    crt_cnt = min(len(crt_cash[0]), random.randint(0, CHUNK_CREATURE_LIMIT - crt_cash[1]))
-                    tiles_xy = random.choices(tuple(crt_cash[0]), k=crt_cnt)
-                    if is_night(getattr(self, "world_time", 0)):
-                        # Ночью мир населяется гуще — иначе ночь это просто
-                        # тёмный экран, а не время, когда лучше не выходить.
-                        crt_cnt = min(len(crt_cash[0]),
-                                      int(crt_cnt * NIGHT_SPAWN_MULT) + 1)
-                        tiles_xy = random.choices(tuple(crt_cash[0]), k=crt_cnt)
-                    for tile_xy in tiles_xy:
-                        if self.spawn_is_visible(*tile_xy):
-                            continue        # не рождаем существо на глазах
-                        if self.lit_by_lamp(*tile_xy):
-                            continue        # свет отгоняет — см. lit_by_lamp
-                        biome = biome_of_pos(tile_xy[0], tile_xy[1])[0]
-                        Crt = random_creature_selection(tile_xy[1], biome, tile_xy[0])
-                        if Crt is not None:
-                            dynamic_tiles.append(spawn_creature(Crt, self.game, *tile_xy))
-                            crt_cash[1] += 1
+        if not config.GameSettings.creatures:
+            return
+        crt_cash = chunk[3]
+        tact = self.game.tact
+        if tact <= crt_cash[2] + FPS * 300:
+            return
+        crt_cash[2] = tact
+        # Предел на окрестность игрока. Главная защита от «двадцати существ на
+        # экране»: подселение просто не происходит, пока вокруг и так тесно.
+        if self.creatures_near_player(tact) >= self.CREATURE_SOFT_CAP:
+            return
+        # Считаем ЖИВЫХ в чанке, а не то, сколько он породил за свою жизнь.
+        # Счётчик никогда не уменьшался (существа умирают и уходят в соседние
+        # чанки), поэтому он ограничивал не плотность, а историю.
+        dynamic_tiles = chunk[1]
+        alive = sum(1 for o in dynamic_tiles if o.class_obj & OBJ_CREATURE and o.alive)
+        crt_cash[1] = alive
+        limit = CHUNK_CREATURE_LIMIT
+        if is_night(getattr(self, "world_time", 0)):
+            # Ночью мир населяется гуще — иначе ночь это просто тёмный экран, а
+            # не время, когда лучше не выходить. Множитель идёт на ПРЕДЕЛ, а не
+            # на уже посчитанный остаток: раньше он умножал остаток, и ночной
+            # чанк мог получить девять существ при пределе четыре.
+            limit = int(limit * NIGHT_SPAWN_MULT)
+        room = limit - alive
+        if room <= 0 or not crt_cash[0]:
+            return
+        crt_cnt = min(len(crt_cash[0]), random.randint(0, room))
+        for tile_xy in random.choices(tuple(crt_cash[0]), k=crt_cnt):
+            if self.spawn_is_visible(*tile_xy):
+                continue        # не рождаем существо на глазах
+            if self.lit_by_lamp(*tile_xy):
+                continue        # свет отгоняет — см. lit_by_lamp
+            biome = biome_of_pos(tile_xy[0], tile_xy[1])[0]
+            Crt = random_creature_selection(tile_xy[1], biome, tile_xy[0])
+            if Crt is not None:
+                dynamic_tiles.append(spawn_creature(Crt, self.game, *tile_xy))
+                crt_cash[1] += 1
 
     def chunk_gen(self, xy):
         index = 0
@@ -566,6 +620,16 @@ class GameMap(SavedObject):
                 else:
                     chunk[0][index + 3][TILE_TIMER] = tact
                 chunk[0][index + 3][TILE_TIMER] += random.randint(FPS * 60, FPS * 120)
+        elif tile_type in GROWING_PLANTS:
+            # Камыш, огнецвет, лунный цвет: три стадии (росток, полурост,
+            # зрелое). Тот же приём, что у куста, — кадр тайла это стадия, а не
+            # вариант картинки, поэтому рост виден без отдельной анимации.
+            if tile[2] < GROWING_PLANT_STAGES - 1 and tile[3][TILE_TIMER] < tact:
+                if tile[3][TILE_TIMER] != 0:
+                    chunk[0][index + 2] += 1
+                else:
+                    chunk[0][index + 3][TILE_TIMER] = tact
+                chunk[0][index + 3][TILE_TIMER] += random.randint(FPS * 45, FPS * 90)
         elif tile_type == 102:
             if tile[2] == 0:
                 chunk[0][index + 3][TILE_TIMER] = tact + random.randint(FPS * 240, FPS * 660)
@@ -1932,8 +1996,10 @@ class GameMap(SavedObject):
         tile = self.get_static_tile(x, chest_y)
         chest = self.get_tile_obj(*self.to_chunk_xy(x, chest_y), tile[3])
         if chest is not None:
-            # хватает на печку (31x4, 11x1, 64x2), котёл (11x1, 64x8) и оба зелья
-            for idx, cnt in ((31, 8), (64, 14), (51, 30), (53, 30), (66, 6), (11, 4)):
+            # Хватает на печку (31x4, 11x1, 64x2), котёл (11x1, 64x8), ведро
+            # (64x3) и первую варку: котлу теперь нужны топливо, ведро воды и
+            # ингредиент, поэтому в припасах есть и доски, и ягоды.
+            for idx, cnt in ((31, 8), (64, 20), (51, 30), (53, 30), (66, 6), (11, 12)):
                 chest.inventory.put_to_inventory(ItemsTile(self.game, idx, count=cnt))
         self.tutorial_state["chest_pos"] = [x, chest_y]
 
@@ -2173,6 +2239,10 @@ def random_plant_selection(biome=None):
 
         state_img = 0
         state = {}
+        if plant_tile_type in GROWING_PLANTS:
+            # Генерация ставит зрелые: мир должен выглядеть выросшим, а не
+            # только что засеянным. Ростки бывают только там, где сажал игрок.
+            state_img = GROWING_PLANT_STAGES - 1
         if plant_tile_type == 101:
             # рандомная картинка только если ставиться при генерации карты
             state_img = random.randint(0, 3)

@@ -3,7 +3,7 @@ from time import time
 from units.Objects import Entities
 from units.Tiles import item_of_break_tile, item_of_right_click_tile, STANDING_TILES, ITEM_TILES, tile_imgs, \
     tile_drops, ON_EARTHEN_PLANTS, MULTI_BLOCK_PLANTS, \
-    PLANT_STAND_ON_DIRT, PLANT_STAND_ON_PLANT, BACKTILES, CLASS_TILE
+    PLANT_STAND_ON_DIRT, PLANT_STAND_ON_PLANT, BACKTILES, CLASS_TILE, GROWING_PLANTS
 from units.Tools.AnimationTool import *
 from units.common import *
 
@@ -102,6 +102,15 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
             item = item_of_right_click_tile(tile)[0]
             game_map.add_item_of_index(*item, x, y)
             tile[2], tile[3][TILE_TIMER] = 0, 0
+            game_map.set_static_tile(x, y, tile)
+    elif ttile in GROWING_PLANTS:
+        # Сбор урожая: растение остаётся и отрастает заново — ровно как куст.
+        harvest = item_of_right_click_tile(tile)
+        if harvest:
+            game_map.add_item_of_index(*harvest[0], x, y)
+            tile[2] = 0
+            if isinstance(tile[3], dict):
+                tile[3][TILE_TIMER] = 0
             game_map.set_static_tile(x, y, tile)
     elif ttile == 130:
         point = (x + 0.5) * TSIZE, (y + 0.5) * TSIZE

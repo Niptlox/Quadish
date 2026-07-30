@@ -28,6 +28,7 @@ FURNACE_TILE = 131 # печка
 CAULDRON_TILE = 125  # котёл
 RUBY_ITEM = 66     # рубин (ингредиент зелий из сундука)
 POTION_ITEMS = (55, 351)  # зелье жизни, зелье прыжка
+BUCKET_EMPTY, BUCKET_WATER = 410, 411  # ведро и ведро с водой
 
 MARKER_COLOR = "#FDE047"
 
@@ -113,9 +114,21 @@ class TutorialHints:
                  lambda: CAULDRON_TILE in p.collisions_ttile,
                  task="Построй котёл",
                  achievement="tutorial_cauldron"),
-            Step("Обучение: встань у котла и свари зелье — рецепты в инвентаре [E]",
+            # Котёл перестал быть «столом с огоньком»: теперь это машина с
+            # тремя ячейками, и без объяснения игрок кладёт ягоды в топливо.
+            # Поэтому шага стало три: сделать ведро, набрать воду, сварить.
+            Step("Обучение: у стола скрафть ведро (3 железа) — без воды котёл не работает",
+                 lambda: count_in_inventory(inv, BUCKET_EMPTY) >= 1
+                 or count_in_inventory(inv, BUCKET_WATER) >= 1,
+                 task="Скрафть ведро",
+                 achievement="tutorial_bucket"),
+            Step("Обучение: набери воды — [ПКМ] ведром по воде (озеро или лужа)",
+                 lambda: count_in_inventory(inv, BUCKET_WATER) >= 1,
+                 task="Набери воды в ведро",
+                 achievement="tutorial_water"),
+            Step("Обучение: в котёл — доски в топливо, ведро в воду, 6 ягод в ингредиенты",
                  lambda: any(count_in_inventory(inv, i) for i in POTION_ITEMS),
-                 task="Свари зелье у котла",
+                 task="Свари зелье в котле",
                  achievement="tutorial_potion"),
             Step("Обучение пройдено! Свой мир — через «Играть», справка — [F1]",
                  lambda: True),

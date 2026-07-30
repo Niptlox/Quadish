@@ -625,28 +625,66 @@ class Furnace(Tile):
         return sum([inv.items_of_break() for inv in inventories], [])
 
 
-# Зельеварение. Ингредиент -> (сколько его нужно, что получится, сколько).
+# Зельеварение: ({ингредиент: сколько, ...}, (что получится, сколько)).
 #
-# Один ингредиент на рецепт — намеренно. Двух-трёх-компонентные рецепты
-# требуют либо второй ячейки ввода (и тогда котёл становится верстаком с
-# огнём), либо угадывания порядка; ни то ни другое не добавляет решений. Всё
-# «сложение» рецепта уже есть: топливо + вода + ингредиент, то есть три вещи,
-# каждую из которых надо принести отдельно.
+# Ингредиентных ячеек три, и рецепт сверяется с их содержимым КАК С НАБОРОМ:
+# порядок не важен, лишний ингредиент рецепт не подходит. Порядок был бы
+# угадыванием, а «лишнее не мешает» превращало бы котёл в мусорку, куда
+# сваливают всё подряд.
 #
-# Ингредиенты — это трофеи существ и новые растения (docs/BALANCE_SCHEME.md):
-# зелье теперь оплачивается охотой или походом в биом, а не запасами руды.
-CAULDRON_RECIPES = {
-    53: (6, 55, 1),      # ягоды -> зелье жизни
-    422: (3, 351, 1),    # крыло мыши -> зелье нового прыжка
-    109: (3, 413, 1),    # лунный цвет -> скорость
-    420: (2, 414, 1),    # клык -> сила
-    424: (1, 415, 1),    # ядро голема -> каменная кожа
-    108: (3, 416, 1),    # огнецвет -> несгораемость
-    423: (2, 417, 1),    # жгучая слизь -> дыхание
-}
+# Простые рецепты (один ингредиент) остались — с них начинают. Составные дают
+# БОЛЬШЕ порций из тех же трав: за возню с тремя ячейками надо платить, но
+# платить выгодой, а не обязанностью.
+#
+# Ингредиенты — это трофеи существ и растения (docs/BALANCE_SCHEME.md): зелье
+# оплачивается охотой или походом в биом, а не запасами руды.
+CAULDRON_RECIPES = [
+    ({53: 6}, (55, 1)),          # ягоды -> зелье жизни
+    ({422: 3}, (351, 1)),        # крыло мыши -> зелье нового прыжка
+    ({109: 3}, (413, 1)),        # лунный цвет -> скорость
+    ({420: 2}, (414, 1)),        # клык -> сила
+    ({424: 1}, (415, 1)),        # ядро голема -> каменная кожа
+    ({108: 3}, (416, 1)),        # огнецвет -> несгораемость
+    ({423: 2}, (417, 1)),        # жгучая слизь -> дыхание
+    # Составные: те же зелья, но по две порции и с добавкой из другого мира.
+    ({109: 2, 421: 2}, (413, 2)),        # лунный цвет + перо
+    ({420: 2, 52: 2}, (414, 2)),         # клык + мясо
+    ({108: 2, 402: 2}, (416, 2)),        # огнецвет + сера
+    ({423: 2, 107: 2}, (417, 2)),        # жгучая слизь + камыш
+    ({53: 4, 111: 2}, (55, 2)),          # ягоды + пещерный гриб
+    # Усиленная таблетка: варится, а не собирается руками, и лечит дольше.
+    ({412: 2, 51: 2, 53: 4}, (418, 2)),
+]
 # Ведро с водой (units/Tools/ToolBucket.py) — обязательная часть варки.
 BUCKET_WATER_INDEX = 411
 BUCKET_EMPTY_INDEX = 410
+# Сколько ячеек под ингредиенты
+CAULDRON_INPUT_CELLS = 3
+
+
+def cauldron_ingredients(cells):
+    """Что лежит в ячейках ингредиентов: {индекс: количество}."""
+    have = {}
+    for cell in cells:
+        if cell is not None:
+            have[cell.index] = have.get(cell.index, 0) + cell.count
+    return have
+
+
+def match_cauldron_recipe(have):
+    """Найти рецепт по набору ингредиентов или None.
+
+    Совпадение ТОЧНОЕ по составу: лишний вид ингредиента рецепт не подходит.
+    Из двух подошедших берём тот, где ингредиентов больше — иначе составной
+    рецепт был бы недостижим (его набор всегда содержит простой)."""
+    best = None
+    for need, out in CAULDRON_RECIPES:
+        if set(need) != set(have):
+            continue
+        if all(have.get(idx, 0) >= cnt for idx, cnt in need.items()):
+            if best is None or len(need) > len(best[0]):
+                best = (need, out)
+    return best
 
 
 class Cauldron(Tile):
@@ -676,7 +714,9 @@ class Cauldron(Tile):
         self.water_cell = Inventory(self.game_map, self, [1, 1],
                                     items_update_event=self.check_cells_and_start)
         self.water_cell.filter_items = {BUCKET_WATER_INDEX, BUCKET_EMPTY_INDEX}
-        self.input_cell = Inventory(self.game_map, self, [1, 1],
+        # Три ячейки ингредиентов одной строкой, а не три отдельных инвентаря:
+        # рецепт всё равно смотрит на них как на набор.
+        self.input_cell = Inventory(self.game_map, self, [CAULDRON_INPUT_CELLS, 1],
                                     items_update_event=self.check_cells_and_start)
         self.result_cell = Inventory(self.game_map, self, [1, 1],
                                      items_update_event=self.check_cells_and_start)
@@ -687,14 +727,11 @@ class Cauldron(Tile):
     # ---------- проверки ----------
 
     def recipe(self):
-        """Рецепт по содержимому ячейки ингредиента или None."""
-        item = self.input_cell[0]
-        if item is None:
+        """Рецепт по содержимому ячеек ингредиентов или None."""
+        have = cauldron_ingredients(self.input_cell)
+        if not have:
             return None
-        rec = CAULDRON_RECIPES.get(item.index)
-        if rec is None or item.count < rec[0]:
-            return None
-        return rec
+        return match_cauldron_recipe(have)
 
     def has_water(self):
         item = self.water_cell[0]
@@ -712,13 +749,13 @@ class Cauldron(Tile):
         rec = self.recipe()
         if rec is None:
             return False
-        return self.has_fuel() and self.has_water() and self.result_fits(rec[1])
+        return self.has_fuel() and self.has_water() and self.result_fits(rec[1][0])
 
     def check_cells_and_start(self):
         if self.check_cells():
             if self.brewing is None:
                 self.__start()
-        elif self.brewing is not None and not self.check_cells():
+        elif self.brewing is not None:
             # Забрали воду, топливо или ингредиент — варка отменяется, и
             # прогресс сбрасывается. Иначе можно было бы «долить» котёл в
             # последний момент и получить зелье бесплатно.
@@ -729,7 +766,7 @@ class Cauldron(Tile):
     # ---------- варка ----------
 
     def __start(self):
-        self.brewing = self.input_cell[0].index
+        self.brewing = self.recipe()
         self.timer = 0
         self.progress = 0
 
@@ -740,8 +777,9 @@ class Cauldron(Tile):
         self.progress = 0
         if rec is None:
             return
-        need, result_index, result_count = rec
-        self.input_cell.get_from_inventory(self.brewing or self.input_cell[0].index, need)
+        need, (result_index, result_count) = rec
+        for index, count in need.items():
+            self.input_cell.get_from_inventory(index, count)
         self.fuel_cell.get_from_inventory(self.fuel_cell[0].index, 1)
         # Вода израсходована: ведро в ячейке пустеет.
         self.water_cell.get_from_inventory(BUCKET_WATER_INDEX, 1)
@@ -770,6 +808,101 @@ class Cauldron(Tile):
     def items_of_break(self):
         inventories = [self.fuel_cell, self.water_cell, self.input_cell, self.result_cell]
         return sum([inv.items_of_break() for inv in inventories], [])
+
+
+# Домашнее хозяйство. Кто что даёт, если его кормить: вид -> (предмет, период).
+# Вид, а не класс: то же правило, что у охоты (hunts) — мод-корова со species
+# "cow" должна доиться без правок здесь.
+LIVESTOCK_PRODUCTS = {
+    "cow": (426, FPS * 90),        # молоко
+    "rabbit": (428, FPS * 120),    # пух
+    "penguin": (427, FPS * 120),   # яйцо
+    "deer": (404, FPS * 150),      # шкура (линька)
+}
+# Чем кормят. Ягоды и трава — то, что и так собирают по дороге.
+TROUGH_FOOD = {53, 104, 405, 107}
+
+
+class Trough(Tile):
+    """Кормушка: превращает диких травоядных в домашних.
+
+    Зачем это, а не «приручение с руки». Хозяйство — это МЕСТО, а не список
+    ручных зверей: игрок ставит кормушку, кладёт в неё еду, и рядом заводится
+    стадо, которое там и живёт. Из этого само собой получается загон, и его не
+    надо объяснять.
+
+    Кормушка ест еду и раздаёт её по одному существу за раз, а не «кормит всех
+    бесплатно»: иначе хозяйство было бы бесконечным источником еды из ничего.
+    """
+    index = 113
+    view_interface_on_click = True
+    FEED_PERIOD = FPS * 5          # как часто проверяет, кого покормить
+    FEED_RADIUS = 8                # тайлов вокруг
+    TAMED_TACTS = FPS * 300        # сколько существо помнит кормушку
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.inventory = Inventory(self.game_map, self, [1, 1])
+        self.inventory.filter_items = set(TROUGH_FOOD)
+        self.timer = 0
+
+    def get_vars(self):
+        d = super().get_vars()
+        d.update(self.inventory.get_vars())
+        return d
+
+    def set_vars(self, d):
+        self.inventory.set_vars(d)
+
+    def items_of_break(self):
+        return [(self.index, 1)] + self.inventory.items_of_break()
+
+    def food(self):
+        item = self.inventory[0]
+        return item if item is not None and item.index in TROUGH_FOOD else None
+
+    def nearby_livestock(self):
+        """Травоядные вокруг кормушки — те, кого вообще можно держать."""
+        cxy = self.game_map.to_chunk_xy(self.tx, self.ty)
+        out = []
+        for dx in (-1, 0, 1):
+            chunk = self.game_map.game_map.get((cxy[0] + dx, cxy[1]))
+            if chunk is None:
+                continue
+            for obj in chunk[1]:
+                if not (obj.alive and obj.class_obj & OBJ_CREATURE):
+                    continue
+                if getattr(obj, "bio_species", None) not in LIVESTOCK_PRODUCTS:
+                    continue
+                if abs(obj.rect.centerx // TSIZE - self.tx) <= self.FEED_RADIUS and \
+                        abs(obj.rect.centery // TSIZE - self.ty) <= self.FEED_RADIUS:
+                    out.append(obj)
+        return out
+
+    def update(self, elapsed_time):
+        self.timer += self.steps
+        if self.timer < self.FEED_PERIOD:
+            return
+        self.timer = 0
+        tact = self.game.tact
+        for animal in self.nearby_livestock():
+            product, period = LIVESTOCK_PRODUCTS[animal.bio_species]
+            fed_until = getattr(animal, "fed_until", 0)
+            if fed_until <= tact:
+                food = self.food()
+                if food is None:
+                    continue
+                self.inventory.get_from_inventory(food.index, 1)
+                animal.fed_until = tact + self.TAMED_TACTS
+                animal.home = (self.tx, self.ty)
+                animal.tamed = True
+                continue
+            # Сытое животное даёт продукт — но не чаще своего периода.
+            if tact - getattr(animal, "produced_tact", 0) >= period:
+                animal.produced_tact = tact
+                self.game_map.add_item_of_index(product, 1,
+                                                animal.rect.centerx // TSIZE,
+                                                animal.rect.centery // TSIZE)
 
 
 class LoreTablet(Tile):
@@ -1412,5 +1545,5 @@ classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate,
           Receiver, Transmitter, LoreTablet,
           Hopper, Conveyor, Dropper, Chopper,
           FuelEngine, CreativeEngine, SpaceEngine, HellEngine, Portal, GolemNest,
-          DustCollector, BloreTrack, Cupboard, Echo, Cauldron}
+          DustCollector, BloreTrack, Cupboard, Echo, Cauldron, Trough}
 tiles_class = {cls.index: cls for cls in classes}

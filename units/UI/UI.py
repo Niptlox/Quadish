@@ -167,6 +167,7 @@ class GameUI(UI):
         self.achievement_message.draw(self.screen)
         self.draw_goal()
         self.draw_effects()
+        self.draw_air()
         self.redraw_playerui()
         self.playerui.draw(self.screen)
 
@@ -220,6 +221,25 @@ class GameUI(UI):
             box.blit(surf, (10, 3))
             self.screen.blit(box, (10, y))
             y += box.get_height() + 4
+
+    # Полоска воздуха. Рисуется ТОЛЬКО когда он тратится: постоянный
+    # индикатор, который двадцать часов из двадцати показывает «полный»,
+    # занимает место и перестаёт читаться.
+    def draw_air(self):
+        player = getattr(self.scene, "player", None)
+        air = getattr(player, "air", None)
+        if air is None or air >= AIR_MAX:
+            return
+        w, h = 160, 10
+        x = (self.screen.get_width() - w) // 2
+        y = self.screen.get_height() - 110
+        part = max(0.0, min(1.0, air / AIR_MAX))
+        box = pygame.Surface((w, h), pygame.SRCALPHA, 32)
+        box.fill((24, 24, 27, 150))
+        # Красный на исходе — цвет говорит «пора наверх» раньше, чем цифры.
+        color = (56, 189, 248) if part > 0.3 else (248, 113, 113)
+        pygame.draw.rect(box, color, (1, 1, int((w - 2) * part), h - 2))
+        self.screen.blit(box, (x, y))
 
     def flip(self):
         pygame.display.flip()

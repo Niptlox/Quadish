@@ -8,6 +8,8 @@ from units.UI.ColorsUI import *
 from units.UI.InventoryUI import InventoryUI, InventoryPlayerUI
 from units.UI.ItemInMouse import *
 from units.common import *
+# Иконки-подсказки в пустых ячейках котла
+from units.Tiles import tile_hand_imgs, tile_imgs
 
 
 class BlockUI(SurfaceUI):
@@ -37,8 +39,13 @@ class BlockUI(SurfaceUI):
         if self.block_obj:
             self.block_obj.update(elapsed_time)
 
+    # Чем закрывается любой экран блока. E — та же клавиша, что открывает и
+    # закрывает инвентарь: игрок нажимает её не задумываясь, и раньше она
+    # закрывала инвентарь ПОД сундуком, оставляя сам сундук открытым.
+    CLOSE_KEYS = (pg.K_ESCAPE, pg.K_e)
+
     def pg_event(self, event: pg.event.Event):
-        if event.type == pg.KEYDOWN and event.key == pg.K_ESCAPE:
+        if event.type == pg.KEYDOWN and event.key in self.CLOSE_KEYS:
             self.close()
             return True
 
@@ -252,10 +259,22 @@ class InventoryPlayerWithBlockUI(BlockUI):
         self.opened = self.player_inventory_ui.opened
 
     def pg_event(self, event: pg.event.Event):
-        super().pg_event(event)
+        # Результат базового обработчика ТЕРЯЛСЯ, и это был баг: ESC закрывал
+        # сундук, но возвращал False, поэтому сцена получала то же нажатие и
+        # открывала паузу. Выйти из сундука можно было только через неё.
+        closed = super().pg_event(event)
+        if closed:
+            return True
         res = self.player_inventory_ui.pg_event(event)
         res = self.block_ui.pg_event(event) or res
         return res
+
+    def close(self):
+        # Закрываем ОБА экрана: инвентарь игрока открывается вместе с блоком,
+        # и оставленный открытым он продолжал перехватывать управление.
+        super().close()
+        self.player_inventory_ui.close()
+        self.block_ui.close()
 
     def set_player(self, player):
         self.player_inventory_ui.inventory = player.inventory
@@ -303,6 +322,20 @@ class InventoryPlayerCupboardUI(InventoryPlayerWithBlockUI):
         super().__init__(player, CupboardUI())
 
 
+class TroughUI(ChestUI):
+    """Кормушка: одна ячейка под еду. Тот же интерфейс, что у сундука, —
+    отдельный экран ради одной клетки заводить незачем."""
+    def __init__(self):
+        InventoryUI.__init__(self, None, [1, 1])
+
+
+class InventoryPlayerTroughUI(InventoryPlayerWithBlockUI):
+    index = 113
+
+    def __init__(self, player):
+        super().__init__(player, TroughUI())
+
+
 class InventoryPlayerFurnaceUI(InventoryPlayerWithBlockUI):
     index = 131
 
@@ -311,39 +344,77 @@ class InventoryPlayerFurnaceUI(InventoryPlayerWithBlockUI):
 
 
 class CauldronUI(BlockUI):
-    """Четыре ячейки котла: топливо, вода, ингредиент, результат.
+    """Ячейки котла: топливо, вода, три ингредиента, результат.
 
-    Раскладка повторяет печку (`FurnaceUI`) — та же полоска прогресса на том же
-    месте — и это намеренно: котёл теперь машина того же рода, и узнавать его
-    заново игроку не нужно.
+    В пустых ячейках рисуется бледная иконка того, что сюда кладут: полено —
+    топливо, ведро — вода, цветок — ингредиент. Без неё котёл это четыре
+    одинаковых квадрата, и что куда класть, приходится угадывать перебором.
+    Иконка, а не подпись: подпись пришлось бы переводить и она не помещается
+    в клетку.
     """
     background = bg_color
+    # Что рисовать в пустой ячейке как подсказку
+    HINT_FUEL = 11        # доски
+    HINT_WATER = 411      # ведро с водой
+    HINT_INPUT = 109      # лунный цвет
 
     def __init__(self):
         cell = InventoryUI.cell_size
-        rect = pg.Rect(0, 0, cell * 6, cell * 5)
+        rect = pg.Rect(0, 0, cell * 7, cell * 5)
         super().__init__(rect)
         self.convert_alpha()
-        self.input_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
+        self.input_inventory_ui = InventoryUI(None, [3, 1], margin_table=0, ui_owner=self)
         self.input_inventory_ui.get_draw_rect().topleft = cell * 0.5, cell * 0.5
         self.water_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
-        self.water_inventory_ui.get_draw_rect().topleft = cell * 0.5, cell * 2
+        self.water_inventory_ui.get_draw_rect().topleft = cell * 0.5, cell * 2.2
         self.fuel_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
-        self.fuel_inventory_ui.get_draw_rect().topleft = cell * 0.5, cell * 3.5
+        self.fuel_inventory_ui.get_draw_rect().topleft = cell * 0.5, cell * 3.6
         self.result_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
-        self.result_inventory_ui.get_draw_rect().topleft = cell * 4.5, cell * 2
+        self.result_inventory_ui.get_draw_rect().topleft = cell * 5.2, cell * 2.2
         self.inventories = (self.input_inventory_ui, self.water_inventory_ui,
                             self.fuel_inventory_ui, self.result_inventory_ui)
         self._work_rect = None
+        self._hints = self._make_hints()
+
+    def _make_hints(self):
+        """Бледные иконки-подсказки. Готовятся один раз: это статика."""
+        size = int(InventoryUI.cell_size * 0.7)
+        hints = {}
+        for key, index in (("fuel", self.HINT_FUEL), ("water", self.HINT_WATER),
+                           ("input", self.HINT_INPUT)):
+            img = tile_hand_imgs.get(index) or tile_imgs.get(index)
+            if img is None:
+                continue
+            img = pg.transform.smoothscale(img.convert_alpha(), (size, size))
+            img.set_alpha(70)          # подсказка, а не содержимое ячейки
+            hints[key] = img
+        return hints
 
     def set_work_rect(self, value):
         for inv in self.inventories:
             inv.work_rect = value
 
+    def _draw_hint(self, key, inventory_ui, cell_index=0):
+        img = self._hints.get(key)
+        if img is None:
+            return
+        inv = inventory_ui.inventory
+        if inv is not None and inv[cell_index] is not None:
+            return                      # ячейка занята — подсказка не нужна
+        rect = inventory_ui.get_draw_rect()
+        cell = InventoryUI.cell_size
+        x = rect.x + cell * cell_index + (cell - img.get_width()) // 2
+        y = rect.y + (cell - img.get_height()) // 2
+        self.blit(img, (x, y))
+
     def draw(self, surface):
         self.fill(self.background)
         for inv in self.inventories:
             inv.draw(self)
+        for i in range(3):
+            self._draw_hint("input", self.input_inventory_ui, i)
+        self._draw_hint("water", self.water_inventory_ui)
+        self._draw_hint("fuel", self.fuel_inventory_ui)
         h = int(self.block_obj.progress * (InventoryUI.cell_size - 4))
         if h:
             x, y = self.input_inventory_ui.get_draw_rect().bottomleft
@@ -591,7 +662,7 @@ class EchoUI(LoreTabletUI):
 
 
 BLOCKS_UI = {cls.index: cls for cls in
-             [InventoryPlayerChestUI, InventoryPlayerCupboardUI, InventoryPlayerFurnaceUI, InventoryPlayerCauldronUI, CommandBlockUI, InventoryPlayerMusicBlockUI,
+             [InventoryPlayerChestUI, InventoryPlayerCupboardUI, InventoryPlayerTroughUI, InventoryPlayerFurnaceUI, InventoryPlayerCauldronUI, CommandBlockUI, InventoryPlayerMusicBlockUI,
               InventoryPlayerReceiverUI, InventoryPlayerTransmitterUI, LoreTabletUI, EchoUI,
               InventoryPlayerHopperUI, InventoryPlayerDropperUI,
               InventoryPlayerFuelEngineUI, InventoryPlayerCreativeEngineUI,

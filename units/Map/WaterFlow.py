@@ -35,6 +35,11 @@ from collections import deque
 from units.Tiles import WATER_TILE, WATER_LEVELS, water_frame, water_frame_level, water_frame_deep
 
 AIR = 0
+# Лава и то, во что она превращается от воды. Обычный камень, а не особая
+# порода: новый блок ради одного взаимодействия — это лишняя сущность, а
+# «залил лаву — получил камень» и так читается однозначно.
+LAVA_TILE = 140
+QUENCHED_TILE = 3
 
 # Сколько клеток обслуживаем за один такт воды и как часто он бывает.
 # 4 кадра между тактами — вода течёт заметно, но не мгновенно; 64 клетки —
@@ -120,6 +125,30 @@ class WaterFlow:
                 tx, ty, [WATER_TILE, 0, water_frame(min(WATER_LEVELS, level), deep), 0],
                 create_chunk=False)
 
+    def _quench(self, tx, ty, level, deep):
+        """Погасить лаву по соседству. True — что-то погашено.
+
+        Зачем это правило. Ведро появилось раньше, чем ему нашлось главное
+        применение: лаву нельзя было убрать ничем, кроме динамита, и ад
+        проходился только облётом. Вода + лава = порода — это и самый ожидаемый
+        ответ, и единственный способ идти вниз пешком.
+
+        Гасим ОДНУ клетку за шаг и тратим на неё единицу воды: иначе ведро
+        вычищало бы озеро лавы целиком, а объём воды в мире перестал бы что-то
+        значить.
+        """
+        for dx, dy in ((0, 1), (-1, 0), (1, 0), (0, -1)):
+            near = self._read(tx + dx, ty + dy)
+            if near is None or near[0] != LAVA_TILE:
+                continue
+            self.game_map.set_static_tile(tx + dx, ty + dy, QUENCHED_TILE,
+                                          create_chunk=False)
+            self._put(tx, ty, level - 1, deep)
+            self._wake(tx, ty)
+            self._wake(tx + dx, ty + dy)
+            return True
+        return False
+
     def _flow(self, tx, ty):
         """Один шаг для клетки. True — вода сдвинулась."""
         here = self._read(tx, ty)
@@ -128,6 +157,11 @@ class WaterFlow:
         _, level, deep = here
         if level <= 0:
             return False
+
+        # Лава важнее течения: вода, стоящая рядом с лавой, сначала гасит её и
+        # только потом растекается дальше.
+        if self._quench(tx, ty, level, deep):
+            return True
 
         below = self._read(tx, ty + 1)
         if below is not None:

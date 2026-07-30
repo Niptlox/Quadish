@@ -1366,13 +1366,24 @@ def test_tutorial_world_and_steps():
     game.player.collisions_ttile = {125}
     tut.update()
     assert gm.tutorial_step == 10
-    # шаг 10: зелье; финальный шаг закрывается сам
+    # шаги 10-12: ведро, вода, зелье. Котёл стал машиной с тремя ячейками, и
+    # без этих шагов игрок кладёт ягоды в топливо.
+    from units.Tools import TOOLS
+    inv.put_to_inventory(TOOLS[410](game))
+    tut.update()
+    assert gm.tutorial_step == 11, "шаг с ведром не закрылся"
+    inv.get_from_inventory(410, 1)
+    inv.put_to_inventory(TOOLS[411](game))
+    tut.update()
+    assert gm.tutorial_step == 12, "шаг с набором воды не закрылся"
+    # финальный шаг закрывается сам
     inv.put_to_inventory(ItemsTile(game, 351, count=1))
     tut.update()
     tut.update()
     assert gm.tutorial_step == -1, "обучение должно завершиться"
     for ach in ("tutorial_craft", "tutorial_builder", "tutorial_workbench",
                 "tutorial_supplies", "tutorial_furnace", "tutorial_cauldron",
+                "tutorial_bucket", "tutorial_water",
                 "tutorial_potion", "tutorial_done"):
         assert game.player.achievements.is_completed(ach), f"нет достижения {ach}"
 
@@ -3979,6 +3990,509 @@ def test_hawk_dives_to_the_player_instead_of_hovering():
         f"в погоне ястреб обязан идти на высоту игрока: {hawk.target_y}"
 
 
+# ===================== управление, население, звери =====================
+
+def test_chest_closes_by_esc_and_e():
+    """Из сундука можно было выйти ТОЛЬКО через паузу: базовый обработчик
+    закрывал экран, но его результат терялся, поэтому сцена получала то же
+    нажатие и открывала паузу. E при этом закрывала инвентарь ПОД сундуком."""
+    import pygame as pg
+    game = fresh_world(920)
+    gm = game.game_map
+    gm.set_static_tile(5, 0, 129)
+    chest = _tile_obj(gm, 5, 0)
+    ui = game.blocks_ui_manager.blocks_ui[129]
+    for key in (pg.K_ESCAPE, pg.K_e):
+        game.blocks_ui_manager.set_block(chest)
+        assert ui.opened, "сундук не открылся"
+        handled = game.blocks_ui_manager.pg_event(pg.event.Event(pg.KEYDOWN, key=key))
+        assert handled, f"нажатие {pg.key.name(key)} не считается обработанным — " \
+                        "сцена откроет паузу поверх сундука"
+        assert not ui.opened, f"сундук не закрылся по {pg.key.name(key)}"
+        assert not ui.player_inventory_ui.opened, \
+            "инвентарь игрока остался открытым и продолжает перехватывать управление"
+
+
+def test_population_near_player_is_capped():
+    """За пять минут на острове собиралось два десятка существ: подселение шло
+    раз в пять минут на КАЖДЫЙ чанк, счётчик чанка считал «сколько я породил за
+    всю жизнь», а ночной множитель умножал не предел, а остаток."""
+    from units.common import FPS, OBJ_CREATURE, CHUNK_CREATURE_LIMIT
+    game = fresh_world(921)
+    gm = game.game_map
+    game.player.tp_to((0, 0))
+    game.screen_map.teleport_to_player()
+    # полчаса мира: подселение успевает сработать много раз
+    for step in range(60):
+        game.tact += FPS * 60
+        gm._crowd_cache = None
+        for chunk in list(gm.game_map.values()):
+            gm.update_chunk(chunk)
+    near = gm.creatures_near_player()
+    assert near <= gm.CREATURE_SOFT_CAP + CHUNK_CREATURE_LIMIT * 2, \
+        f"вокруг игрока развелось {near} существ"
+
+
+def test_night_multiplier_does_not_break_the_chunk_limit():
+    """Ночью гуще — но не «девять существ при пределе четыре»: множитель идёт
+    на предел, а не на уже посчитанный остаток."""
+    from units.common import (FPS, NIGHT_SPAWN_MULT, OBJ_CREATURE, DAY_LENGTH,
+                              CHUNK_CREATURE_LIMIT)
+    game = fresh_world(922)
+    gm = game.game_map
+    gm.world_time = int(DAY_LENGTH * 0.8)      # ночь
+    game.player.tp_to((0, 0))
+    game.screen_map.teleport_to_player()
+    limit = int(CHUNK_CREATURE_LIMIT * NIGHT_SPAWN_MULT)
+    for step in range(20):
+        game.tact += FPS * 60
+        gm._crowd_cache = None
+        for chunk in list(gm.game_map.values()):
+            gm.update_chunk(chunk)
+    worst = max((sum(1 for o in ch[1] if o.class_obj & OBJ_CREATURE and o.alive)
+                 for ch in gm.game_map.values()), default=0)
+    assert worst <= limit + CHUNK_CREATURE_LIMIT, \
+        f"в одном чанке {worst} существ при ночном пределе {limit}"
+
+
+def test_predator_hunts_prey():
+    """Существа не замечали друг друга: волк и заяц могли стоять в одном тайле,
+    и мир читался как набор мишеней для игрока."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Wolf, Cow, ST_CHASE
+    game = fresh_world(923)
+    x, y = _flat_arena(game, w=40)
+    wolf = _place(game, Wolf, x + 5, y)
+    cow = _place(game, Cow, x + 7, y)
+    game.player.active = True
+    game.player.tp_to(((x + 39) * TSIZE, y * TSIZE))    # игрок далеко
+    game.screen_map.teleport_to_player()
+    lives = cow.lives
+    chased = False
+    for tact in range(600):
+        wolf.update(tact, 1000 / 60)
+        cow.update(tact, 1000 / 60)
+        chased = chased or wolf.state == ST_CHASE
+    assert chased, "волк не начал охоту"
+    assert cow.lives < lives, f"волк не укусил корову: {lives} -> {cow.lives}"
+
+
+def test_prey_runs_from_the_predator():
+    """Добыча убегает от хищника тем же состоянием, что и от игрока."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Wolf, Rabbit, ST_FLEE
+    game = fresh_world(924)
+    x, y = _flat_arena(game, w=40)
+    wolf = _place(game, Wolf, x + 5, y)
+    rabbit = _place(game, Rabbit, x + 9, y)
+    game.player.active = True
+    game.player.tp_to(((x + 39) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    started_at = rabbit.rect.centerx
+    fled = False
+    for tact in range(240):
+        wolf.update(tact, 1000 / 60)
+        rabbit.update(tact, 1000 / 60)
+        fled = fled or rabbit.state == ST_FLEE
+    assert fled, "заяц не испугался волка"
+    # Проверяем НАПРАВЛЕНИЕ бегства, а не итоговую дистанцию: волк быстрее
+    # зайца и вполне может его догнать — это правильный исход охоты, но тогда
+    # дистанция в конце маленькая, и тест ловил бы не то.
+    assert rabbit.rect.centerx > started_at, "заяц побежал не прочь от волка"
+
+
+def test_hunt_never_overrides_the_player():
+    """Игрок важнее охоты: существо, которое бьют, обязано реагировать на
+    того, кто бьёт, а не догонять зайца."""
+    from units.common import TSIZE, FPS
+    from units.Objects.Creatures import Wolf, Rabbit, ST_CHASE
+    game = fresh_world(925)
+    x, y = _flat_arena(game, w=40)
+    wolf = _place(game, Wolf, x + 5, y)
+    _place(game, Rabbit, x + 8, y)
+    game.player.active = True
+    game.player.tp_to(((x + 2) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    wolf.alert_tacts = FPS * 3
+    wolf.last_seen_x = game.player.rect.centerx
+    wolf.hunt_update(0)
+    assert not wolf.hunt_step(), "охота перебила реакцию на игрока"
+
+
+def test_trough_tames_livestock_and_gives_products():
+    """Хозяйство — это МЕСТО, а не список ручных зверей: кормушка кормит тех,
+    кто рядом, и они у неё живут."""
+    from units.common import FPS, OBJ_ITEM
+    from units.Objects.Items import ItemsTile
+    from units.Objects.Creatures import Cow
+    game = fresh_world(926)
+    gm = game.game_map
+    x, y = _flat_arena(game, w=30)
+    gm.set_static_tile(x + 5, y, 113)
+    trough = _tile_obj(gm, x + 5, y)
+    assert trough is not None and trough.index == 113
+    trough.inventory.put_to_inventory(ItemsTile(game, 53, count=10))
+    cow = _place(game, Cow, x + 7, y)
+    game.screen_map.teleport_to_player()
+    game.tact = 100
+    for _ in range(40):
+        game.tact += FPS * 10
+        trough.tick(FPS * 10)
+    assert cow.tamed, "корова не приручилась у кормушки"
+    assert cow.home == (x + 5, y), "домом должна стать кормушка"
+    assert trough.inventory[0] is None or trough.inventory[0].count < 10, \
+        "кормушка должна тратить еду"
+    products = [o for ch in gm.game_map.values() for o in ch[1]
+                if o.class_obj & OBJ_ITEM and o.alive and o.index == 426]
+    assert products, "сытая корова должна давать молоко"
+
+
+def test_trough_needs_food():
+    """Без еды кормушка не приручает: хозяйство не должно быть бесплатным."""
+    from units.common import FPS
+    from units.Objects.Creatures import Cow
+    game = fresh_world(927)
+    gm = game.game_map
+    x, y = _flat_arena(game, w=30)
+    gm.set_static_tile(x + 5, y, 113)
+    trough = _tile_obj(gm, x + 5, y)
+    cow = _place(game, Cow, x + 7, y)
+    game.tact = 100
+    for _ in range(20):
+        game.tact += FPS * 10
+        trough.tick(FPS * 10)
+    assert not cow.tamed, "корова приручилась у пустой кормушки"
+
+
+def test_tamed_animal_does_not_flee_and_stays_home():
+    """Домашнее животное не шарахается от хозяина и держится кормушки."""
+    from units.common import TSIZE
+    from units.Objects.Creatures import Cow, ST_WANDER
+    game = fresh_world(928)
+    x, y = _flat_arena(game, w=40)
+    cow = _place(game, Cow, x + 25, y)
+    cow.tamed = True
+    cow.home = (x + 5, y)          # ушла далеко от кормушки
+    game.player.active = True
+    game.player.tp_to(((x + 26) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    cow.alert_tacts = cow.memory_tacts
+    cow.last_seen_x = game.player.rect.centerx
+    assert not cow.wants_to_flee(), "домашняя корова убегает от хозяина"
+    cow.alert_tacts = 0
+    cow.state = ST_WANDER
+    cow.move_direction = 1
+    cow.flock_cohesion()
+    assert cow.move_direction == -1, "домашнее животное должно возвращаться к кормушке"
+
+
+def test_cauldron_uses_three_ingredient_cells():
+    """Составной рецепт — то, ради чего появились лишние ячейки: те же травы,
+    но две порции."""
+    from units.Objects.Items import ItemsTile
+    from units.Tools import TOOLS
+    game = fresh_world(929)
+    gm = game.game_map
+    gm.set_static_tile(5, 0, 125)
+    cauldron = _tile_obj(gm, 5, 0)
+    assert sum(1 for _ in cauldron.input_cell) >= 3, \
+        "у котла должно быть три ячейки ингредиентов"
+    cauldron.fuel_cell.put_to_inventory(ItemsTile(game, 11, count=4))
+    cauldron.water_cell.put_to_inventory(TOOLS[411](game))
+    cauldron.input_cell.put_to_inventory(ItemsTile(game, 109, count=2))
+    cauldron.input_cell.put_to_inventory(ItemsTile(game, 421, count=2))
+    assert cauldron.check_cells(), "составной рецепт не собрался"
+    for _ in range(cauldron.brew_time + 2):
+        cauldron.update(16)
+    out = cauldron.result_cell[0]
+    assert out is not None and out.index == 413 and out.count == 2, \
+        f"составной рецепт дал {out and (out.index, out.count)}"
+
+
+def test_cauldron_rejects_extra_ingredients():
+    """Лишний ингредиент рецепт не подходит: иначе котёл — мусорка, куда
+    сваливают всё подряд."""
+    from units.Objects.Items import ItemsTile
+    from units.Tools import TOOLS
+    game = fresh_world(932)
+    gm = game.game_map
+    gm.set_static_tile(5, 0, 125)
+    cauldron = _tile_obj(gm, 5, 0)
+    cauldron.fuel_cell.put_to_inventory(ItemsTile(game, 11, count=4))
+    cauldron.water_cell.put_to_inventory(TOOLS[411](game))
+    cauldron.input_cell.put_to_inventory(ItemsTile(game, 53, count=6))
+    assert cauldron.check_cells(), "простой рецепт должен работать"
+    cauldron.input_cell.put_to_inventory(ItemsTile(game, 3, count=1))   # камень
+    assert not cauldron.check_cells(), "котёл сварил зелье с лишним ингредиентом"
+
+
+def test_cauldron_ui_hints_what_goes_where():
+    """Без иконок котёл — четыре одинаковых квадрата, и что куда класть,
+    приходится угадывать перебором."""
+    get_app()
+    from units.UI.BlocksUI import CauldronUI
+    ui = CauldronUI()
+    assert set(ui._hints) == {"fuel", "water", "input"}, \
+        f"подсказки не для всех ячеек: {sorted(ui._hints)}"
+
+
+# ===================== вода и лава, дыхание, грядки, рыбалка =====================
+
+def test_water_quenches_lava():
+    """У ведра не было главного применения: лаву нельзя было убрать ничем,
+    кроме динамита, и ад проходился только облётом."""
+    from units.Tiles import water_frame
+    game = fresh_world(900)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    for tx in range(x + 4, x + 8):
+        gm.set_static_tile(tx, y, 140)          # лужа лавы
+    gm.water_flow.queue.clear()
+    gm.water_flow.pending.clear()
+    gm.set_static_tile(x + 3, y, [120, 0, water_frame(4), 0])   # вылили ведро
+    for tact in range(0, 400):
+        gm.water_flow.tick(tact)
+    assert gm.get_static_tile_type(x + 4, y, default=0, create_chunk=True) == 3, \
+        "лава рядом с водой не превратилась в породу"
+
+
+def test_quenching_costs_water():
+    """Гасим одну клетку за единицу воды: иначе одно ведро вычищало бы озеро
+    лавы целиком, и объём воды перестал бы что-то значить."""
+    from units.Tiles import water_frame
+    game = fresh_world(904)
+    gm = game.game_map
+    x, y = _water_arena(game, w=24)
+    for tx in range(x + 4, x + 16):
+        gm.set_static_tile(tx, y, 140)
+    gm.water_flow.queue.clear()
+    gm.water_flow.pending.clear()
+    gm.set_static_tile(x + 3, y, [120, 0, water_frame(4), 0])
+    for tact in range(0, 600):
+        gm.water_flow.tick(tact)
+    lava_left = sum(1 for tx in range(x + 4, x + 16)
+                    if gm.get_static_tile_type(tx, y, default=0, create_chunk=True) == 140)
+    assert lava_left >= 8, f"одно ведро погасило слишком много лавы: осталось {lava_left} из 12"
+
+
+def test_air_runs_out_under_water_and_hurts():
+    """Раньше в воде можно было жить вечно. Утопление сделано только вместе с
+    индикатором: смерть от невидимого таймера — плохая цена за купание."""
+    from units.common import TSIZE, AIR_MAX, FPS
+    game = fresh_world(905)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    _flood(gm, x + 5, y, w=6, depth=8)
+    player = game.player
+    player.active = True
+    player.creative_mode = False
+    player.first_fall = False
+    player.tp_to(((x + 7) * TSIZE, (y - 5) * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 5)
+    assert player.air > AIR_MAX * 0.9, "воздух начал тратиться не с полного запаса"
+    lives = player.lives
+    _run_frames(game, int(AIR_MAX) + FPS * 2)
+    assert player.air == 0, "воздух под водой обязан кончаться"
+    assert player.lives < lives, "без воздуха игрок должен получать урон"
+
+
+def test_air_refills_above_water():
+    """Наверху дыхание восстанавливается быстро: наказывать за то, что игрок
+    уже выплыл, нечестно."""
+    from units.common import TSIZE, AIR_MAX, FPS
+    game = fresh_world(906)
+    game.player.active = True
+    game.player.creative_mode = False
+    x, y = _flat_arena(game, w=20)
+    game.player.tp_to(((x + 5) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    game.player.air = 10
+    _run_frames(game, FPS * 3)
+    assert game.player.air == AIR_MAX, f"воздух не восстановился: {game.player.air}"
+
+
+def test_walking_in_shallow_water_does_not_drown():
+    """Захлебнуться можно только там, где воды почти полный тайл. По пояс —
+    это брод, и там дышат: иначе уровни воды не значили бы ничего для физики,
+    а лужа убивала бы так же, как омут."""
+    from units.common import TSIZE, AIR_MAX, FPS
+    from units.Tiles import water_frame
+    game = fresh_world(907)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    for tx in range(x + 4, x + 10):
+        gm.set_static_tile(tx, y, [120, 0, water_frame(2), 0])   # по пояс
+    player = game.player
+    player.active = True
+    player.creative_mode = False
+    player.tp_to(((x + 6) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, FPS * 3)
+    assert player.air == AIR_MAX, f"на мелководье игрок задыхается: {player.air}"
+
+
+def test_breath_potion_stretches_the_air():
+    """Зелье дыхания растягивает запас, а не отменяет его."""
+    from units.common import TSIZE, AIR_MAX, FPS
+    from units.Effects import BREATH
+    game = fresh_world(908)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    _flood(gm, x + 5, y, w=6, depth=8)
+    player = game.player
+    player.active = True
+    player.creative_mode = False
+    player.first_fall = False
+    player.tp_to(((x + 7) * TSIZE, (y - 5) * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 5)
+    player.air = AIR_MAX
+    _run_frames(game, FPS * 5)
+    plain = AIR_MAX - player.air
+    player.air = AIR_MAX
+    player.effects.add(BREATH, FPS * 60)
+    _run_frames(game, FPS * 5)
+    with_potion = AIR_MAX - player.air
+    assert 0 < with_potion < plain, f"зелье не помогло: {plain} -> {with_potion}"
+
+
+def test_planted_crop_grows_and_regrows_after_harvest():
+    """Посаженное растение стояло вечно, и грядка на базе ничем не отличалась
+    от декорации. Теперь оно растёт, а урожай снимается со зрелого — само
+    растение при этом остаётся."""
+    from units.common import FPS, TILE_TIMER
+    from units.Tiles import GROWING_PLANT_STAGES, item_of_right_click_tile
+    from units.Tools.Tools import tile_click
+    game = fresh_world(909)
+    gm = game.game_map
+    x, y = 70, 8
+    gm.set_static_tile(x, y + 1, 1)
+    gm.set_static_tile(x, y, 109)              # посадили лунный цвет
+    assert gm.get_static_tile(x, y)[2] == 0, "посаженное растение должно быть ростком"
+    chunk = gm.game_map[gm.to_chunk_xy(x, y)]
+    i = gm.convert_pos_to_i(x, y)
+    tact = 0
+    for _ in range(GROWING_PLANT_STAGES + 2):
+        tact += FPS * 200
+        gm.grow_plant_tile(chunk, i, chunk[0][i:i + 4], x, y, tact)
+    assert chunk[0][i + 2] == GROWING_PLANT_STAGES - 1, "растение не выросло"
+    assert item_of_right_click_tile(gm.get_static_tile(x, y)), "урожай не снимается"
+    tile_click(gm, None, x, y, (0, 0), game.player)
+    assert gm.get_static_tile_type(x, y, create_chunk=True) == 109, "растение пропало после сбора"
+    assert gm.get_static_tile(x, y)[2] == 0, "после сбора растение должно отрасти заново"
+    assert not item_of_right_click_tile(gm.get_static_tile(x, y)), \
+        "с ростка урожай снимать нельзя"
+
+
+def test_generated_plants_are_grown():
+    """Мир должен выглядеть выросшим: ростки бывают только там, где сажал
+    игрок."""
+    from units.Tiles import GROWING_PLANTS, GROWING_PLANT_STAGES
+    game = fresh_world(11)
+    gm = game.game_map
+    seen = 0
+    for cx in range(-5, 6):
+        for cy in range(-2, 4):
+            static = gm.generate_chunk(cx, cy)[0]
+            for i in range(0, len(static), 4):
+                if static[i] in GROWING_PLANTS:
+                    seen += 1
+                    assert static[i + 2] == GROWING_PLANT_STAGES - 1, \
+                        f"генератор поставил недоросшее растение {static[i]}"
+    assert seen, "новых растений не нашлось"
+
+
+def test_fishing_rod_casts_only_into_water():
+    """Поплавок ставится на воду, а не на землю: иначе рыбалка работала бы
+    посреди поля."""
+    from units.common import TSIZE
+    from pygame import Vector2
+    game = fresh_world(910)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    _flood(gm, x + 6, y, w=6, depth=4)
+    player = game.player
+    player.active = True
+    player.tp_to(((x + 3) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 2)
+    _give(player, 520)
+    rod = _hold(player, 520)
+    rod.tool.owner = player
+    to_ground = Vector2((x + 2) * TSIZE + 16 - player.rect.centerx,
+                        (y + 1) * TSIZE + 16 - player.rect.centery)
+    assert not rod.tool.right_button_click(to_ground), "удочка забросилась в землю"
+    to_water = Vector2((x + 7) * TSIZE + 16 - player.rect.centerx,
+                       (y - 1) * TSIZE + 16 - player.rect.centery)
+    assert rod.tool.right_button_click(to_water), "заброс в воду не сработал"
+    assert rod.tool.float_tile is not None
+
+
+def test_fishing_catches_something():
+    """Клюёт по таймеру, добыча падает у поплавка."""
+    from units.common import TSIZE, FPS, OBJ_ITEM
+    from pygame import Vector2
+    game = fresh_world(911)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    _flood(gm, x + 6, y, w=6, depth=4)
+    player = game.player
+    player.active = True
+    player.tp_to(((x + 3) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 2)
+    _give(player, 520)
+    rod = _hold(player, 520)
+    rod.tool.owner = player
+    to_water = Vector2((x + 7) * TSIZE + 16 - player.rect.centerx,
+                       (y - 1) * TSIZE + 16 - player.rect.centery)
+    rod.tool.right_button_click(to_water)
+    for _ in range(FPS * 12):
+        _run_frames(game, 1)
+        rod.tool.update(to_water)
+        if rod.tool.float_tile is None:
+            break
+    assert rod.tool.float_tile is None, "за двенадцать секунд обязано клюнуть"
+    items = [o for ch in gm.game_map.values() for o in ch[1]
+             if o.class_obj & OBJ_ITEM and o.alive]
+    assert items, "улов не появился в мире"
+
+
+def test_fishing_line_breaks_when_you_walk_away():
+    """Рыбалка не должна работать в фоне, пока игрок ушёл на другой конец
+    карты."""
+    from units.common import TSIZE
+    from pygame import Vector2
+    game = fresh_world(912)
+    gm = game.game_map
+    x, y = _water_arena(game, w=30)
+    _flood(gm, x + 6, y, w=6, depth=4)
+    player = game.player
+    player.active = True
+    player.tp_to(((x + 3) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 2)
+    _give(player, 520)
+    rod = _hold(player, 520)
+    rod.tool.owner = player
+    to_water = Vector2((x + 7) * TSIZE + 16 - player.rect.centerx,
+                       (y - 1) * TSIZE + 16 - player.rect.centery)
+    assert rod.tool.right_button_click(to_water)
+    player.tp_to(((x + 28) * TSIZE, y * TSIZE))
+    rod.tool.update(to_water)
+    assert rod.tool.float_tile is None, "леска не оборвалась при уходе"
+
+
+def test_fishing_table_is_mostly_fish():
+    """Основа улова — еда: рыбалка должна кормить, а редкости только делают
+    улов не всегда одинаковым."""
+    from units.Tools.ToolFishing import CATCH_TABLE
+    total = sum(w for _, _, w in CATCH_TABLE)
+    fish = sum(w for idx, _, w in CATCH_TABLE if idx == 405)
+    assert fish / total > 0.5, f"рыбы в таблице всего {fish / total:.0%}"
+
+
 # ===================== ведро, котёл и эффекты =====================
 
 def _tile_obj(gm, tx, ty):
@@ -4115,12 +4629,20 @@ def test_cauldron_recipes_use_hunt_and_plants():
     from units.Tiles import tile_words
     drops = {p[0] for cls in CREATURES for _, p in cls.drop_items}
     plants = {107, 108, 109, 111, 112}
-    for ingredient, (need, result, count) in CAULDRON_RECIPES.items():
-        assert ingredient in tile_words, f"ингредиент {ingredient} без названия"
+    ingredients = set()
+    for need, (result, count) in CAULDRON_RECIPES:
+        assert need, "рецепт без ингредиентов"
+        for index, amount in need.items():
+            assert index in tile_words, f"ингредиент {index} без названия"
+            assert amount >= 1
+            ingredients.add(index)
         assert result in tile_words, f"результат {result} без названия"
-        assert need >= 1 and count >= 1
-    assert drops & set(CAULDRON_RECIPES), "ни один трофей существ не идёт в зелья"
-    assert plants & set(CAULDRON_RECIPES), "ни одно новое растение не идёт в зелья"
+        assert count >= 1
+    assert drops & ingredients, "ни один трофей существ не идёт в зелья"
+    assert plants & ingredients, "ни одно новое растение не идёт в зелья"
+    # Составные рецепты нужны, иначе три ячейки ингредиентов не для чего
+    assert any(len(need) > 1 for need, _ in CAULDRON_RECIPES), \
+        "нет ни одного рецепта, которому нужна вторая ячейка"
 
 
 def test_pill_is_the_earliest_healing_recipe():
@@ -4143,7 +4665,7 @@ def test_potions_are_no_longer_instant_hand_crafts():
     from units.creating_items import RECIPES
     from units.Objects.TileClasses import CAULDRON_RECIPES
     hand_results = {r[0][0] for r in RECIPES}
-    brewed = {rec[1] for rec in CAULDRON_RECIPES.values()}
+    brewed = {out[0] for _, out in CAULDRON_RECIPES}
     assert not (hand_results & brewed), \
         f"эти зелья всё ещё собираются руками: {hand_results & brewed}"
 
@@ -4331,7 +4853,7 @@ def test_creature_drops_feed_the_cauldron():
     for cls, index in expected.items():
         drops = {p[0] for _, p in cls.drop_items}
         assert index in drops, f"{cls.__name__} не даёт {index}: {drops}"
-    brewable = set(CAULDRON_RECIPES)
+    brewable = {idx for need, _ in CAULDRON_RECIPES for idx in need}
     assert {420, 422, 423, 424} <= brewable, "трофеи не участвуют в зельеварении"
     assert 425 in {p[0] for _, p in DeepLurker.drop_items}, "глубинник без чешуи"
 
@@ -4596,7 +5118,14 @@ def test_aggressive_creature_chases_and_then_gives_up():
     for _ in range(wolf.memory_tacts + 30):
         game.tact += 1
         wolf.update(game.tact, 16)
-    assert wolf.state != ST_CHASE, "погоня обязана заканчиваться"
+    # Проверяем память об ИГРОКЕ, а не состояние: волк теперь охотится и на
+    # зверей (hunts), и оставшийся ST_CHASE может относиться к зайцу рядом —
+    # это правильное поведение, а не незакончившаяся погоня за игроком.
+    assert wolf.alert_tacts == 0, "волк не забыл игрока"
+    assert wolf.last_seen_x is None, "волк помнит, где был игрок"
+    if wolf.state == ST_CHASE:
+        assert getattr(wolf, "prey", None) is not None, \
+            "погоня за игроком обязана заканчиваться"
 
 
 def _place_flock(game, cls, tx, ty, count, flock_id=777):
