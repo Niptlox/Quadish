@@ -27,14 +27,18 @@ class __Settings:
 
     @classmethod
     def set(cls, var_name, var_value):
-        # print(cls.section, var_name, var_value)
+        """Записать настройку в файл и в класс.
+
+        Присваивание через setattr, а не через exec с подстановкой значения:
+        exec ломался бы на любой строке с кавычкой и молча выполнял бы то, что
+        в ней написано. Заодно значение кладётся КАК ЕСТЬ — а раньше строка,
+        собранная из списка, так списком и не становилась (см.
+        ModSettings.set_mod_disabled).
+        """
         config.set(cls.section, var_name, str(var_value))
         config_save()
         if var_name in cls.__dict__:
-            if isinstance(var_value, str):
-                var_value = '"' + var_value + '"'
-            exec(f"cls.{var_name} = {var_value}")
-        print(cls.__dict__[var_name])
+            setattr(cls, var_name, var_value)
 
 
 class Window(__Settings):
@@ -93,11 +97,18 @@ class ModSettings(__Settings):
 
     @classmethod
     def set_mod_disabled(cls, folder, value):
-        names = [n for n in cls.disabled if n != folder]
-        if value:
-            names.append(folder)
-        cls.disabled = sorted(names)
-        cls.set('disabled', ",".join(cls.disabled))
+        """Включить/выключить один мод.
+
+        В файл идёт строка, а в классе остаётся СПИСОК. Раньше в класс
+        попадала та же строка, и на следующем вызове её перебирали по буквам:
+        список выключенных превращался в набор символов, переключатель мода
+        переставал работать после первого же нажатия, а settings.ini обрастал
+        строкой из запятых (по запятой за каждый вызов).
+        """
+        names = sorted({n for n in cls.disabled if n != folder} |
+                       ({folder} if value else set()))
+        cls.set('disabled', ",".join(names))
+        cls.disabled = names
 
 
 class GameSettings(__Settings):

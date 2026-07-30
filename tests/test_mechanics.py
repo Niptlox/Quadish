@@ -5004,6 +5004,29 @@ def test_single_mod_can_be_disabled_without_the_others():
         mods.load_mods()
 
 
+def test_mod_switch_survives_being_toggled_twice():
+    """Переключатель мода ломался после первого же нажатия: в класс попадала
+    СТРОКА, собранная из списка, и на следующем вызове её перебирали по буквам.
+    Список выключенных превращался в набор символов, is_disabled переставал
+    работать, а settings.ini обрастал строкой из запятых."""
+    get_app()
+    from units import config as cfg
+    folder = "watermelon_mod"
+    was = cfg.ModSettings.is_disabled(folder)
+    try:
+        for _ in range(3):
+            cfg.ModSettings.set_mod_disabled(folder, True)
+            assert isinstance(cfg.ModSettings.disabled, list), \
+                f"список выключенных стал {type(cfg.ModSettings.disabled).__name__}"
+            assert cfg.ModSettings.is_disabled(folder), "мод не выключился"
+            cfg.ModSettings.set_mod_disabled(folder, False)
+            assert not cfg.ModSettings.is_disabled(folder), "мод не включился обратно"
+            assert all(len(n) > 1 for n in cfg.ModSettings.disabled), \
+                f"в списке появились отдельные буквы: {cfg.ModSettings.disabled}"
+    finally:
+        cfg.ModSettings.set_mod_disabled(folder, was)
+
+
 def test_worlds_menu_uses_the_same_button_geometry_as_settings():
     """Экран миров был отдельным окном-панелью со своими шрифтами и мелкими
     кнопками — рядом с остальными меню он читался как чужой. Геометрия
