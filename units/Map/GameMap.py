@@ -1338,6 +1338,16 @@ class GameMap(SavedObject):
                 if standart_noise2_bool(tile_x, tile_y) and tile_type is None:
                     if standart_noise2_bool(tile_x, tile_y - 2 - random.randint(0, 1)):
                         tile_type = 3  # stone
+                        # Пещерные растения (гриб, блоровый мох). Пишем НАД
+                        # собой, в уже посчитанный тайл: обход идёт сверху вниз,
+                        # поэтому «что под этим воздухом» известно только здесь,
+                        # в ветке породы. Тем же приёмом ставится трава на дёрн.
+                        if y_pos > 0 and static_tiles[tile_index - self.chunk_arr_width] == 0:
+                            cave_plant = cave_plant_selection(tile_y)
+                            if cave_plant is not None:
+                                pl_i = tile_index - self.chunk_arr_width
+                                static_tiles[pl_i] = cave_plant
+                                static_tiles[pl_i + 1] = TILES_SOLIDITY.get(cave_plant, -1)
                         if standart_noise2_bool(tile_x, tile_y + 1 + random.randint(0, 1)) and standart_noise2_bool(
                                 tile_x + 1, tile_y) and standart_noise2_bool(tile_x - 1, tile_y):
                             backtile_type = 1003  # backstone
@@ -1646,6 +1656,29 @@ class GameMap(SavedObject):
             obj = tiles_class[ttile](self.game, (tx, ty))
             self.add_tile_obj_to_chunk(chunk, obj)
             static[i + 3] = obj.id
+
+    def bind_tile_object(self, x, y):
+        """Выдать объект классовому блоку, у которого его нет.
+
+        Нужно для миров, сохранённых ДО того, как блок стал классовым: котёл
+        (125) до этого релиза был обычной мебелью, объекта у него не было, и
+        первый же правый клик по нему падал бы на None. Тот же случай — блок,
+        записанный генератором мимо set_static_tile.
+        """
+        cxy = self.to_chunk_xy(x, y)
+        chunk = self.game_map.get(cxy)
+        if chunk is None:
+            return None
+        i = self.convert_pos_to_i(x, y)
+        ttile = chunk[0][i]
+        cls = tiles_class.get(ttile)
+        if cls is None:
+            return None
+        obj = cls(self.game, (x, y))
+        self.add_tile_obj_to_chunk(chunk, obj)
+        chunk[0][i + 3] = obj.id
+        self.modified_chunks.add(cxy)
+        return obj
 
     def _fill_dungeon_chests(self, chunk, site, chunk_x, chunk_y):
         """Наполнить сундуки подземелья, попавшие в этот чанк.
@@ -2099,6 +2132,31 @@ def _island_tops(tx, base, clearance=ISLAND_TOP_CLEARANCE,
         else:
             air_run += 1
     return tops
+
+
+# Пещерная флора. Гриб — везде под землёй, блоровый мох — только на глубине,
+# рядом с блором: он и светится тем же синим. Шансы маленькие, потому что
+# проверка идёт на КАЖДЫЙ тайл породы с воздухом над ним, а таких в пещерах
+# много — но «камень с воздухом над ним» это только пол пещеры, и замер
+# показал, что при 0.02 на 312 чанков находилось СЕМЬ растений на весь мир.
+CAVE_MUSHROOM_CHANCE = 0.09
+BLORE_MOSS_CHANCE = 0.12
+BLORE_MOSS_DEPTH = 420
+
+
+def cave_plant_selection(tile_y):
+    """Растение на камне под землёй или None.
+
+    Отдельно от `random_plant_selection`: та выбирает по БИОМУ и ставится на
+    дёрн, а под землёй биома нет — там есть только глубина.
+    """
+    if tile_y < BOTTOM_MIDDLE_WORLD // 8:
+        return None                     # у поверхности пещерной флоры нет
+    if tile_y > BLORE_MOSS_DEPTH and random.random() < BLORE_MOSS_CHANCE:
+        return 112                      # блоровый мох
+    if random.random() < CAVE_MUSHROOM_CHANCE:
+        return 111                      # пещерный гриб
+    return None
 
 
 def random_plant_selection(biome=None):

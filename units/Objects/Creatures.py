@@ -647,7 +647,10 @@ class Wolf(MovingCreature):
 
     color = "#708090"
     max_lives = 35
-    drop_items = [(ItemsTile, (56, (1, 3))), (ItemsTile, (58, (1)))]
+    drop_items = [(ItemsTile, (56, (1, 3))), (ItemsTile, (58, (1))),
+                  # Клык — ингредиент зелья силы: у охоты появилась цель
+                  # помимо мяса (см. CAULDRON_RECIPES)
+                  (ItemsTile, (420, (0, 2)))]
 
     move_speed = 3.5
     jump_speed = 5
@@ -683,7 +686,8 @@ class Snake(Wolf):
     bio_subspecies = "green snake"
     width, height = int(TSIZE * 1), int(TSIZE * 0.1)
     color = "#4d7c0f"
-    drop_items = [(ItemsTile, (401, (1, 2))), (ItemsTile, (301, (0, 1)))]
+    drop_items = [(ItemsTile, (401, (1, 2))), (ItemsTile, (301, (0, 1))),
+                  (ItemsTile, (420, (0, 1)))]
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
@@ -727,7 +731,7 @@ class Scorpion(Wolf):
     width, height = int(TSIZE * 0.7), int(TSIZE * 0.5)
     color = "#D4A373"
     max_lives = 18
-    drop_items = [(ItemsTile, (403, (1, 2)))]
+    drop_items = [(ItemsTile, (403, (1, 2))), (ItemsTile, (420, (0, 1)))]
 
     move_speed = 5
     jump_speed = 4
@@ -840,7 +844,7 @@ class Bird(FlyingCreature):
     width, height = int(TSIZE * 0.7), int(TSIZE * 0.45)
     colors = ["#57534E", "#78716C", "#1C1917"]
     max_lives = 6
-    drop_items = [(ItemsTile, (404, (0, 1)))]
+    drop_items = [(ItemsTile, (404, (0, 1))), (ItemsTile, (421, (1, 2)))]
     move_speed = 4
     flock_size = 5
     flock_radius = 6
@@ -873,7 +877,7 @@ class Gull(Bird):
     move_speed = 4.5
     fly_height = 4              # ниже мелкой птицы: держится над водой
     flock_size = 4
-    drop_items = [(ItemsTile, (404, (0, 1)))]
+    drop_items = [(ItemsTile, (404, (0, 1))), (ItemsTile, (421, (1, 2)))]
 
 
 class Raven(Bird):
@@ -898,7 +902,7 @@ class Raven(Bird):
     punch_damage = 4
     punch_speed = 3
     punch_discard = 2
-    drop_items = [(ItemsTile, (404, (1, 2)))]
+    drop_items = [(ItemsTile, (404, (1, 2))), (ItemsTile, (421, (1, 3)))]
 
 
 class Hawk(Bird):
@@ -927,7 +931,7 @@ class Hawk(Bird):
     punch_damage = 7
     punch_speed = 2
     punch_discard = 4
-    drop_items = [(ItemsTile, (404, (1, 3)))]
+    drop_items = [(ItemsTile, (404, (1, 3))), (ItemsTile, (421, (2, 3)))]
 
     def __init__(self, game, pos=(0, 0)):
         super().__init__(game, pos)
@@ -1095,7 +1099,9 @@ class Jellyfish(SwimmingCreature):
     width, height = int(TSIZE * 0.55), int(TSIZE * 0.7)
     colors = ["#C084FC", "#A78BFA"]
     max_lives = 10
-    drop_items = [(ItemsTile, (51, (1, 2)))]
+    drop_items = [(ItemsTile, (51, (1, 2))),
+                  # Жгучая слизь — из неё варят зелье дыхания
+                  (ItemsTile, (423, (1, 2)))]
     move_speed = 1.5
     enemy = True
     punch_damage = 6
@@ -1125,7 +1131,9 @@ class DeepLurker(SwimmingCreature):
     width, height = int(TSIZE * 1.2), int(TSIZE * 0.8)
     color = "#1E3A5F"
     max_lives = 40
-    drop_items = [(ItemsTile, (405, (2, 3))), (ItemsTile, (403, (1, 2)))]
+    drop_items = [(ItemsTile, (405, (2, 3))), (ItemsTile, (403, (1, 2))),
+                  # Светящаяся чешуя: из неё лампа без золота
+                  (ItemsTile, (425, (1, 2)))]
     move_speed = 4
     swim_speed = 1.2
     enemy = True
@@ -1260,7 +1268,9 @@ class Boar(Wolf):
     width, height = int(TSIZE * 0.9), int(TSIZE * 0.7)
     color = "#44403C"
     max_lives = 30
-    drop_items = [(ItemsTile, (405, (2, 3)))]
+    drop_items = [(ItemsTile, (405, (2, 3))),
+                  # Кабаний клык — самый доступный ингредиент зелья силы
+                  (ItemsTile, (420, (1, 2)))]
 
     move_speed = 3
     jump_speed = 5
@@ -1320,7 +1330,7 @@ class Bat(Wolf):
     width, height = int(TSIZE * 0.7), int(TSIZE * 0.45)
     color = "#3F3A36"
     max_lives = 10
-    drop_items = [(ItemsTile, (404, (0, 1)))]
+    drop_items = [(ItemsTile, (404, (0, 1))), (ItemsTile, (422, (1, 2)))]
 
     move_speed = 5
     jump_speed = 7
@@ -1351,7 +1361,9 @@ class StoneGolem(Wolf):
     width, height = int(TSIZE * 1.6), int(TSIZE * 1.8)
     color = "#78716C"
     max_lives = 120
-    drop_items = [(ItemsTile, (3, (5, 10))), (ItemsTile, (64, (0, 2)))]
+    drop_items = [(ItemsTile, (3, (5, 10))), (ItemsTile, (64, (0, 2))),
+                  # Ядро — единственный источник зелья каменной кожи
+                  (ItemsTile, (424, (0, 1)))]
 
     move_speed = 1.2
     jump_speed = 5
@@ -1444,7 +1456,8 @@ class VoidSentinel(Wolf):
     width, height = int(TSIZE * 1.4), int(TSIZE * 1.7)
     color = "#312E81"
     max_lives = 150
-    drop_items = [(ItemsTile, (408, (2, 5))), (ItemsTile, (65, (1, 2))), (ItemsTile, (66, (0, 1)))]
+    drop_items = [(ItemsTile, (408, (2, 5))), (ItemsTile, (65, (1, 2))), (ItemsTile, (66, (0, 1))),
+                  (ItemsTile, (424, (0, 1)))]
 
     move_speed = 1.4
     jump_speed = 5

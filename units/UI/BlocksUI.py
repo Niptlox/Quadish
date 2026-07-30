@@ -310,6 +310,69 @@ class InventoryPlayerFurnaceUI(InventoryPlayerWithBlockUI):
         super(InventoryPlayerFurnaceUI, self).__init__(player, FurnaceUI())
 
 
+class CauldronUI(BlockUI):
+    """Четыре ячейки котла: топливо, вода, ингредиент, результат.
+
+    Раскладка повторяет печку (`FurnaceUI`) — та же полоска прогресса на том же
+    месте — и это намеренно: котёл теперь машина того же рода, и узнавать его
+    заново игроку не нужно.
+    """
+    background = bg_color
+
+    def __init__(self):
+        cell = InventoryUI.cell_size
+        rect = pg.Rect(0, 0, cell * 6, cell * 5)
+        super().__init__(rect)
+        self.convert_alpha()
+        self.input_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
+        self.input_inventory_ui.get_draw_rect().topleft = cell * 0.5, cell * 0.5
+        self.water_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
+        self.water_inventory_ui.get_draw_rect().topleft = cell * 0.5, cell * 2
+        self.fuel_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
+        self.fuel_inventory_ui.get_draw_rect().topleft = cell * 0.5, cell * 3.5
+        self.result_inventory_ui = InventoryUI(None, [1, 1], margin_table=0, ui_owner=self)
+        self.result_inventory_ui.get_draw_rect().topleft = cell * 4.5, cell * 2
+        self.inventories = (self.input_inventory_ui, self.water_inventory_ui,
+                            self.fuel_inventory_ui, self.result_inventory_ui)
+        self._work_rect = None
+
+    def set_work_rect(self, value):
+        for inv in self.inventories:
+            inv.work_rect = value
+
+    def draw(self, surface):
+        self.fill(self.background)
+        for inv in self.inventories:
+            inv.draw(self)
+        h = int(self.block_obj.progress * (InventoryUI.cell_size - 4))
+        if h:
+            x, y = self.input_inventory_ui.get_draw_rect().bottomleft
+            pg.draw.rect(self, (255, 255, 255, 200), (x + 2, y - h - 2, 5, h))
+        surface.blit(self, self.rect)
+
+    def set_block(self, block_obj):
+        super().set_block(block_obj)
+        self.input_inventory_ui.inventory = block_obj.input_cell
+        self.water_inventory_ui.inventory = block_obj.water_cell
+        self.fuel_inventory_ui.inventory = block_obj.fuel_cell
+        self.result_inventory_ui.inventory = block_obj.result_cell
+
+    def pg_event(self, event: pg.event.Event):
+        if super().pg_event(event):
+            return True
+        res = False
+        for inv in self.inventories:
+            res = inv.pg_event(event) or res
+        return res or self.check_mouse_event(event)
+
+
+class InventoryPlayerCauldronUI(InventoryPlayerWithBlockUI):
+    index = 125
+
+    def __init__(self, player):
+        super().__init__(player, CauldronUI())
+
+
 class MusicBlockUI(BlockUI):
     """Одна ячейка — какой предмет положен, такая нота играет (см.
     MusicBlock в units/Objects/TileClasses.py)."""
@@ -528,7 +591,7 @@ class EchoUI(LoreTabletUI):
 
 
 BLOCKS_UI = {cls.index: cls for cls in
-             [InventoryPlayerChestUI, InventoryPlayerCupboardUI, InventoryPlayerFurnaceUI, CommandBlockUI, InventoryPlayerMusicBlockUI,
+             [InventoryPlayerChestUI, InventoryPlayerCupboardUI, InventoryPlayerFurnaceUI, InventoryPlayerCauldronUI, CommandBlockUI, InventoryPlayerMusicBlockUI,
               InventoryPlayerReceiverUI, InventoryPlayerTransmitterUI, LoreTabletUI, EchoUI,
               InventoryPlayerHopperUI, InventoryPlayerDropperUI,
               InventoryPlayerFuelEngineUI, InventoryPlayerCreativeEngineUI,

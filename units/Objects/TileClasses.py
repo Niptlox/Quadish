@@ -625,6 +625,153 @@ class Furnace(Tile):
         return sum([inv.items_of_break() for inv in inventories], [])
 
 
+# Зельеварение. Ингредиент -> (сколько его нужно, что получится, сколько).
+#
+# Один ингредиент на рецепт — намеренно. Двух-трёх-компонентные рецепты
+# требуют либо второй ячейки ввода (и тогда котёл становится верстаком с
+# огнём), либо угадывания порядка; ни то ни другое не добавляет решений. Всё
+# «сложение» рецепта уже есть: топливо + вода + ингредиент, то есть три вещи,
+# каждую из которых надо принести отдельно.
+#
+# Ингредиенты — это трофеи существ и новые растения (docs/BALANCE_SCHEME.md):
+# зелье теперь оплачивается охотой или походом в биом, а не запасами руды.
+CAULDRON_RECIPES = {
+    53: (6, 55, 1),      # ягоды -> зелье жизни
+    422: (3, 351, 1),    # крыло мыши -> зелье нового прыжка
+    109: (3, 413, 1),    # лунный цвет -> скорость
+    420: (2, 414, 1),    # клык -> сила
+    424: (1, 415, 1),    # ядро голема -> каменная кожа
+    108: (3, 416, 1),    # огнецвет -> несгораемость
+    423: (2, 417, 1),    # жгучая слизь -> дыхание
+}
+# Ведро с водой (units/Tools/ToolBucket.py) — обязательная часть варки.
+BUCKET_WATER_INDEX = 411
+BUCKET_EMPTY_INDEX = 410
+
+
+class Cauldron(Tile):
+    """Котёл: топливо + ведро воды + ингредиент -> зелье.
+
+    Раньше котёл был просто «столом с огоньком»: рецепты зелий требовали
+    КАСАНИЯ котла (`(125, -1)` в units/creating_items.py), то есть варка ничем
+    не отличалась от сборки стула — те же ресурсы, тот же мгновенный крафт.
+    Зельеварения как занятия не было.
+
+    Теперь это машина, как печка, и три её ячейки — это три разных походa:
+    дрова (лес), вода (водоём, и её надо принести ведром), ингредиент (трофей
+    существа или растение своего биома). Варка занимает время и тратит воду:
+    ведро остаётся в ячейке, но становится пустым — это самый понятный способ
+    показать, что воду израсходовали.
+    """
+    not_save_vars = Tile.not_save_vars
+    index = 125
+    brew_time = FPS * 4
+    view_interface_on_click = True
+
+    def __init__(self, game, tile_pos):
+        super().__init__(game, tile_pos)
+        self.fuel_cell = Inventory(self.game_map, self, [1, 1],
+                                   items_update_event=self.check_cells_and_start)
+        self.fuel_cell.filter_items = set(fuel_tiles)
+        self.water_cell = Inventory(self.game_map, self, [1, 1],
+                                    items_update_event=self.check_cells_and_start)
+        self.water_cell.filter_items = {BUCKET_WATER_INDEX, BUCKET_EMPTY_INDEX}
+        self.input_cell = Inventory(self.game_map, self, [1, 1],
+                                    items_update_event=self.check_cells_and_start)
+        self.result_cell = Inventory(self.game_map, self, [1, 1],
+                                     items_update_event=self.check_cells_and_start)
+        self.brewing = None
+        self.progress = 0
+        self.timer = 0
+
+    # ---------- проверки ----------
+
+    def recipe(self):
+        """Рецепт по содержимому ячейки ингредиента или None."""
+        item = self.input_cell[0]
+        if item is None:
+            return None
+        rec = CAULDRON_RECIPES.get(item.index)
+        if rec is None or item.count < rec[0]:
+            return None
+        return rec
+
+    def has_water(self):
+        item = self.water_cell[0]
+        return item is not None and item.index == BUCKET_WATER_INDEX
+
+    def has_fuel(self):
+        item = self.fuel_cell[0]
+        return item is not None and item.index in fuel_tiles
+
+    def result_fits(self, result_index):
+        out = self.result_cell[0]
+        return out is None or (out.index == result_index and out.count < Items.cell_size)
+
+    def check_cells(self):
+        rec = self.recipe()
+        if rec is None:
+            return False
+        return self.has_fuel() and self.has_water() and self.result_fits(rec[1])
+
+    def check_cells_and_start(self):
+        if self.check_cells():
+            if self.brewing is None:
+                self.__start()
+        elif self.brewing is not None and not self.check_cells():
+            # Забрали воду, топливо или ингредиент — варка отменяется, и
+            # прогресс сбрасывается. Иначе можно было бы «долить» котёл в
+            # последний момент и получить зелье бесплатно.
+            self.brewing = None
+            self.timer = 0
+            self.progress = 0
+
+    # ---------- варка ----------
+
+    def __start(self):
+        self.brewing = self.input_cell[0].index
+        self.timer = 0
+        self.progress = 0
+
+    def __finish(self):
+        rec = self.recipe()
+        self.brewing = None
+        self.timer = 0
+        self.progress = 0
+        if rec is None:
+            return
+        need, result_index, result_count = rec
+        self.input_cell.get_from_inventory(self.brewing or self.input_cell[0].index, need)
+        self.fuel_cell.get_from_inventory(self.fuel_cell[0].index, 1)
+        # Вода израсходована: ведро в ячейке пустеет.
+        self.water_cell.get_from_inventory(BUCKET_WATER_INDEX, 1)
+        from units.Tools import TOOLS
+        self.water_cell.put_to_inventory(TOOLS[BUCKET_EMPTY_INDEX](self.game, pos=self.rect.topleft))
+        self.result_cell.put_to_inventory(ItemsTile(self.game, result_index, count=result_count))
+        # Сюжет отмечает первую сваренную порцию (units/Story.py, акт V):
+        # отметка по факту события мира, а не по нажатию в интерфейсе.
+        from units.Story import note_flag
+        note_flag(self.game, "brewed")
+        self.check_cells_and_start()
+
+    def update(self, elapsed_time):
+        if self.brewing is None:
+            return
+        if not self.check_cells():
+            self.brewing = None
+            self.timer = 0
+            self.progress = 0
+            return
+        self.timer += self.steps
+        self.progress = min(1.0, self.timer / self.brew_time)
+        if self.timer >= self.brew_time:
+            self.__finish()
+
+    def items_of_break(self):
+        inventories = [self.fuel_cell, self.water_cell, self.input_cell, self.result_cell]
+        return sum([inv.items_of_break() for inv in inventories], [])
+
+
 class LoreTablet(Tile):
     """Плита с надписью — основной канал подачи сюжета (docs/STORY.md).
 
@@ -1265,5 +1412,5 @@ classes = {Chest, Furnace, CommandBlock, Activator, TimerBlock, PressurePlate,
           Receiver, Transmitter, LoreTablet,
           Hopper, Conveyor, Dropper, Chopper,
           FuelEngine, CreativeEngine, SpaceEngine, HellEngine, Portal, GolemNest,
-          DustCollector, BloreTrack, Cupboard, Echo}
+          DustCollector, BloreTrack, Cupboard, Echo, Cauldron}
 tiles_class = {cls.index: cls for cls in classes}

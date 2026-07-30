@@ -2,6 +2,10 @@ from units.Map.TileFlags import TILE_FLAG_BITS, BIT_PHYSBODY, BIT_SEMIPHYSBODY
 from units.Tiles import DAMAGE_TILES, WATER_TILE, water_frame_level
 from units.common import *
 
+# От чего спасает зелье несгораемости — от жара. Кактус (103) сюда не входит:
+# от колючки зелье не помогает, это не огонь.
+FIREPROOF_TILES = frozenset({140})
+
 
 # from units.Map.GameMap import GameMap
 
@@ -79,6 +83,19 @@ class PhysicalObject(SavedObject):
         """Словарь {(tx, ty): тип} для проверки столкновений."""
         tiles = self._collision_tiles
         return self.game.screen_map.static_tiles if tiles is None else tiles
+
+    def effect_immunity(self):
+        """Опасные тайлы, от которых защищает действующий эффект.
+
+        Через множество, а не через правку `immune_tiles`: класс общий на всех
+        существ этого вида, и приписанная в него лава осталась бы у всех и
+        навсегда (docs/EFFECTS в units/Effects.py — то же правило).
+        """
+        effects = getattr(self, "effects", None)
+        if effects is None:
+            return frozenset()
+        from units.Effects import FIREPROOF
+        return FIREPROOF_TILES if effects.has(FIREPROOF) else frozenset()
 
     def in_water(self, offset_y=0):
         """Погружён ли центр тела в воду (docs/WATER.md).
@@ -193,7 +210,7 @@ class PhysicalObject(SavedObject):
         # тайлов. Раньше он начислялся на каждую касающуюся вершину, из-за
         # чего кактус бил вчетверо, а лава (8 x 4 вершины) убивала бы
         # игрока с 30 HP мгновенно.
-        dangerous = touched_damage - self.immune_tiles
+        dangerous = touched_damage - self.immune_tiles - self.effect_immunity()
         if dangerous:
             self.damage(max(DAMAGE_TILES[t] for t in dangerous))
         return collision_types

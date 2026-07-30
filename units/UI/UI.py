@@ -166,6 +166,7 @@ class GameUI(UI):
         self.sys_message.draw(self.screen)
         self.achievement_message.draw(self.screen)
         self.draw_goal()
+        self.draw_effects()
         self.redraw_playerui()
         self.playerui.draw(self.screen)
 
@@ -191,6 +192,34 @@ class GameUI(UI):
             box.blit(surf, (7, 4))
             self._goal_surface = box
         self.screen.blit(self._goal_surface, (10, 10))
+
+    # Действующие эффекты — под строкой цели, столбиком. Без этого эффект с
+    # длительностью не работает как механика: игрок не знает ни что на нём
+    # висит, ни сколько осталось, и «выпить заранее» превращается в угадывание.
+    effect_font = pygame.font.Font(CWDIR + 'data/fonts/xenoa.ttf', 14)
+
+    def draw_effects(self):
+        player = getattr(self.scene, "player", None)
+        effects = getattr(player, "effects", None)
+        if effects is None or not effects.active:
+            return
+        from units.Effects import EFFECTS
+        y = 44 if config.GameSettings.show_goal else 10
+        for kind, tacts, _power in effects.visible():
+            spec = EFFECTS.get(kind)
+            if spec is None:
+                continue
+            secs = max(0, tacts // FPS)
+            text = f"{spec['title']} {secs // 60}:{secs % 60:02d}"
+            surf = self.effect_font.render(text, True, (240, 240, 245))
+            box = pygame.Surface((surf.get_width() + 16, surf.get_height() + 6),
+                                 pygame.SRCALPHA, 32)
+            box.fill((24, 24, 27, 140))
+            # Цветная метка слева: вид эффекта читается быстрее цвета текста.
+            pygame.draw.rect(box, pygame.Color(spec["tint"]), (0, 0, 4, box.get_height()))
+            box.blit(surf, (10, 3))
+            self.screen.blit(box, (10, y))
+            y += box.get_height() + 4
 
     def flip(self):
         pygame.display.flip()

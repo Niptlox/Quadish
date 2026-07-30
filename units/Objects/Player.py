@@ -6,6 +6,7 @@ from pygame.locals import *
 
 from units.Achievements import Achievements
 from units.Graphics.Animation import get_death_animation
+from units.Effects import Effects, ITEM_EFFECTS, SPEED, STONESKIN, FIREPROOF, BREATH
 from units.Objects.Entity import PhysicalObject
 from units.Inventory import InventoryPlayer
 from units.Objects.Items import Items
@@ -25,7 +26,12 @@ class Player(PhysicalObject):
                                                     "dig_pos", "dig_dist", "set_dist", "set", "dig", "sitting", "moving_left",
                                                     "moving_right", "on_wall", "tact", "eat", "jump_speed", "max_speed",
                                                     "accelerate_x", "fall_speed", "max_fall_speed", "fly_speed",
-                                                    "vehicle"}
+                                                    "vehicle",
+                                                    # Сам объект эффектов не сохраняем — он держит
+                                                    # ссылку на игрока и через него на игру (в игре
+                                                    # есть непиклящийся pygame.time.Clock). В сейв
+                                                    # идёт только effects_state: числа.
+                                                    "effects"}
     class_obj = OBJ_PLAYER
     width, height = max(1, TSIZE - 10), max(1, TSIZE - 2)
     player_img = player_img
@@ -102,6 +108,11 @@ class Player(PhysicalObject):
         # В сейв не идёт: средство само лежит в чанке, а ссылка на него
         # восстанавливается посадкой.
         self.vehicle = None
+
+        # Длящиеся эффекты (units/Effects.py). В сейв идёт effects_state —
+        # обычный словарь чисел, поэтому эффекты переживают сохранение мира.
+        self.effects_state = {}
+        self.effects = Effects(self)
 
         self.achievements = Achievements(self)
         self.killer = ""
@@ -248,6 +259,7 @@ class Player(PhysicalObject):
         if not self.active:
             return True
         self.tact = tact
+        self.effects.update(tact)
         self.death_animation.update(elapsed_time)
         self.draw(self.ui.display)
 
@@ -298,6 +310,11 @@ class Player(PhysicalObject):
             if self.max_lives > self.max_max_lives:
                 self.max_lives = self.max_max_lives
             self.lives = min(self.lives + item.recovery_lives, self.max_lives)
+            # Длящиеся эффекты предмета (таблетка, зелья). Таблица в
+            # units/Effects.py, а не здесь: это баланс, и он должен быть виден
+            # целиком в одном месте.
+            for spec in ITEM_EFFECTS.get(item.index, ()):
+                self.effects.add(spec[0], spec[1], spec[2] if len(spec) > 2 else None)
             item.count -= 1
             if item.count <= 0:
                 self.inventory[self.inventory.active_cell] = None
@@ -409,7 +426,14 @@ class Player(PhysicalObject):
         # горизонтальную скорость, и вертикальную, то есть весь кадр движения.
         self.swimming = self.in_water() and not self.flying
         drag = WATER_DRAG if self.swimming else 1.0
-        player_movement[0] += (self.speed * drag + self.track_speed) * elapsed_time
+        if self.swimming:
+            # Зелье дыхания уменьшает сопротивление воды: плыть становится
+            # почти так же быстро, как идти.
+            drag = min(1.0, drag * self.effects.mult(BREATH))
+        # Скорость — множителем в момент хода, а не правкой max_speed: правка
+        # пережила бы эффект и осталась бы в сейве навсегда.
+        player_movement[0] += (self.speed * drag * self.effects.mult(SPEED)
+                               + self.track_speed) * elapsed_time
         player_movement[1] += self.vertical_momentum * elapsed_time
         if self.flying:
             if self.on_up:
@@ -549,6 +573,9 @@ class Player(PhysicalObject):
         self.death_animation.start()
         if self.max_lives == -1:
             return True
+        # Каменная кожа — множитель урона меньше единицы. Минимум 1: полная
+        # неуязвимость от зелья превратила бы бой в ожидание.
+        lives = max(1, int(round(lives * self.effects.mult(STONESKIN))))
         self.lives -= lives
         if self.lives <= 0:
             self.kill()

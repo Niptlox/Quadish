@@ -89,6 +89,13 @@ def tile_click(game_map, tile, x, y, local_pos_tile, player):
         game_map.set_static_tile(x, y, game_map.get_tile_ttile(127))
     elif ttile in CLASS_TILE:
         obj = game_map.get_tile_obj(x // CHUNK_SIZE, y // CHUNK_SIZE, tile[3])
+        if obj is None:
+            # Блок из мира, сохранённого ДО того, как этот тайл стал классовым
+            # (котёл 125 — ровно такой случай): объекта у него нет. Создаём на
+            # месте, а не падаем по AttributeError на первом же клике.
+            obj = game_map.bind_tile_object(x, y)
+        if obj is None:
+            return False
         obj.right_click(local_pos_tile)
     elif ttile == 101:
         if tile[2] > 0:

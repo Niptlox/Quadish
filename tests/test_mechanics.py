@@ -3934,19 +3934,29 @@ def test_gulls_spawn_over_the_water():
 
 def test_deep_lurker_lives_only_in_sealed_pockets():
     """Глубинник существует ради того, чтобы находка «пустота в камне, а в ней
-    зеркало» не была бесплатной. В открытом озере его быть не должно."""
+    зеркало» не была бесплатной. В открытом озере его быть не должно.
+
+    Чанки берём по РЕШЁТКЕ ПОЛОСТЕЙ, а не подряд: полость — одна на ~18 000
+    тайлов, глубинник выпадает не в каждой, и слепой обход прямоугольника
+    зависел от того, куда попали чанки (правка соседнего генератора однажды
+    оставила тест вообще без глубинников)."""
     from units.Objects.Creatures import DeepLurker
-    from units.Map.Water import water_pocket_tile_at
+    from units.Map.Water import water_pocket_tile_at, pocket_site
     game = fresh_world(5)
     gm = game.game_map
+    base = gm.base_generation
     checked = 0
-    for cx in range(-8, 9):
-        for cy in range(2, 18):
-            for obj in gm.generate_chunk(cx, cy)[1]:
+    for cx in range(-14, 15):
+        for cy in range(2, 24):
+            site = pocket_site(cx, cy, base)
+            if site is None:
+                continue
+            chunk = gm.generate_chunk(site.cx // 32, site.cy // 32)
+            for obj in chunk[1]:
                 if isinstance(obj, DeepLurker):
                     checked += 1
                     tx, ty = obj.rect.centerx // 32, obj.rect.centery // 32
-                    assert water_pocket_tile_at(tx, ty, gm.base_generation) is not None, \
+                    assert water_pocket_tile_at(tx, ty, base) is not None, \
                         "глубинник оказался вне полости"
     assert checked, "глубинников не нашлось — тест ничего не проверил"
 
@@ -3967,6 +3977,363 @@ def test_hawk_dives_to_the_player_instead_of_hovering():
     hawk.update_altitude(0)
     assert hawk.target_y == game.player.rect.y, \
         f"в погоне ястреб обязан идти на высоту игрока: {hawk.target_y}"
+
+
+# ===================== ведро, котёл и эффекты =====================
+
+def _tile_obj(gm, tx, ty):
+    return gm.get_tile_obj(*gm.to_chunk_xy(tx, ty), gm.get_static_tile(tx, ty)[3])
+
+
+def _give(player, index, count=1):
+    """Положить предмет игроку и вернуть его."""
+    from units.Objects.Items import ItemsTile
+    from units.Tools import TOOLS
+    if index in TOOLS:
+        item = TOOLS[index](player.game, pos=player.rect.topleft)
+    else:
+        item = ItemsTile(player.game, index, player.rect.topleft, count)
+    player.inventory.put_to_inventory(item)
+    return item
+
+
+def _hold(player, index):
+    """Взять предмет с этим индексом в активную ячейку."""
+    for i, cell in enumerate(player.inventory):
+        if cell is not None and cell.index == index:
+            player.inventory.active_cell = i
+            player.choose_active_cell(i)
+            return cell
+    return None
+
+
+def test_bucket_takes_water_and_pours_it_back():
+    """Ведро — единственный способ ПРИНЕСТИ воду туда, где её нет. Два
+    предмета (пустое и полное), а не поле «полное»: иконку видно в тулбаре, и
+    вода не теряется при подборе пустого ведра."""
+    from units.common import TSIZE
+    from units.Tiles import water_frame
+    from pygame import Vector2
+    game = fresh_world(800)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    gm.set_static_tile(x + 6, y, [120, 0, water_frame(4), 0])
+    player = game.player
+    player.active = True
+    player.tp_to(((x + 5) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    # Инструмент считает цель от player.vector, а он выставляется в update:
+    # без кадра он остался бы нулевым, и «до воды» вышло бы полкарты.
+    _run_frames(game, 2)
+    _give(player, 410)
+    bucket = _hold(player, 410)
+    assert bucket is not None, "ведро не попало в инвентарь"
+    to_water = Vector2((x + 6) * TSIZE + 16 - player.rect.centerx,
+                       y * TSIZE + 16 - player.rect.centery)
+    bucket.tool.owner = player
+    assert bucket.tool.right_button_click(to_water), "ведро не набрало воду"
+    assert gm.get_static_tile(x + 6, y, create_chunk=True)[0] == 0, "вода осталась на месте"
+    full = _hold(player, 411)
+    assert full is not None, "полного ведра в инвентаре нет"
+    # выливаем на другой тайл
+    full.tool.owner = player
+    to_air = Vector2((x + 8) * TSIZE + 16 - player.rect.centerx,
+                     y * TSIZE + 16 - player.rect.centery)
+    assert full.tool.right_button_click(to_air), "полное ведро не вылилось"
+    assert gm.get_static_tile(x + 8, y, create_chunk=True)[0] == 120, "воды нет там, где вылили"
+    assert _hold(player, 410) is not None, "ведро не стало пустым"
+
+
+def test_bucket_does_not_pour_into_stone():
+    """Вода не вытесняет блоки — то же правило, что у потока."""
+    from units.common import TSIZE
+    from pygame import Vector2
+    game = fresh_world(801)
+    gm = game.game_map
+    x, y = _water_arena(game, w=20)
+    player = game.player
+    player.active = True
+    player.tp_to(((x + 5) * TSIZE, y * TSIZE))
+    game.screen_map.teleport_to_player()
+    _run_frames(game, 2)
+    _give(player, 411)
+    full = _hold(player, 411)
+    full.tool.owner = player
+    to_floor = Vector2((x + 6) * TSIZE + 16 - player.rect.centerx,
+                       (y + 1) * TSIZE + 16 - player.rect.centery)
+    assert not full.tool.right_button_click(to_floor), "ведро вылилось в камень"
+    assert gm.get_static_tile(x + 6, y + 1, create_chunk=True)[0] == 3, "камень подменился водой"
+
+
+def test_cauldron_brews_only_with_fuel_water_and_ingredient():
+    """Котёл был «столом с огоньком»: зелья собирались мгновенным крафтом от
+    касания. Теперь это машина, и без любой из трёх составляющих она не
+    работает."""
+    from units.Objects.Items import ItemsTile
+    from units.Tools import TOOLS
+    game = fresh_world(802)
+    gm = game.game_map
+    gm.set_static_tile(5, 0, 125)
+    cauldron = _tile_obj(gm, 5, 0)
+    assert cauldron is not None and cauldron.index == 125
+
+    cauldron.input_cell.put_to_inventory(ItemsTile(game, 53, count=6))   # ягоды
+    assert not cauldron.check_cells(), "без топлива и воды варить нельзя"
+    cauldron.fuel_cell.put_to_inventory(ItemsTile(game, 11, count=4))    # доски
+    assert not cauldron.check_cells(), "без воды варить нельзя"
+    cauldron.water_cell.put_to_inventory(TOOLS[411](game))               # ведро с водой
+    assert cauldron.check_cells(), "всё на месте, а котёл не варит"
+
+    for _ in range(cauldron.brew_time + 2):
+        cauldron.update(16)
+    out = cauldron.result_cell[0]
+    assert out is not None and out.index == 55, f"в результате {out and out.index}"
+    # вода израсходована: ведро в ячейке стало пустым
+    assert cauldron.water_cell[0] is not None and cauldron.water_cell[0].index == 410, \
+        "ведро должно опустеть — это и есть «вода израсходована»"
+
+
+def test_cauldron_needs_enough_of_the_ingredient():
+    """У рецепта есть количество: одна ягода не превращается в зелье."""
+    from units.Objects.Items import ItemsTile
+    from units.Tools import TOOLS
+    game = fresh_world(803)
+    gm = game.game_map
+    gm.set_static_tile(5, 0, 125)
+    cauldron = _tile_obj(gm, 5, 0)
+    cauldron.fuel_cell.put_to_inventory(ItemsTile(game, 11, count=4))
+    cauldron.water_cell.put_to_inventory(TOOLS[411](game))
+    cauldron.input_cell.put_to_inventory(ItemsTile(game, 53, count=2))
+    assert not cauldron.check_cells(), "двух ягод на зелье не хватает"
+
+
+def test_cauldron_recipes_use_hunt_and_plants():
+    """Ингредиенты зелий — трофеи существ и новые растения, а не руда: зелье
+    оплачивается охотой или походом в биом (docs/BALANCE_SCHEME.md)."""
+    from units.Objects.TileClasses import CAULDRON_RECIPES
+    from units.Objects.Creatures import CREATURES
+    from units.Tiles import tile_words
+    drops = {p[0] for cls in CREATURES for _, p in cls.drop_items}
+    plants = {107, 108, 109, 111, 112}
+    for ingredient, (need, result, count) in CAULDRON_RECIPES.items():
+        assert ingredient in tile_words, f"ингредиент {ingredient} без названия"
+        assert result in tile_words, f"результат {result} без названия"
+        assert need >= 1 and count >= 1
+    assert drops & set(CAULDRON_RECIPES), "ни один трофей существ не идёт в зелья"
+    assert plants & set(CAULDRON_RECIPES), "ни одно новое растение не идёт в зелья"
+
+
+def test_pill_is_the_earliest_healing_recipe():
+    """Таблетка: четыре ягоды и слизь — то, что есть у любого, кто дошёл до
+    первого куста и первого слизня. И лечит она эффектом, а не мгновенно."""
+    from units.creating_items import RECIPES
+    from units.Effects import ITEM_EFFECTS, REGEN
+    pill = [r for r in RECIPES if r[0][0] == 412]
+    assert pill, "рецепта таблетки нет"
+    out, need = pill[0]
+    assert dict(need) == {53: 4, 51: 1}, f"состав таблетки: {need}"
+    assert out[1] >= 1
+    assert any(spec[0] == REGEN for spec in ITEM_EFFECTS[412]), \
+        "таблетка обязана давать заживление, а не мгновенное лечение"
+
+
+def test_potions_are_no_longer_instant_hand_crafts():
+    """Зелья убраны из ручного крафта: мгновенная сборка зелья обесценивала и
+    котёл, и сами зелья — варка была неотличима от сборки стула."""
+    from units.creating_items import RECIPES
+    from units.Objects.TileClasses import CAULDRON_RECIPES
+    hand_results = {r[0][0] for r in RECIPES}
+    brewed = {rec[1] for rec in CAULDRON_RECIPES.values()}
+    assert not (hand_results & brewed), \
+        f"эти зелья всё ещё собираются руками: {hand_results & brewed}"
+
+
+def test_effects_expire_and_do_not_touch_player_fields():
+    """Главное правило системы: эффект НИЧЕГО не меняет в игроке. Иначе правка
+    поля пережила бы сам эффект и осталась бы в сейве навсегда."""
+    from units.common import FPS
+    from units.Effects import SPEED
+    game = fresh_world(804)
+    player = game.player
+    speed_before = player.max_speed
+    player.effects.add(SPEED, FPS)
+    assert player.effects.has(SPEED)
+    assert player.max_speed == speed_before, "эффект правит поле игрока"
+    assert player.effects.mult(SPEED) > 1
+    for tact in range(FPS + 2):
+        player.effects.update(tact)
+    assert not player.effects.has(SPEED), "эффект не кончился по времени"
+    assert player.effects.mult(SPEED) == 1.0
+    assert player.max_speed == speed_before
+
+
+def test_effect_is_extended_not_stacked():
+    """Второе зелье продлевает, а не умножает: 1.45 * 1.45 — это уже полёт."""
+    from units.common import FPS
+    from units.Effects import SPEED
+    game = fresh_world(805)
+    player = game.player
+    player.effects.add(SPEED, FPS * 10)
+    power = player.effects.mult(SPEED)
+    player.effects.add(SPEED, FPS * 10)
+    assert player.effects.mult(SPEED) == power, "сила эффекта сложилась"
+    assert player.effects.left(SPEED) > FPS * 10, "время не продлилось"
+
+
+def test_regen_heals_over_time():
+    """Заживление лечит понемногу и по секундам, а не по кадрам: единица за
+    кадр — это шестьдесят здоровья в секунду, то есть бессмертие."""
+    from units.common import FPS
+    from units.Effects import REGEN
+    game = fresh_world(806)
+    player = game.player
+    player.lives = player.max_lives - 10
+    hurt = player.lives
+    player.effects.add(REGEN, FPS * 5)
+    for tact in range(FPS * 3):
+        player.effects.update(tact)
+    healed = player.lives - hurt
+    assert 1 <= healed <= 4, f"заживление вылечило {healed} за три секунды"
+
+
+def test_stoneskin_reduces_damage_but_never_to_zero():
+    """Полная неуязвимость от зелья превратила бы бой в ожидание."""
+    from units.common import FPS
+    from units.Effects import STONESKIN
+    game = fresh_world(807)
+    player = game.player
+    player.creative_mode = False
+    player.lives = player.max_lives
+    player.damage(10)
+    plain = player.max_lives - player.lives
+    player.lives = player.max_lives
+    player.effects.add(STONESKIN, FPS * 5)
+    player.damage(10)
+    with_skin = player.max_lives - player.lives
+    assert 0 < with_skin < plain, f"каменная кожа: {plain} -> {with_skin}"
+
+
+def test_fireproof_effect_saves_from_lava_only_while_it_lasts():
+    """Огнеупорность даётся эффектом, а не приписывается в immune_tiles: класс
+    общий на всех существ вида, и лава осталась бы безвредной навсегда."""
+    from units.common import FPS
+    from units.Effects import FIREPROOF
+    from units.Objects.Entity import FIREPROOF_TILES
+    game = fresh_world(808)
+    player = game.player
+    assert 140 in FIREPROOF_TILES, "лава обязана входить в защиту от жара"
+    assert player.effect_immunity() == frozenset()
+    player.effects.add(FIREPROOF, FPS)
+    assert 140 in player.effect_immunity()
+    for tact in range(FPS + 2):
+        player.effects.update(tact)
+    assert player.effect_immunity() == frozenset(), "защита осталась после эффекта"
+    assert 140 not in type(player).immune_tiles, "иммунитет просочился в класс"
+
+
+def test_eating_a_pill_grants_the_effect():
+    """Съеденный предмет накладывает эффекты из таблицы ITEM_EFFECTS."""
+    from units.Effects import REGEN
+    game = fresh_world(809)
+    player = game.player
+    player.active = True
+    player.lives = player.max_lives - 5
+    _give(player, 412, 2)
+    _hold(player, 412)
+    player.eat = True
+    _run_frames(game, 2)
+    assert player.effects.has(REGEN), "таблетка не дала заживления"
+
+
+def test_effects_survive_save_and_load():
+    """Эффекты — это числа в поле игрока, поэтому они переживают сохранение.
+    Сам объект Effects в сейв не идёт: он держит ссылку на игру, а в игре есть
+    непиклящийся pygame.time.Clock — именно на этом падало сохранение."""
+    from units.common import FPS
+    from units.Effects import SPEED
+    game = fresh_world(810)
+    player = game.player
+    player.effects.add(SPEED, FPS * 20)
+    import copy
+    # Копия, а не сам словарь: get_vars отдаёт ссылку на поля игрока, и
+    # очистка эффектов ниже стёрла бы заодно «сохранённое» состояние.
+    vrs = copy.deepcopy(player.get_vars())
+    assert "effects" not in vrs, "объект эффектов не должен попадать в сейв"
+    assert vrs["effects_state"].get(SPEED), "состояние эффектов не сохранилось"
+    player.effects.clear()
+    player.set_vars(vrs)
+    assert player.effects.has(SPEED), "после загрузки эффект потерялся"
+
+
+def test_old_world_cauldron_gets_its_object_on_click():
+    """Котёл до этого релиза был мебелью: в сохранённых мирах у него нет
+    объекта, и первый правый клик падал бы на None. Объект должен создаваться
+    на месте — это цена превращения блока в машину."""
+    from units.Tools.Tools import tile_click
+    game = fresh_world(811)
+    gm = game.game_map
+    gm.set_static_tile(7, 0, 125)
+    tile = gm.get_static_tile(7, 0)
+    tile[3] = 0                       # как в старом сейве: объекта нет
+    gm.set_static_tile(7, 0, list(tile))
+    tile = gm.get_static_tile(7, 0)
+    tile[3] = 0
+    assert gm.get_static_tile(7, 0)[0] == 125
+    tile_click(gm, None, 7, 0, (0, 0), game.player)
+    obj = _tile_obj(gm, 7, 0)
+    assert obj is not None and obj.index == 125, "объект котла не создался"
+
+
+# ===================== новые растения =====================
+
+def test_new_plants_grow_in_their_places():
+    """Пять новых растений: три на дёрне по биомам, два на камне под землёй.
+    Пещерным нужна своя ветка генератора — дёрна на глубине нет."""
+    game = fresh_world(11)
+    gm = game.game_map
+    found = set()
+    for cx in range(-6, 7):
+        for cy in range(-2, 22):
+            static = gm.generate_chunk(cx, cy)[0]
+            for i in range(0, len(static), 4):
+                if static[i] in (107, 108, 109, 111, 112):
+                    found.add(static[i])
+    assert found == {107, 108, 109, 111, 112}, f"не выросли: {{107,108,109,111,112}} - {found}"
+
+
+def test_cave_plants_stand_on_stone():
+    """Гриб и мох растут на камне: если их поставить в воздух, они висят."""
+    from units.Map.GameMap import cave_plant_selection
+    from units.Tiles import CAVE_PLANTS
+    game = fresh_world(12)
+    gm = game.game_map
+    checked = 0
+    for cx in range(-4, 5):
+        for cy in range(4, 20):
+            static = gm.generate_chunk(cx, cy)[0]
+            for i in range(0, len(static), 4):
+                if static[i] in CAVE_PLANTS:
+                    cell = i // 4
+                    tx = cx * 32 + cell % 32
+                    ty = cy * 32 + cell // 32
+                    below = gm.get_static_tile_type(tx, ty + 1, default=0, create_chunk=True)
+                    assert below not in (0, 120), f"растение висит в воздухе на {tx},{ty}"
+                    checked += 1
+    assert checked, "пещерных растений не нашлось"
+    assert cave_plant_selection(0) is None, "у поверхности пещерной флоры быть не должно"
+
+
+def test_creature_drops_feed_the_cauldron():
+    """Дроп из существ стал ингредиентом: у охоты появилась цель помимо мяса."""
+    from units.Objects.Creatures import Wolf, Bat, Jellyfish, StoneGolem, DeepLurker, Hawk
+    from units.Objects.TileClasses import CAULDRON_RECIPES
+    expected = {Wolf: 420, Bat: 422, Jellyfish: 423, StoneGolem: 424, Hawk: 421}
+    for cls, index in expected.items():
+        drops = {p[0] for _, p in cls.drop_items}
+        assert index in drops, f"{cls.__name__} не даёт {index}: {drops}"
+    brewable = set(CAULDRON_RECIPES)
+    assert {420, 422, 423, 424} <= brewable, "трофеи не участвуют в зельеварении"
+    assert 425 in {p[0] for _, p in DeepLurker.drop_items}, "глубинник без чешуи"
 
 
 # ===================== пересчёт меню при смене размера окна =====================
@@ -5426,12 +5793,22 @@ def test_altar_has_an_echo_nearby():
     assert found, "у алтаря должен стоять отголосок"
 
 
-def test_story_covers_all_twelve_chapters():
-    """Сюжет из стори-бука доведён до игры целиком, а не первыми тремя главами."""
+def test_story_covers_every_chapter_of_the_storybook():
+    """Сюжет из стори-бука доведён до игры целиком, а не первыми тремя главами.
+
+    Число глав сверяется со СТОРИ-БУКОМ, а не с константой в тесте: раньше
+    здесь стояло «должно быть 12», и пятый акт уронил тест, хотя и код, и
+    документ были согласованы между собой."""
+    import re
     from units.Story import ACTS
-    assert len(ACTS) == 12, f"глав должно быть 12, а не {len(ACTS)}"
+    book = open("docs/STORYBOOK.md", encoding="utf-8").read()
+    chapters = set(re.findall(r"\*\*Глава (\d+)\.", book))
+    assert len(ACTS) == len(chapters), \
+        f"глав в коде {len(ACTS)}, в стори-буке {len(chapters)}"
     acts_titles = {a.title for a in ACTS}
-    assert len(acts_titles) == 4, f"четыре акта, а не {len(acts_titles)}: {acts_titles}"
+    book_acts = set(re.findall(r"### (Акт [IVX]+)\.", book))
+    assert len(acts_titles) == len(book_acts), \
+        f"актов в коде {len(acts_titles)}, в стори-буке {len(book_acts)}"
     ids = [a.id for a in ACTS]
     assert len(set(ids)) == len(ids), "id глав должны быть уникальны"
     for a in ACTS:

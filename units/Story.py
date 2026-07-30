@@ -134,6 +134,24 @@ ACTS = (
     Act("weight", "Акт IV. Уйти",
         "Оно приближается. Дождись, пока почувствуешь вес",
         lambda g: "weight_felt" in _flags(g)),
+    # --- Акт V ------------------------------------------------------------
+    # Финал IV акта открыт: игрок может уйти или остаться. Пятый акт — про
+    # ТО, ЧТО БУДЕТ, ЕСЛИ ОСТАТЬСЯ, и поэтому он не про новый край мира, а про
+    # обживание этого: воду, зелья, растения. Ровно тот контент, который в игре
+    # появился последним, — сюжет объясняет, зачем он нужен, вместо того чтобы
+    # выдавать игроку ещё одну дорогу.
+    Act("brew", "Акт V. Остаться",
+        "Свари первое зелье в котле: топливо, ведро воды и ингредиент",
+        lambda g: "brewed" in _flags(g)),
+    Act("garden", "Акт V. Остаться",
+        "Найди то, чем они лечились: лунный цвет или огнецвет",
+        lambda g: "herbs" in _flags(g)),
+    Act("deep_water", "Акт V. Остаться",
+        "Найди воду там, где её быть не должно — полость внутри острова",
+        lambda g: "pocket_found" in _flags(g)),
+    Act("stay", "Акт V. Остаться",
+        "Оно рядом, а ты остался. Проживи здесь ещё три дня",
+        lambda g: "stayed" in _flags(g)),
 )
 
 
@@ -145,6 +163,10 @@ def _depth(game):
 # «чем глубже — тем чище»)
 DEEP_BLORE_Y = 500
 BLORE_ORE_ITEM = 61
+# Растения, которые «они» собирали (units/Tiles.py): лунный цвет и огнецвет.
+HERB_ITEMS = (109, 108)
+# Сколько ещё надо продержаться после «веса», чтобы закрылась последняя глава.
+STAY_DAYS = 3
 
 
 def check_world_flags(game):
@@ -175,6 +197,29 @@ def check_world_flags(game):
     if ("portal" in _done_ids(game)
             and getattr(game.game_map, "world_time", 0) > DAY_LENGTH * 6):
         note_flag(game, "weight_felt")
+    # Акт V. Все отметки — по состоянию мира, как и весь остальной сюжет.
+    if any(_has_item(player, idx) for idx in HERB_ITEMS):
+        note_flag(game, "herbs")
+    if _in_water_pocket(game, player):
+        note_flag(game, "pocket_found")
+    if ("weight_felt" in _flags(game)
+            and getattr(game.game_map, "world_time", 0)
+            > DAY_LENGTH * (6 + STAY_DAYS)):
+        note_flag(game, "stayed")
+
+
+def _in_water_pocket(game, player):
+    """Стоит ли игрок в запечатанной полости с водой (units/Map/Water.py).
+
+    Тем же способом, что и «дошёл до сокровищницы»: по факту нахождения, а не
+    по событию интерфейса. Полость — чистая функция от (тайл, сид), поэтому
+    проверка ничего не создаёт и не зависит от того, прогружен ли чанк.
+    """
+    from units.Map.Water import water_pocket_tile_at
+    gm = game.game_map
+    tx, ty = player.rect.centerx // 32, player.rect.centery // 32
+    return water_pocket_tile_at(tx, ty, gm.base_generation,
+                                getattr(gm, "pocket_sites", None)) is not None
 
 
 def _in_vault(game, player):
